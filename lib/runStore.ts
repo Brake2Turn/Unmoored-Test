@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { DEFAULT_SHIP_ID } from '@/lib/ships';
+import { generateMap, type SectorMap } from '@/lib/sectorMap';
 
 const KEY = 'unmoored.currentRun';
 
@@ -20,10 +21,17 @@ export type RunState = {
   hullIntegrity: number;
   /** Which ship this run launched in. Absent on saves from before ship select. */
   shipId?: string;
+  /** The jump map, rolled once when the run is created. */
+  map?: SectorMap;
+  /** Index of the node the ship is currently sitting on. */
+  position?: number;
+  /** Every node visited so far, oldest first. Its length is the sector number. */
+  visited?: number[];
 };
 
 function createRun(shipId: string): RunState {
   const now = Date.now();
+  const map = generateMap();
   return {
     id: `${now}-${Math.random().toString(36).slice(2, 10)}`,
     startedAt: now,
@@ -32,6 +40,9 @@ function createRun(shipId: string): RunState {
     elapsed: 0,
     hullIntegrity: 1,
     shipId,
+    map,
+    position: map.start,
+    visited: [map.start],
   };
 }
 
@@ -68,6 +79,23 @@ export async function clearRun(): Promise<void> {
   } catch {
     // Ignore — the caller re-reads state either way.
   }
+}
+
+/**
+ * Fills in anything a save predates. Runs written before the jump map existed
+ * get one rolled on the spot rather than being thrown away.
+ */
+export function withMap(run: RunState): RunState {
+  if (run.map && typeof run.position === 'number' && run.visited?.length) return run;
+
+  const map = run.map ?? generateMap();
+  const position = typeof run.position === 'number' ? run.position : map.start;
+  return {
+    ...run,
+    map,
+    position,
+    visited: run.visited?.length ? run.visited : [position],
+  };
 }
 
 /** One-line description shown under Continue Run, e.g. "SECTOR 3 · 12:40 · HULL 84%". */

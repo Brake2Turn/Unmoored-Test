@@ -21,6 +21,7 @@ export default function RootLayout() {
           <Stack.Screen name="index" />
           <Stack.Screen name="select-ship" />
           <Stack.Screen name="run" />
+          <Stack.Screen name="sector" />
           <Stack.Screen
             name="settings"
             options={{ presentation: 'modal', animation: 'slide_from_bottom' }}

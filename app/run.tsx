@@ -1,81 +1,94 @@
-import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Backdrop } from '@/components/Backdrop';
 import { MenuButton } from '@/components/MenuButton';
-import { useHaptics } from '@/lib/settings';
+import { StarField } from '@/components/StarField';
+import { ShipArt } from '@/components/ships/ShipArt';
+import { useHaptics, useSettings } from '@/lib/settings';
 import { fonts, layout, palette, tracking } from '@/lib/theme';
-import { loadRun, saveRun, type RunState } from '@/lib/runStore';
+import { loadRun, saveRun, withMap, type RunState } from '@/lib/runStore';
 import { shipById } from '@/lib/ships';
 
 /**
- * A stand-in for gameplay.
+ * The helm: the ship adrift in open space with a single thing to do.
  *
- * This exists purely so the start screen's actions can be exercised end to end:
- * starting a run creates a save, time spent here accumulates, and leaving writes
- * it back so Continue Run has something real to resume. Replace this wholesale
- * when the actual game arrives.
+ * Deliberately close to empty. The only control is JUMP, which opens the
+ * sector map; the quiet LEAVE at the top exists so a player is never stuck
+ * here with no way back to the title.
  */
 export default function RunScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const haptics = useHaptics();
+  const { settings } = useSettings();
 
   const [run, setRun] = useState<RunState | null>(null);
-  const [elapsed, setElapsed] = useState(0);
-  const runRef = useRef<RunState | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    loadRun().then((value) => {
-      if (cancelled || !value) return;
-      runRef.current = value;
-      setRun(value);
-      setElapsed(value.elapsed);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // Re-read on focus so returning from a jump shows the new position.
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      loadRun().then((value) => {
+        if (cancelled || !value) return;
+        const filled = withMap(value);
+        if (filled !== value) saveRun(filled);
+        setRun(filled);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
 
-  // Tick the clock once a second while this screen is mounted.
-  useEffect(() => {
-    if (!run) return;
-    const timer = setInterval(() => setElapsed((value) => value + 1), 1000);
-    return () => clearInterval(timer);
-  }, [run]);
-
-  const onExit = useCallback(async () => {
-    haptics.confirm();
-    const current = runRef.current;
-    if (current) await saveRun({ ...current, elapsed });
-    router.back();
-  }, [elapsed, haptics, router]);
+  const ship = shipById(run?.shipId);
 
   const buttonWidth = Math.min(
     layout.buttonWidth,
     width - layout.screenMargin * 2 - insets.left - insets.right,
   );
 
-  const minutes = Math.floor(elapsed / 60);
-  const seconds = Math.floor(elapsed % 60);
-  const ship = shipById(run?.shipId);
+  const onJump = useCallback(() => {
+    haptics.confirm();
+    router.push('/sector');
+  }, [haptics, router]);
+
+  const onLeave = useCallback(() => {
+    haptics.tap();
+    router.back();
+  }, [haptics, router]);
 
   return (
-    <View style={[styles.container, { paddingBottom: insets.bottom + layout.menuBottomOffset }]}>
-      <View style={styles.centre}>
-        <Text style={[styles.ship, { color: ship.accent }]}>{ship.name}</Text>
-        <Text style={styles.headline}>SECTOR {run?.sector ?? 1}</Text>
-        <Text style={styles.clock}>
-          {minutes}:{String(seconds).padStart(2, '0')}
-        </Text>
-        <Text style={styles.hint}>GAMEPLAY GOES HERE</Text>
+    <View style={styles.container}>
+      <Backdrop width={width} height={height} variant="deep" />
+      <StarField width={width} height={height} reduceMotion={settings.reduceMotion} />
+
+      <View style={[styles.leaveRow, { top: insets.top + 6 }]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Leave the run and return to the title screen"
+          onPress={onLeave}
+          hitSlop={16}
+          style={styles.leave}
+        >
+          <Text style={styles.leaveLabel}>LEAVE</Text>
+        </Pressable>
       </View>
 
-      <View style={styles.menu}>
-        <MenuButton label="RETURN TO TITLE" onPress={onExit} width={buttonWidth} />
+      {/* The ship sits low, with the emptiness above it doing the work. */}
+      <Animated.View
+        entering={settings.reduceMotion ? undefined : FadeIn.duration(700)}
+        style={[styles.shipHolder, { paddingBottom: insets.bottom + 188 }]}
+      >
+        <ShipArt shipId={ship.id} accent={ship.accent} width={132} height={172} />
+      </Animated.View>
+
+      <View style={[styles.footer, { paddingBottom: insets.bottom + 44 }]}>
+        <MenuButton label="JUMP" onPress={onJump} primary width={buttonWidth} />
       </View>
     </View>
   );
@@ -83,40 +96,25 @@ export default function RunScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: palette.void },
-  centre: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  menu: { alignItems: 'center' },
-  ship: {
+  leaveRow: { position: 'absolute', left: 20, zIndex: 5 },
+  leave: { paddingVertical: 6, paddingHorizontal: 4 },
+  leaveLabel: {
     fontFamily: fonts.body,
     fontSize: 10,
     fontWeight: '500',
+    color: palette.textDisabled,
     letterSpacing: tracking.caption,
-    marginRight: -tracking.caption,
-    marginBottom: 10,
   },
-  headline: {
-    fontFamily: fonts.display,
-    fontSize: 44,
-    fontWeight: '700',
-    color: palette.textPrimary,
-    letterSpacing: tracking.display,
-    marginRight: -tracking.display,
+  shipHolder: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
-  clock: {
-    fontFamily: fonts.body,
-    fontSize: 15,
-    fontWeight: '500',
-    color: palette.accent,
-    letterSpacing: tracking.label,
-    marginRight: -tracking.label,
-    marginTop: 14,
-  },
-  hint: {
-    fontFamily: fonts.body,
-    fontSize: 11,
-    fontWeight: '500',
-    color: palette.textMuted,
-    letterSpacing: tracking.caption,
-    marginRight: -tracking.caption,
-    marginTop: 18,
+  footer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
   },
 });
