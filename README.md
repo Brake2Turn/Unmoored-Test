@@ -22,6 +22,20 @@ need to be on the same WiFi network.
 
 Edit any file and save: the screen reloads on your phone in about a second.
 
+### Previewing in a browser instead
+
+The same code runs in a desktop browser through `react-native-web`:
+
+```powershell
+npx expo start --web
+```
+
+That opens `http://localhost:8081` with the real app in it — handy for quick
+layout work without reaching for your phone. Two caveats: haptics are silently
+ignored (browsers have no Taptic Engine), and the volume sliders are the one
+control whose web rendering differs from the phone. Check anything touch-related
+in Expo Go before trusting it.
+
 ### If Expo Go says the SDK version doesn't match
 
 Expo Go only runs the current SDK. Upgrade the project to match:
