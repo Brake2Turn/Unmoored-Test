@@ -80,8 +80,26 @@ ship fires a light haptic.
 
 Ships live in `lib/ships.ts` as plain data — name, class, tagline, an accent
 colour that tints the card and stat bars, and three 0–1 stats. The drawing for
-each lives in `components/ships/ShipArt.tsx`, keyed by id. Adding a fourth ship
-means one entry in each file; nothing else needs touching.
+each lives in `components/ships/ShipArt.tsx`, keyed by id. Adding a ship means
+one entry in each file; nothing else needs touching.
+
+Six ships ship today: **Drifter** and **Lance** are available from the first
+launch, and **Bulwark**, **Halo**, **Mantis** and **Vesper** start locked.
+
+### Locking
+
+A ship is locked simply by having an `unlockHint` in `lib/ships.ts`. Locked
+ships still appear in the carousel — seeing what is coming is half the reason
+to keep playing — but they draw in cold grey, carry a padlock, show their
+unlock condition in place of the tagline, and the launch button reads LOCKED
+and does nothing.
+
+Earned ships persist through `lib/unlocks.ts`, which stores the unlocked ids
+in AsyncStorage and always keeps the two starters. **Nothing awards a ship
+yet**, because no run can end — the unlock conditions are written but not
+wired. Once gameplay exists, granting one is a single `unlockShip(id)` call
+and the carousel already reacts. Reset Progress clears earned ships along
+with the run.
 
 ## Project layout
 
@@ -99,7 +117,8 @@ components/
   MenuButton.tsx         Menu entry with pressed and disabled states
   TitleBlock.tsx         Wordmark, rule and tagline
 lib/
-  ships.ts               Ship roster, stats and accents
+  ships.ts               Ship roster, stats, accents and unlock hints
+  unlocks.ts             Which ships the player has earned
   theme.ts               Palette, type scale, layout constants
   runStore.ts            Saves and loads the current run
   settings.tsx           Player preferences + haptics helper

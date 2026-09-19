@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSettings } from '@/lib/settings';
 import { fonts, palette, tracking } from '@/lib/theme';
 import { clearRun, loadRun } from '@/lib/runStore';
+import { resetUnlocks } from '@/lib/unlocks';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -25,13 +26,13 @@ export default function SettingsScreen() {
   }, []);
 
   const onReset = useCallback(() => {
-    Alert.alert('Reset progress?', 'Your current run will be discarded.', [
+    Alert.alert('Reset progress?', 'Your current run and any earned ships will be discarded.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Reset Progress',
         style: 'destructive',
         onPress: async () => {
-          await clearRun();
+          await Promise.all([clearRun(), resetUnlocks()]);
           setHasRun(false);
         },
       },

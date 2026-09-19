@@ -1,7 +1,17 @@
 import React from 'react';
-import Svg, { Defs, Ellipse, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, Ellipse, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 
-type Props = { shipId: string; accent: string; width: number; height: number };
+type Props = {
+  shipId: string;
+  accent: string;
+  width: number;
+  height: number;
+  /** Draws the ship in cold grey instead of its own colour. */
+  locked?: boolean;
+};
+
+/** Every edge and light on a locked ship drops to this. */
+const LOCKED_TINT = '#3E4763';
 
 /** Dark silhouette that lets the accent-coloured edges and glass do the work. */
 const HULL = '#141A2E';
@@ -11,13 +21,14 @@ const HULL_DEEP = '#0B0F1E';
  * Vector art for each ship, drawn in a shared 200×260 box so every silhouette
  * sits on the same baseline and swipes between cleanly.
  */
-export function ShipArt({ shipId, accent, width, height }: Props) {
+export function ShipArt({ shipId, accent, width, height, locked = false }: Props) {
+  const tint = locked ? LOCKED_TINT : accent;
   return (
     <Svg width={width} height={height} viewBox="0 0 200 260">
       <Defs>
         <LinearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor={accent} stopOpacity={0.85} />
-          <Stop offset="1" stopColor={accent} stopOpacity={0.25} />
+          <Stop offset="0" stopColor={tint} stopOpacity={locked ? 0.4 : 0.85} />
+          <Stop offset="1" stopColor={tint} stopOpacity={locked ? 0.12 : 0.25} />
         </LinearGradient>
         <LinearGradient id="plate" x1="0" y1="0" x2="0" y2="1">
           <Stop offset="0" stopColor={HULL} />
@@ -25,11 +36,17 @@ export function ShipArt({ shipId, accent, width, height }: Props) {
         </LinearGradient>
       </Defs>
       {shipId === 'lance' ? (
-        <Lance accent={accent} />
+        <Lance accent={tint} />
       ) : shipId === 'bulwark' ? (
-        <Bulwark accent={accent} />
+        <Bulwark accent={tint} />
+      ) : shipId === 'halo' ? (
+        <Halo accent={tint} />
+      ) : shipId === 'mantis' ? (
+        <Mantis accent={tint} />
+      ) : shipId === 'vesper' ? (
+        <Vesper accent={tint} />
       ) : (
-        <Drifter accent={accent} />
+        <Drifter accent={tint} />
       )}
     </Svg>
   );
@@ -113,6 +130,85 @@ function Bulwark({ accent }: { accent: string }) {
         strokeOpacity={0.35}
       />
       <Path d="M74 216 L94 216 M106 216 L126 216" stroke={accent} strokeWidth={5} strokeLinecap="round" opacity={0.9} />
+    </>
+  );
+}
+
+/** Ring tender: the hull is a torus, the cargo rides inside the hole. */
+function Halo({ accent }: { accent: string }) {
+  return (
+    <>
+      <Rect x={92} y={34} width={16} height={190} rx={7} fill="url(#plate)" stroke={accent} strokeWidth={2} />
+      <Circle cx={100} cy={132} r={62} fill="none" stroke="url(#plate)" strokeWidth={26} />
+      <Circle cx={100} cy={132} r={75} fill="none" stroke={accent} strokeWidth={2} />
+      <Circle cx={100} cy={132} r={49} fill="none" stroke={accent} strokeWidth={2} strokeOpacity={0.6} />
+      <Path
+        d="M100 57 L100 70 M175 132 L162 132 M100 207 L100 194 M25 132 L38 132"
+        stroke={accent}
+        strokeWidth={3}
+        strokeLinecap="round"
+        opacity={0.8}
+      />
+      <Circle cx={100} cy={56} r={13} fill="url(#glass)" stroke={accent} strokeWidth={1.5} />
+      <Path d="M92 220 L108 220" stroke={accent} strokeWidth={4} strokeLinecap="round" opacity={0.9} />
+    </>
+  );
+}
+
+/** Salvage craft: a narrow body between two forward grappling claws. */
+function Mantis({ accent }: { accent: string }) {
+  return (
+    <>
+      <Path
+        d="M84 98 C 50 112 38 154 52 192 L68 184 C 58 154 66 124 88 116 Z"
+        fill="url(#plate)"
+        stroke={accent}
+        strokeWidth={2}
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M116 98 C 150 112 162 154 148 192 L132 184 C 142 154 134 124 112 116 Z"
+        fill="url(#plate)"
+        stroke={accent}
+        strokeWidth={2}
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M100 30 L118 88 L112 206 L88 206 L82 88 Z"
+        fill="url(#plate)"
+        stroke={accent}
+        strokeWidth={2}
+        strokeLinejoin="round"
+      />
+      <Ellipse cx={100} cy={74} rx={12} ry={22} fill="url(#glass)" stroke={accent} strokeWidth={1.5} />
+      <Path d="M52 192 L46 202 M148 192 L154 202" stroke={accent} strokeWidth={3} strokeLinecap="round" />
+      <Path d="M90 214 L110 214" stroke={accent} strokeWidth={4} strokeLinecap="round" opacity={0.9} />
+    </>
+  );
+}
+
+/** Sail clipper: an enormous solar sail dragging a very small boat. */
+function Vesper({ accent }: { accent: string }) {
+  return (
+    <>
+      <Path
+        d="M100 22 L172 178 L28 178 Z"
+        fill={accent}
+        fillOpacity={0.09}
+        stroke={accent}
+        strokeWidth={2}
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M100 22 L100 178 M100 22 L64 178 M100 22 L136 178"
+        stroke={accent}
+        strokeWidth={1.5}
+        strokeOpacity={0.4}
+      />
+      <Path d="M56 150 L144 150" stroke={accent} strokeWidth={1.5} strokeOpacity={0.3} />
+      <Rect x={90} y={168} width={20} height={56} rx={9} fill="url(#plate)" stroke={accent} strokeWidth={2} />
+      <Circle cx={100} cy={184} r={7} fill="url(#glass)" stroke={accent} strokeWidth={1.2} />
+      <Path d="M93 228 L107 228" stroke={accent} strokeWidth={4} strokeLinecap="round" opacity={0.9} />
     </>
   );
 }

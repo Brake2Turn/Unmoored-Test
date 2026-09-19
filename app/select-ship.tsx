@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -24,8 +24,10 @@ import { MenuButton } from '@/components/MenuButton';
 import { ShipArt } from '@/components/ships/ShipArt';
 import { useHaptics } from '@/lib/settings';
 import { fonts, layout, palette, tracking } from '@/lib/theme';
-import { SHIPS, type Ship } from '@/lib/ships';
+import { SHIPS, STARTER_SHIP_IDS, type Ship } from '@/lib/ships';
+import { loadUnlocked } from '@/lib/unlocks';
 import { startNewRun } from '@/lib/runStore';
+import Svg, { Path, Rect as SvgRect } from 'react-native-svg';
 
 const CARD_GAP = 16;
 
@@ -37,6 +39,17 @@ export default function SelectShipScreen() {
 
   const [index, setIndex] = useState(0);
   const [launching, setLaunching] = useState(false);
+  const [unlocked, setUnlocked] = useState<string[]>(STARTER_SHIP_IDS);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadUnlocked().then((ids) => {
+      if (!cancelled) setUnlocked(ids);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const scrollX = useSharedValue(0);
   // Tracked in a ref so the scroll handler can tell a real change from a
   // settle on the same card without re-rendering.
@@ -66,14 +79,16 @@ export default function SelectShipScreen() {
   );
 
   const selected = SHIPS[index];
+  const isLocked = !unlocked.includes(selected.id);
 
   const onLaunch = useCallback(async () => {
-    if (launching) return;
+    // The button is disabled on a locked ship; this is belt-and-braces.
+    if (launching || isLocked) return;
     setLaunching(true);
     haptics.confirm();
     await startNewRun(selected.id);
     router.replace('/run');
-  }, [haptics, launching, router, selected.id]);
+  }, [haptics, isLocked, launching, router, selected.id]);
 
   const buttonWidth = Math.min(
     layout.buttonWidth,
@@ -117,20 +132,31 @@ export default function SelectShipScreen() {
               scrollX={scrollX}
               snapInterval={snapInterval}
               cardWidth={cardWidth}
+              locked={!unlocked.includes(ship.id)}
             />
           ))}
         </Animated.ScrollView>
       </View>
 
       <View style={styles.info}>
-        <Text style={[styles.className, { color: selected.accent }]}>{selected.className}</Text>
-        <Text style={styles.name}>{selected.name}</Text>
-        <Text style={styles.tagline}>{selected.tagline}</Text>
+        <Text style={[styles.className, { color: isLocked ? palette.textDisabled : selected.accent }]}>
+          {selected.className}
+        </Text>
+        <Text style={[styles.name, isLocked && { color: palette.textDisabled }]}>{selected.name}</Text>
+
+        {isLocked ? (
+          <View style={styles.hintRow}>
+            <LockGlyph size={11} color={palette.textMuted} />
+            <Text style={styles.unlockHint}>{selected.unlockHint}</Text>
+          </View>
+        ) : (
+          <Text style={styles.tagline}>{selected.tagline}</Text>
+        )}
 
         <View style={styles.stats}>
-          <StatBar label="HULL" value={selected.stats.hull} accent={selected.accent} />
-          <StatBar label="SPEED" value={selected.stats.speed} accent={selected.accent} />
-          <StatBar label="CARGO" value={selected.stats.cargo} accent={selected.accent} />
+          <StatBar label="HULL" value={selected.stats.hull} accent={selected.accent} locked={isLocked} />
+          <StatBar label="SPEED" value={selected.stats.speed} accent={selected.accent} locked={isLocked} />
+          <StatBar label="CARGO" value={selected.stats.cargo} accent={selected.accent} locked={isLocked} />
         </View>
 
         <View style={styles.dots}>
@@ -139,7 +165,10 @@ export default function SelectShipScreen() {
               key={ship.id}
               style={[
                 styles.dot,
-                i === index && { backgroundColor: selected.accent, width: 18 },
+                i === index && {
+                  backgroundColor: isLocked ? palette.textDisabled : selected.accent,
+                  width: 18,
+                },
               ]}
             />
           ))}
@@ -147,7 +176,13 @@ export default function SelectShipScreen() {
       </View>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + 28 }]}>
-        <MenuButton label="LAUNCH" onPress={onLaunch} primary width={buttonWidth} />
+        <MenuButton
+          label={isLocked ? 'LOCKED' : 'LAUNCH'}
+          onPress={onLaunch}
+          primary={!isLocked}
+          disabled={isLocked}
+          width={buttonWidth}
+        />
       </View>
     </View>
   );
@@ -163,12 +198,14 @@ function ShipCard({
   scrollX,
   snapInterval,
   cardWidth,
+  locked,
 }: {
   ship: Ship;
   position: number;
   scrollX: SharedValue<number>;
   snapInterval: number;
   cardWidth: number;
+  locked: boolean;
 }) {
   const animatedStyle = useAnimatedStyle(() => {
     const range = [
@@ -186,20 +223,44 @@ function ShipCard({
 
   return (
     <Animated.View style={[styles.card, { width: cardWidth }, animatedStyle]}>
-      <View style={[styles.cardInner, { borderColor: ship.accent }]}>
+      <View
+        style={[
+          styles.cardInner,
+          { borderColor: locked ? 'rgba(255,255,255,0.10)' : ship.accent },
+          locked && styles.cardLocked,
+        ]}
+      >
         <ShipArt
           shipId={ship.id}
           accent={ship.accent}
           width={cardWidth * 0.74}
           height={cardWidth * 0.97}
+          locked={locked}
         />
+        {locked ? (
+          <View style={styles.lockBadge}>
+            <LockGlyph size={13} color={palette.textMuted} />
+            <Text style={styles.lockLabel}>LOCKED</Text>
+          </View>
+        ) : null}
       </View>
     </Animated.View>
   );
 }
 
-function StatBar({ label, value, accent }: { label: string; value: number; accent: string }) {
+function StatBar({
+  label,
+  value,
+  accent,
+  locked,
+}: {
+  label: string;
+  value: number;
+  accent: string;
+  locked: boolean;
+}) {
   const filled = Math.round(value * 5);
+  const fill = locked ? 'rgba(255,255,255,0.22)' : accent;
   return (
     <View style={styles.statRow}>
       <Text style={styles.statLabel}>{label}</Text>
@@ -209,12 +270,28 @@ function StatBar({ label, value, accent }: { label: string; value: number; accen
             key={i}
             style={[
               styles.segment,
-              i < filled ? { backgroundColor: accent } : null,
+              i < filled ? { backgroundColor: fill } : null,
             ]}
           />
         ))}
       </View>
     </View>
+  );
+}
+
+/** Small padlock, drawn rather than pulled from an icon font. */
+function LockGlyph({ size, color }: { size: number; color: string }) {
+  return (
+    <Svg width={size} height={size * 1.25} viewBox="0 0 16 20">
+      <Path
+        d="M4.5 8.5 V5.5 a3.5 3.5 0 0 1 7 0 V8.5"
+        fill="none"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+      />
+      <SvgRect x={2} y={8.5} width={12} height={9.5} rx={2.2} fill={color} />
+    </Svg>
   );
 }
 
@@ -256,6 +333,23 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.028)',
   },
 
+  cardLocked: { backgroundColor: 'rgba(255,255,255,0.012)' },
+  lockBadge: {
+    position: 'absolute',
+    bottom: 22,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  lockLabel: {
+    fontFamily: fonts.body,
+    fontSize: 10,
+    fontWeight: '500',
+    color: palette.textMuted,
+    letterSpacing: tracking.caption,
+    marginRight: -tracking.caption,
+  },
+
   info: { alignItems: 'center', paddingHorizontal: 24, paddingTop: 18 },
   className: {
     fontFamily: fonts.body,
@@ -279,6 +373,16 @@ const styles = StyleSheet.create({
     color: palette.textMuted,
     marginTop: 8,
     textAlign: 'center',
+  },
+
+  hintRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 9 },
+  unlockHint: {
+    fontFamily: fonts.body,
+    fontSize: 11,
+    fontWeight: '500',
+    color: palette.textMuted,
+    letterSpacing: tracking.caption,
+    marginRight: -tracking.caption,
   },
 
   stats: { width: '100%', maxWidth: 260, gap: 7, marginTop: 18 },
