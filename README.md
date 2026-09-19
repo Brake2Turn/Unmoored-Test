@@ -178,11 +178,9 @@ moves the ship there like any other.
 
 ### Fuel
 
-A full tank is **13 jumps** — `Math.round(NODE_COUNT * 0.65)`, which for twenty
-stars is exactly 13, no rounding required. One jump costs one fuel and reaches
-one new star, so a tank explores 65% of the sector. The starting star is home
-rather than something explored, which is what makes the arithmetic land on the
-nose.
+A full tank is **10 jumps** — `Math.round(NODE_COUNT * FUEL_COVERAGE)` with
+coverage at 0.5. One jump costs one fuel wherever it goes, so a tank with no
+backtracking reaches half the sector.
 
 The readout is an **F badge and a count** — `Ⓕ 13` — above JUMP on the helm and
 smaller in the map header. It turns red below a quarter of a tank. At zero,
@@ -192,13 +190,13 @@ OUT OF FUEL.
 **Every jump costs one fuel, including a hop back to a star already visited.**
 `visited` holds distinct stars only, for drawing the rings; `jumps` counts hops
 and is what the sector number follows. Bouncing between two stars therefore
-drains a tank in 13 jumps while `visited` stays at 2 — verified by driving the
+drains a tank in 10 jumps while `visited` stays at 2 — verified by driving the
 preview through exactly that.
 
 Measured over 5,000 maps: the boss is **always exactly 6 jumps** from the start,
 because the band spacing (22.7) is more than half the jump range (34), so a jump
 can never skip a band. A tank therefore covers a fixed 6-jump critical path plus
-**7 spare jumps** to spend on detours — that spare budget is the whole decision.
+**4 spare jumps** to spend on detours — that spare budget is the whole decision.
 No map is unwinnable for want of fuel.
 
 **Running dry does not end the run yet.** The ship is simply stuck, and LEAVE is

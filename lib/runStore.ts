@@ -97,6 +97,7 @@ export function hydrateRun(run: RunState): RunState {
     typeof run.position === 'number' &&
     run.visited?.length &&
     typeof run.fuel === 'number' &&
+    run.fuel <= FUEL_PER_RUN &&
     typeof run.jumps === 'number';
   if (complete) return run;
 
@@ -112,7 +113,12 @@ export function hydrateRun(run: RunState): RunState {
     position,
     visited,
     jumps,
-    fuel: typeof run.fuel === 'number' ? run.fuel : Math.max(FUEL_PER_RUN - jumps, 0),
+    // Clamped, so a save made when tanks were bigger cannot hold more fuel
+    // than the badge is able to show.
+    fuel:
+      typeof run.fuel === 'number'
+        ? Math.min(run.fuel, FUEL_PER_RUN)
+        : Math.max(FUEL_PER_RUN - jumps, 0),
   };
 }
 
