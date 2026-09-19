@@ -1,109 +1,117 @@
 # Unmoored
 
-A space-themed iOS game. This repository currently contains the **start screen**
-and the scaffolding around it.
+A space-themed mobile game, built with Expo (React Native). This repository
+currently contains the **start screen** and the scaffolding around it.
 
 ![Start screen, both states](docs/start-screen-states.svg)
 
-## Requirements
+## Getting it running on Windows
 
-- Xcode 16 or later (the project uses synchronized file groups, `objectVersion 77`)
-- iOS 17.0+ deployment target
-- A Mac — SpriteKit does not build on Linux
+You need [Node.js](https://nodejs.org) (LTS) and the **Expo Go** app from the
+iPhone App Store. No Mac, no Xcode.
 
-## Running it
-
-```sh
-open Unmoored.xcodeproj
+```powershell
+npm install
+npx expo install --fix
+npx expo start
 ```
 
-Then pick an iPhone simulator and hit Run. From the command line:
+A QR code appears in the terminal. Open the **Camera** app on your iPhone, point
+it at the code, and tap the banner — the game opens in Expo Go. Your phone and PC
+need to be on the same WiFi network.
 
-```sh
-xcodebuild -scheme Unmoored -destination 'platform=iOS Simulator,name=iPhone 15' build
+Edit any file and save: the screen reloads on your phone in about a second.
+
+### If Expo Go says the SDK version doesn't match
+
+Expo Go only runs the current SDK. Upgrade the project to match:
+
+```powershell
+npx expo install expo@latest --fix
 ```
 
-No dependencies, no package resolution, nothing to install first.
+That one command realigns every dependency, and is also the fix for any
+"incompatible version" warning during install.
 
 ## What the start screen does
 
-Three menu entries, as specified:
+Three menu entries:
 
 | Entry | Behaviour |
 | --- | --- |
-| **New Run** | Discards any saved run, writes a fresh one, and enters the run scene. |
+| **New Run** | Discards any saved run, writes a fresh one, and opens the run screen. |
 | **Continue Run** | Enabled only when a save exists. Its caption shows that run's progress (`SECTOR 3 · 12:40 · HULL 84%`); with no save it reads `NO RUN IN PROGRESS` and is greyed out and untappable. |
-| **Settings** | Presents the settings sheet over the scene. |
+| **Settings** | Slides up the settings sheet. |
 
 Supporting details:
 
 - **Parallax starfield** — three depth bands scrolling at different speeds, looping
-  seamlessly, with a subset of stars twinkling out of phase.
-- **Backdrop** — gradient sky, two drifting nebula blooms, a lit planet rising from
-  the lower edge with an atmospheric rim, and an occasional shooting star.
-- **Entrance animation** — title fades and settles, menu entries rise in sequence.
-  It plays on first launch only; returning from a run does not replay it.
-- **Touch feel** — press states with scale and bloom, drag-off cancels the way UIKit
-  controls do, light haptic on press and a firmer one on activation.
-- **Layout** — everything is derived from the scene size and the real safe-area
-  insets, so it adapts across devices rather than assuming one screen.
-- **Reduce Motion** — a settings toggle that stills the drift, parallax and entrance
-  for players sensitive to motion.
+  seamlessly, with a subset of stars twinkling out of phase. Animation runs on the
+  UI thread via Reanimated, so it stays smooth.
+- **Backdrop** — gradient sky, two nebula blooms, and a lit planet rising from the
+  lower edge with an atmospheric rim.
+- **Entrance animation** — the title fades in and the menu entries rise in sequence.
+- **Touch feel** — press states with scale and bloom, drag-off cancels, and a light
+  haptic on tap with a firmer one on activation.
+- **Layout** — derived from the real screen size and safe-area insets, so it adapts
+  across devices rather than assuming one screen.
+- **Reduce Motion** — a settings toggle that stills the drift and the entrance.
 
 ## Project layout
 
 ```
-Unmoored/
-  UnmooredApp.swift          @main entry point
-  RootView.swift             Hosts the SpriteKit scene, presents the settings sheet
-  AppModel.swift             Navigation state, scene transitions, menu delegate
-  Scenes/
-    StartScene.swift         The start screen
-    RunPlaceholderScene.swift  Stand-in for gameplay (see below)
-    Nodes/
-      Starfield.swift        Looping parallax star layers
-      CelestialBackdrop.swift  Sky, nebulae, planet, shooting stars
-      MenuButton.swift       Menu entry with pressed and disabled states
-  Models/
-    RunState.swift           A single in-progress run
-    RunStore.swift           Saves and loads that run as JSON
-    GameSettings.swift       Player preferences, persisted to UserDefaults
-  Views/
-    SettingsView.swift       SwiftUI settings sheet
-  Support/
-    Theme.swift              Palette, type scale, layout constants
-    TextureFactory.swift     Runtime-generated star, glow, gradient and planet textures
-    Haptics.swift            Feedback wrapper that respects the settings toggle
+app/                     Screens (expo-router: one file = one route)
+  _layout.tsx            Navigation stack, providers, status bar
+  index.tsx              The start screen
+  run.tsx                Stand-in for gameplay (see below)
+  settings.tsx           Settings sheet
+components/
+  StarField.tsx          Looping parallax star layers
+  Backdrop.tsx           Sky gradient, nebulae, planet
+  MenuButton.tsx         Menu entry with pressed and disabled states
+  TitleBlock.tsx         Wordmark, rule and tagline
+lib/
+  theme.ts               Palette, type scale, layout constants
+  runStore.ts            Saves and loads the current run
+  settings.tsx           Player preferences + haptics helper
+assets/
+  icon.png               App icon (1024×1024)
 ```
 
-There are no image assets beyond the app icon — every glow and gradient is drawn at
-runtime, so the art scales to any screen and the app stays small.
+There are no image assets beyond the icon — every gradient and glow is drawn with
+SVG or native views, so the art scales to any screen.
 
-## The placeholder run scene
+## The placeholder run screen
 
-`RunPlaceholderScene` is **not gameplay**. It exists so the three menu actions can be
-exercised end to end: starting a run creates a save, time spent in it accumulates, and
+`app/run.tsx` is **not gameplay**. It exists so the menu actions can be exercised
+end to end: starting a run creates a save, time spent there accumulates, and
 leaving writes it back so Continue Run has something real to resume. Replace it
-wholesale when the actual game scene arrives — `AppModel.enterRun(_:)` is the only
-place that references it.
+when the actual game arrives — nothing else depends on its contents.
 
-## Regenerating the project file
+## Publishing to the App Store
 
-`Unmoored.xcodeproj` is committed and is the source of truth. `project.yml` is an
-[XcodeGen](https://github.com/yonaskolb/XcodeGen) spec kept alongside it, so the
-project can be rebuilt from scratch if that file is ever lost or hits a merge
-conflict:
+All of this happens from Windows. Expo builds the iPhone app on their Macs.
 
-```sh
-brew install xcodegen && xcodegen generate
+```powershell
+npm install -g eas-cli
+eas login
+eas build --platform ios      # produces a real .ipa
+eas submit --platform ios     # uploads it to App Store Connect
 ```
 
-## Before submitting to the App Store
+You will need:
 
-The scaffolding is in place but these are still placeholders:
+- An **Apple Developer Program** membership — $99/year, required by Apple to publish.
+- An **Expo account** — the free tier includes a limited number of cloud builds per month.
 
-- `PRODUCT_BUNDLE_IDENTIFIER` is `com.unmoored.game` — change it to an identifier you own.
-- No development team is set; signing is on Automatic.
-- The app icon is a generated placeholder. It is a valid 1024×1024 asset, but it is
-  not a finished piece of art.
-- App Store Connect will also want a privacy manifest, screenshots and a support URL.
+Still placeholders before you ship:
+
+- `bundleIdentifier` is `com.unmoored.game` in `app.json` — change it to something you own.
+- The app icon is generated art, not a finished piece of design.
+- App Store Connect will also want screenshots, a description and a privacy policy.
+
+## History
+
+The start screen was first built as a native Swift + SpriteKit app. That version
+is preserved in git history at commit `bc42c4d` if it is ever useful — it was
+replaced because building it requires a Mac.
