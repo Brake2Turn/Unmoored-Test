@@ -25,9 +25,11 @@ export type RunState = {
   map?: SectorMap;
   /** Index of the node the ship is currently sitting on. */
   position?: number;
-  /** Every node visited so far, oldest first. Its length is the sector number. */
+  /** Distinct nodes stood on, oldest first. Revisiting one does not re-add it. */
   visited?: number[];
-  /** Jumps left in the tank. Each jump costs one. */
+  /** Jumps made, counting a hop back to a star already visited. */
+  jumps?: number;
+  /** Jumps left in the tank. Each jump costs one, wherever it goes. */
   fuel?: number;
 };
 
@@ -45,6 +47,7 @@ function createRun(shipId: string): RunState {
     map,
     position: map.start,
     visited: [map.start],
+    jumps: 0,
     fuel: FUEL_PER_RUN,
   };
 }
@@ -90,21 +93,26 @@ export async function clearRun(): Promise<void> {
  */
 export function hydrateRun(run: RunState): RunState {
   const complete =
-    run.map && typeof run.position === 'number' && run.visited?.length && typeof run.fuel === 'number';
+    run.map &&
+    typeof run.position === 'number' &&
+    run.visited?.length &&
+    typeof run.fuel === 'number' &&
+    typeof run.jumps === 'number';
   if (complete) return run;
 
   const map = run.map ?? generateMap();
   const position = typeof run.position === 'number' ? run.position : map.start;
-  const visited = run.visited?.length ? run.visited : [position];
-  // An older run has already spent whatever it jumped before fuel existed.
-  const spent = Math.max(visited.length - 1, 0);
+  // Older saves appended a duplicate on every backtrack; collapse them.
+  const visited = run.visited?.length ? [...new Set(run.visited)] : [position];
+  const jumps = typeof run.jumps === 'number' ? run.jumps : Math.max((run.visited?.length ?? 1) - 1, 0);
 
   return {
     ...run,
     map,
     position,
     visited,
-    fuel: typeof run.fuel === 'number' ? run.fuel : Math.max(FUEL_PER_RUN - spent, 0),
+    jumps,
+    fuel: typeof run.fuel === 'number' ? run.fuel : Math.max(FUEL_PER_RUN - jumps, 0),
   };
 }
 

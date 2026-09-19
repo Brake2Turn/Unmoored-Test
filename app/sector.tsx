@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-na
 import Svg, { Circle, Line } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { FuelGauge } from '@/components/FuelGauge';
+import { FuelBadge } from '@/components/FuelBadge';
 import { MenuButton } from '@/components/MenuButton';
 import { useHaptics, useSettings } from '@/lib/settings';
 import { StarField } from '@/components/StarField';
@@ -98,12 +98,17 @@ export default function SectorScreen() {
     setJumping(true);
     haptics.confirm();
 
-    const nextVisited = [...(run.visited ?? [position]), target];
+    // Fuel is spent per jump, not per new star — doubling back costs the same.
+    const seen = run.visited ?? [position];
+    const nextVisited = seen.includes(target) ? seen : [...seen, target];
+    const nextJumps = (run.jumps ?? Math.max(seen.length - 1, 0)) + 1;
+
     const updated: RunState = {
       ...run,
       position: target,
       visited: nextVisited,
-      sector: nextVisited.length,
+      jumps: nextJumps,
+      sector: nextJumps + 1,
       fuel: Math.max(fuel - 1, 0),
     };
     await saveRun(updated);
@@ -138,13 +143,12 @@ export default function SectorScreen() {
           <Text style={styles.backLabel}>BACK</Text>
         </Pressable>
         <Text style={styles.heading}>SECTOR {run?.sector ?? 1}</Text>
-        <View style={styles.back}>
-          <FuelGauge
+        <View style={[styles.back, styles.fuelSlot]}>
+          <FuelBadge
             remaining={fuel}
             capacity={FUEL_PER_RUN}
             accent={ship.accent}
-            width={52}
-            variant="compact"
+            size="compact"
           />
         </View>
       </View>
@@ -281,7 +285,7 @@ export default function SectorScreen() {
           {dry
             ? 'NO FUEL — THE SHIP IS ADRIFT'
             : target === null
-            ? `${inRange.size} STARS IN RANGE · ${fuel} JUMPS LEFT`
+            ? `${inRange.size} STARS IN RANGE`
             : `${target === boss ? 'BOSS · ' : ''}RANGE ${Math.round(
                 distance(map.nodes[position], map.nodes[target]),
               )} OF ${JUMP_RANGE}`}
@@ -313,6 +317,7 @@ const styles = StyleSheet.create({
     zIndex: 5,
   },
   back: { width: 52 },
+  fuelSlot: { alignItems: 'flex-end' },
   backLabel: {
     fontFamily: fonts.body,
     fontSize: 11,

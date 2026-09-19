@@ -112,7 +112,7 @@ app/                     Screens (expo-router: one file = one route)
   sector.tsx             The twenty-star jump map
   settings.tsx           Settings sheet
 components/
-  FuelGauge.tsx          Tank readout, shared by the helm and the map
+  FuelBadge.tsx          Ⓕ badge and count, shared by the helm and the map
   ships/ShipArt.tsx      Vector art for each ship
   StarField.tsx          Looping parallax star layers
   Backdrop.tsx           Sky gradient, nebulae, planet
@@ -184,9 +184,16 @@ one new star, so a tank explores 65% of the sector. The starting star is home
 rather than something explored, which is what makes the arithmetic land on the
 nose.
 
-The gauge sits above JUMP on the helm and shrinks to a bar in the map header. It
-turns red below a quarter of a tank. At zero, nothing on the map is selectable,
-the range ring fades out and both buttons read OUT OF FUEL.
+The readout is an **F badge and a count** — `Ⓕ 13` — above JUMP on the helm and
+smaller in the map header. It turns red below a quarter of a tank. At zero,
+nothing on the map is selectable, the range ring fades out and both buttons read
+OUT OF FUEL.
+
+**Every jump costs one fuel, including a hop back to a star already visited.**
+`visited` holds distinct stars only, for drawing the rings; `jumps` counts hops
+and is what the sector number follows. Bouncing between two stars therefore
+drains a tank in 13 jumps while `visited` stays at 2 — verified by driving the
+preview through exactly that.
 
 Measured over 5,000 maps: the boss is **always exactly 6 jumps** from the start,
 because the band spacing (22.7) is more than half the jump range (34), so a jump

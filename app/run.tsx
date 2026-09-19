@@ -5,7 +5,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Backdrop } from '@/components/Backdrop';
-import { FuelGauge } from '@/components/FuelGauge';
+import { FuelBadge } from '@/components/FuelBadge';
 import { MenuButton } from '@/components/MenuButton';
 import { StarField } from '@/components/StarField';
 import { ShipArt } from '@/components/ships/ShipArt';
@@ -93,12 +93,7 @@ export default function RunScreen() {
       </Animated.View>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + 44 }]}>
-        <FuelGauge
-          remaining={fuel}
-          capacity={FUEL_PER_RUN}
-          accent={ship.accent}
-          width={buttonWidth}
-        />
+        <FuelBadge remaining={fuel} capacity={FUEL_PER_RUN} accent={ship.accent} />
         <MenuButton
           label={dry ? 'OUT OF FUEL' : 'JUMP'}
           onPress={onJump}
