@@ -19,6 +19,7 @@ export default function RootLayout() {
           }}
         >
           <Stack.Screen name="index" />
+          <Stack.Screen name="select-ship" />
           <Stack.Screen name="run" />
           <Stack.Screen
             name="settings"

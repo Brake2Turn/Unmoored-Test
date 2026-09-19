@@ -10,7 +10,7 @@ import { StarField } from '@/components/StarField';
 import { TitleBlock } from '@/components/TitleBlock';
 import { useHaptics, useSettings } from '@/lib/settings';
 import { fonts, layout, palette, tracking } from '@/lib/theme';
-import { loadRun, startNewRun, summarize, type RunState } from '@/lib/runStore';
+import { loadRun, summarize, type RunState } from '@/lib/runStore';
 
 const VERSION = 'V0.1.0 (1)';
 
@@ -55,11 +55,11 @@ export default function StartScreen() {
 
   const animate = !settings.reduceMotion && !entranceDone;
 
-  const onNewRun = useCallback(async () => {
+  const onNewRun = useCallback(() => {
     haptics.confirm();
-    const fresh = await startNewRun();
-    setRun(fresh);
-    router.push('/run');
+    // The run is not created until a ship is chosen, so backing out of ship
+    // select leaves any existing save untouched.
+    router.push('/select-ship');
   }, [haptics, router]);
 
   const onContinue = useCallback(() => {

@@ -53,7 +53,7 @@ Three menu entries:
 
 | Entry | Behaviour |
 | --- | --- |
-| **New Run** | Discards any saved run, writes a fresh one, and opens the run screen. |
+| **New Run** | Opens ship select. The run is only created once a ship launches, so backing out leaves an existing save untouched. |
 | **Continue Run** | Enabled only when a save exists. Its caption shows that run's progress (`SECTOR 3 · 12:40 · HULL 84%`); with no save it reads `NO RUN IN PROGRESS` and is greyed out and untappable. |
 | **Settings** | Slides up the settings sheet. |
 
@@ -71,20 +71,35 @@ Supporting details:
   across devices rather than assuming one screen.
 - **Reduce Motion** — a settings toggle that stills the drift and the entrance.
 
+## Ship select
+
+Pressing New Run opens a horizontal carousel. The centred ship sits at full size
+and full opacity; its neighbours shrink and dim, staying visible at the screen
+edges so the swipe invites itself. Snapping is per-card, and settling on a new
+ship fires a light haptic.
+
+Ships live in `lib/ships.ts` as plain data — name, class, tagline, an accent
+colour that tints the card and stat bars, and three 0–1 stats. The drawing for
+each lives in `components/ships/ShipArt.tsx`, keyed by id. Adding a fourth ship
+means one entry in each file; nothing else needs touching.
+
 ## Project layout
 
 ```
 app/                     Screens (expo-router: one file = one route)
   _layout.tsx            Navigation stack, providers, status bar
   index.tsx              The start screen
+  select-ship.tsx        Swipeable ship carousel
   run.tsx                Stand-in for gameplay (see below)
   settings.tsx           Settings sheet
 components/
+  ships/ShipArt.tsx      Vector art for each ship
   StarField.tsx          Looping parallax star layers
   Backdrop.tsx           Sky gradient, nebulae, planet
   MenuButton.tsx         Menu entry with pressed and disabled states
   TitleBlock.tsx         Wordmark, rule and tagline
 lib/
+  ships.ts               Ship roster, stats and accents
   theme.ts               Palette, type scale, layout constants
   runStore.ts            Saves and loads the current run
   settings.tsx           Player preferences + haptics helper

@@ -7,6 +7,7 @@ import { MenuButton } from '@/components/MenuButton';
 import { useHaptics } from '@/lib/settings';
 import { fonts, layout, palette, tracking } from '@/lib/theme';
 import { loadRun, saveRun, type RunState } from '@/lib/runStore';
+import { shipById } from '@/lib/ships';
 
 /**
  * A stand-in for gameplay.
@@ -60,10 +61,12 @@ export default function RunScreen() {
 
   const minutes = Math.floor(elapsed / 60);
   const seconds = Math.floor(elapsed % 60);
+  const ship = shipById(run?.shipId);
 
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom + layout.menuBottomOffset }]}>
       <View style={styles.centre}>
+        <Text style={[styles.ship, { color: ship.accent }]}>{ship.name}</Text>
         <Text style={styles.headline}>SECTOR {run?.sector ?? 1}</Text>
         <Text style={styles.clock}>
           {minutes}:{String(seconds).padStart(2, '0')}
@@ -82,6 +85,14 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: palette.void },
   centre: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   menu: { alignItems: 'center' },
+  ship: {
+    fontFamily: fonts.body,
+    fontSize: 10,
+    fontWeight: '500',
+    letterSpacing: tracking.caption,
+    marginRight: -tracking.caption,
+    marginBottom: 10,
+  },
   headline: {
     fontFamily: fonts.display,
     fontSize: 44,

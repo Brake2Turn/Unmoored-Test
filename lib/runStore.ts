@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { DEFAULT_SHIP_ID } from '@/lib/ships';
+
 const KEY = 'unmoored.currentRun';
 
 /**
@@ -16,9 +18,11 @@ export type RunState = {
   /** Seconds of play accumulated across all sessions of this run. */
   elapsed: number;
   hullIntegrity: number;
+  /** Which ship this run launched in. Absent on saves from before ship select. */
+  shipId?: string;
 };
 
-function createRun(): RunState {
+function createRun(shipId: string): RunState {
   const now = Date.now();
   return {
     id: `${now}-${Math.random().toString(36).slice(2, 10)}`,
@@ -27,6 +31,7 @@ function createRun(): RunState {
     sector: 1,
     elapsed: 0,
     hullIntegrity: 1,
+    shipId,
   };
 }
 
@@ -51,8 +56,8 @@ export async function saveRun(run: RunState): Promise<void> {
   }
 }
 
-export async function startNewRun(): Promise<RunState> {
-  const run = createRun();
+export async function startNewRun(shipId: string = DEFAULT_SHIP_ID): Promise<RunState> {
+  const run = createRun(shipId);
   await saveRun(run);
   return run;
 }
