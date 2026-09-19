@@ -44,7 +44,7 @@ export default function SelectShipScreen() {
 
   // The card leaves a margin on both sides, so the neighbouring ships stay
   // visible at the screen edges — that peek is what invites the swipe.
-  const cardWidth = Math.min(width * 0.78, 330);
+  const cardWidth = Math.min(width * 0.72, 320);
   const snapInterval = cardWidth + CARD_GAP;
   const sidePadding = (width - cardWidth) / 2;
 
@@ -178,9 +178,9 @@ function ShipCard({
     ];
     return {
       transform: [
-        { scale: interpolate(scrollX.value, range, [0.86, 1, 0.86], Extrapolation.CLAMP) },
+        { scale: interpolate(scrollX.value, range, [0.9, 1, 0.9], Extrapolation.CLAMP) },
       ],
-      opacity: interpolate(scrollX.value, range, [0.4, 1, 0.4], Extrapolation.CLAMP),
+      opacity: interpolate(scrollX.value, range, [0.5, 1, 0.5], Extrapolation.CLAMP),
     };
   });
 
@@ -190,8 +190,8 @@ function ShipCard({
         <ShipArt
           shipId={ship.id}
           accent={ship.accent}
-          width={cardWidth * 0.62}
-          height={cardWidth * 0.81}
+          width={cardWidth * 0.74}
+          height={cardWidth * 0.97}
         />
       </View>
     </Animated.View>
