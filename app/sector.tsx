@@ -4,13 +4,15 @@ import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-na
 import Svg, { Circle, Line } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { FuelGauge } from '@/components/FuelGauge';
 import { MenuButton } from '@/components/MenuButton';
 import { useHaptics, useSettings } from '@/lib/settings';
 import { StarField } from '@/components/StarField';
 import { fonts, layout, palette, tracking } from '@/lib/theme';
-import { loadRun, saveRun, withMap, type RunState } from '@/lib/runStore';
+import { loadRun, saveRun, hydrateRun, type RunState } from '@/lib/runStore';
 import { shipById } from '@/lib/ships';
 import {
+  FUEL_PER_RUN,
   JUMP_RANGE,
   MAP_H,
   MAP_W,
@@ -45,7 +47,7 @@ export default function SectorScreen() {
     let cancelled = false;
     loadRun().then((value) => {
       if (cancelled || !value) return;
-      setRun(withMap(value));
+      setRun(hydrateRun(value));
     });
     return () => {
       cancelled = true;
@@ -56,10 +58,12 @@ export default function SectorScreen() {
   const position = run?.position ?? map?.start ?? 0;
   const visited = useMemo(() => new Set(run?.visited ?? []), [run?.visited]);
   const ship = shipById(run?.shipId);
+  const fuel = run?.fuel ?? FUEL_PER_RUN;
+  const dry = fuel <= 0;
 
   const inRange = useMemo(
-    () => (map ? new Set(reachableFrom(map, position)) : new Set<number>()),
-    [map, position],
+    () => (map && !dry ? new Set(reachableFrom(map, position)) : new Set<number>()),
+    [dry, map, position],
   );
 
   // The map box keeps its 100×160 proportions and is centred in whatever
@@ -100,10 +104,11 @@ export default function SectorScreen() {
       position: target,
       visited: nextVisited,
       sector: nextVisited.length,
+      fuel: Math.max(fuel - 1, 0),
     };
     await saveRun(updated);
     router.back();
-  }, [haptics, jumping, position, router, run, target]);
+  }, [fuel, haptics, jumping, position, router, run, target]);
 
   const buttonWidth = Math.min(
     layout.buttonWidth,
@@ -133,20 +138,28 @@ export default function SectorScreen() {
           <Text style={styles.backLabel}>BACK</Text>
         </Pressable>
         <Text style={styles.heading}>SECTOR {run?.sector ?? 1}</Text>
-        <View style={styles.back} />
+        <View style={styles.back}>
+          <FuelGauge
+            remaining={fuel}
+            capacity={FUEL_PER_RUN}
+            accent={ship.accent}
+            width={52}
+            variant="compact"
+          />
+        </View>
       </View>
 
       <View style={[styles.board, { top: boardTop, height: boardH }]}>
         <Svg width={boardW} height={boardH}>
-          {/* How far this ship can jump. */}
+          {/* How far this ship can jump — meaningless with an empty tank. */}
           <Circle
             cx={currentPx.x}
             cy={currentPx.y}
             r={JUMP_RANGE * scale}
             fill={ship.accent}
-            fillOpacity={0.035}
+            fillOpacity={dry ? 0 : 0.035}
             stroke={ship.accent}
-            strokeOpacity={0.22}
+            strokeOpacity={dry ? 0.07 : 0.22}
             strokeWidth={1}
             strokeDasharray="3 5"
           />
@@ -259,18 +272,25 @@ export default function SectorScreen() {
       </View>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + 34 }]}>
-        <Text style={[styles.prompt, target === boss && { color: palette.danger }]}>
-          {target === null
-            ? `${inRange.size} STARS IN RANGE`
+        <Text
+          style={[
+            styles.prompt,
+            (target === boss || dry) && { color: palette.danger },
+          ]}
+        >
+          {dry
+            ? 'NO FUEL — THE SHIP IS ADRIFT'
+            : target === null
+            ? `${inRange.size} STARS IN RANGE · ${fuel} JUMPS LEFT`
             : `${target === boss ? 'BOSS · ' : ''}RANGE ${Math.round(
                 distance(map.nodes[position], map.nodes[target]),
               )} OF ${JUMP_RANGE}`}
         </Text>
         <MenuButton
-          label={target === null ? 'SELECT A STAR' : 'JUMP'}
+          label={dry ? 'OUT OF FUEL' : target === null ? 'SELECT A STAR' : 'JUMP'}
           onPress={onConfirmJump}
-          primary={target !== null}
-          disabled={target === null}
+          primary={!dry && target !== null}
+          disabled={dry || target === null}
           width={buttonWidth}
         />
       </View>

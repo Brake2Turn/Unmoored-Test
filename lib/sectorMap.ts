@@ -13,6 +13,17 @@ export const NODE_COUNT = 20;
 /** How far the ship can jump, in the same units as the map box. */
 export const JUMP_RANGE = 34;
 
+/** Share of the sector a full tank can reach. */
+export const FUEL_COVERAGE = 0.65;
+
+/**
+ * Jumps in a full tank. One jump costs one fuel and reaches one new star, so
+ * a full tank explores 65% of the sector — 13 of 20 — and the starting star
+ * is home rather than something explored. Derived from NODE_COUNT so the
+ * ratio survives the sector growing.
+ */
+export const FUEL_PER_RUN = Math.round(NODE_COUNT * FUEL_COVERAGE);
+
 /** Nodes per band, bottom (the start) to top. Sums to NODE_COUNT. */
 const BANDS = [1, 3, 4, 4, 4, 3, 1] as const;
 

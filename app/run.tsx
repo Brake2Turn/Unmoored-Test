@@ -5,13 +5,15 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Backdrop } from '@/components/Backdrop';
+import { FuelGauge } from '@/components/FuelGauge';
 import { MenuButton } from '@/components/MenuButton';
 import { StarField } from '@/components/StarField';
 import { ShipArt } from '@/components/ships/ShipArt';
 import { useHaptics, useSettings } from '@/lib/settings';
 import { fonts, layout, palette, tracking } from '@/lib/theme';
-import { loadRun, saveRun, withMap, type RunState } from '@/lib/runStore';
+import { loadRun, saveRun, hydrateRun, type RunState } from '@/lib/runStore';
 import { shipById } from '@/lib/ships';
+import { FUEL_PER_RUN } from '@/lib/sectorMap';
 
 /**
  * The helm: the ship adrift in open space with a single thing to do.
@@ -35,7 +37,7 @@ export default function RunScreen() {
       let cancelled = false;
       loadRun().then((value) => {
         if (cancelled || !value) return;
-        const filled = withMap(value);
+        const filled = hydrateRun(value);
         if (filled !== value) saveRun(filled);
         setRun(filled);
       });
@@ -46,6 +48,8 @@ export default function RunScreen() {
   );
 
   const ship = shipById(run?.shipId);
+  const fuel = run?.fuel ?? FUEL_PER_RUN;
+  const dry = fuel <= 0;
 
   const buttonWidth = Math.min(
     layout.buttonWidth,
@@ -53,9 +57,10 @@ export default function RunScreen() {
   );
 
   const onJump = useCallback(() => {
+    if (dry) return;
     haptics.confirm();
     router.push('/sector');
-  }, [haptics, router]);
+  }, [dry, haptics, router]);
 
   const onLeave = useCallback(() => {
     haptics.tap();
@@ -88,7 +93,19 @@ export default function RunScreen() {
       </Animated.View>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + 44 }]}>
-        <MenuButton label="JUMP" onPress={onJump} primary width={buttonWidth} />
+        <FuelGauge
+          remaining={fuel}
+          capacity={FUEL_PER_RUN}
+          accent={ship.accent}
+          width={buttonWidth}
+        />
+        <MenuButton
+          label={dry ? 'OUT OF FUEL' : 'JUMP'}
+          onPress={onJump}
+          primary={!dry}
+          disabled={dry}
+          width={buttonWidth}
+        />
       </View>
     </View>
   );
@@ -116,5 +133,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     alignItems: 'center',
+    gap: 18,
   },
 });

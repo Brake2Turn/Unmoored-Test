@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { DEFAULT_SHIP_ID } from '@/lib/ships';
-import { generateMap, type SectorMap } from '@/lib/sectorMap';
+import { FUEL_PER_RUN, generateMap, type SectorMap } from '@/lib/sectorMap';
 
 const KEY = 'unmoored.currentRun';
 
@@ -27,6 +27,8 @@ export type RunState = {
   position?: number;
   /** Every node visited so far, oldest first. Its length is the sector number. */
   visited?: number[];
+  /** Jumps left in the tank. Each jump costs one. */
+  fuel?: number;
 };
 
 function createRun(shipId: string): RunState {
@@ -43,6 +45,7 @@ function createRun(shipId: string): RunState {
     map,
     position: map.start,
     visited: [map.start],
+    fuel: FUEL_PER_RUN,
   };
 }
 
@@ -82,19 +85,26 @@ export async function clearRun(): Promise<void> {
 }
 
 /**
- * Fills in anything a save predates. Runs written before the jump map existed
- * get one rolled on the spot rather than being thrown away.
+ * Fills in anything a save predates — a jump map, a position, a tank of fuel —
+ * so an older run opens instead of being thrown away.
  */
-export function withMap(run: RunState): RunState {
-  if (run.map && typeof run.position === 'number' && run.visited?.length) return run;
+export function hydrateRun(run: RunState): RunState {
+  const complete =
+    run.map && typeof run.position === 'number' && run.visited?.length && typeof run.fuel === 'number';
+  if (complete) return run;
 
   const map = run.map ?? generateMap();
   const position = typeof run.position === 'number' ? run.position : map.start;
+  const visited = run.visited?.length ? run.visited : [position];
+  // An older run has already spent whatever it jumped before fuel existed.
+  const spent = Math.max(visited.length - 1, 0);
+
   return {
     ...run,
     map,
     position,
-    visited: run.visited?.length ? run.visited : [position],
+    visited,
+    fuel: typeof run.fuel === 'number' ? run.fuel : Math.max(FUEL_PER_RUN - spent, 0),
   };
 }
 

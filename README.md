@@ -112,6 +112,7 @@ app/                     Screens (expo-router: one file = one route)
   sector.tsx             The twenty-star jump map
   settings.tsx           Settings sheet
 components/
+  FuelGauge.tsx          Tank readout, shared by the helm and the map
   ships/ShipArt.tsx      Vector art for each ship
   StarField.tsx          Looping parallax star layers
   Backdrop.tsx           Sky gradient, nebulae, planet
@@ -174,6 +175,27 @@ always reachable.
 
 **The boss fight itself does not exist yet.** Jumping to that star currently just
 moves the ship there like any other.
+
+### Fuel
+
+A full tank is **13 jumps** — `Math.round(NODE_COUNT * 0.65)`, which for twenty
+stars is exactly 13, no rounding required. One jump costs one fuel and reaches
+one new star, so a tank explores 65% of the sector. The starting star is home
+rather than something explored, which is what makes the arithmetic land on the
+nose.
+
+The gauge sits above JUMP on the helm and shrinks to a bar in the map header. It
+turns red below a quarter of a tank. At zero, nothing on the map is selectable,
+the range ring fades out and both buttons read OUT OF FUEL.
+
+Measured over 5,000 maps: the boss is **always exactly 6 jumps** from the start,
+because the band spacing (22.7) is more than half the jump range (34), so a jump
+can never skip a band. A tank therefore covers a fixed 6-jump critical path plus
+**7 spare jumps** to spend on detours — that spare budget is the whole decision.
+No map is unwinnable for want of fuel.
+
+**Running dry does not end the run yet.** The ship is simply stuck, and LEAVE is
+the way out. A proper stranded/game-over state is the next thing this needs.
 
 ## Publishing to the App Store
 
