@@ -138,7 +138,8 @@ to empty — the emptiness above it is the point. The only control is JUMP. A qu
 LEAVE sits at the top so a player is never stuck with no way back to the title.
 
 **The sector map** (`app/sector.tsx`) is twenty stars scattered across the
-sector. The ship starts on the lone star at the bottom. Stars within jump range
+sector. The ship starts on the lone star at the bottom, and the star in the top
+band is the **boss**, drawn red and ringed. Stars within jump range
 are drawn bright and joined to the ship by dashed routes; everything beyond range
 is dim. Tapping a star in range selects it, and JUMP commits the move and returns
 to the helm one sector further along. Visited stars keep a ring.
@@ -162,6 +163,17 @@ averages 4.9 choices per node. A range of 30 strands nodes on 1.4% of maps; 46
 inflates the average to 7.9 choices and makes the decision mushy.
 
 `allNodesReachable()` is exported so the property can be asserted in a test.
+
+### The boss star
+
+One star in the top band is marked as the boss and drawn red at every distance —
+it should be findable without looking for it. `bossIndex()` resolves it, falling
+back to the furthest band for maps saved before bosses existed. Over 5,000
+generated maps the boss is always in the top band, never the starting star, and
+always reachable.
+
+**The boss fight itself does not exist yet.** Jumping to that star currently just
+moves the ship there like any other.
 
 ## Publishing to the App Store
 

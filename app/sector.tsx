@@ -14,6 +14,7 @@ import {
   JUMP_RANGE,
   MAP_H,
   MAP_W,
+  bossIndex,
   distance,
   reachableFrom,
   type SectorMap,
@@ -115,6 +116,7 @@ export default function SectorScreen() {
 
   const current = map.nodes[position];
   const currentPx = toPixels(current);
+  const boss = bossIndex(map);
 
   return (
     <View style={styles.container}>
@@ -160,7 +162,7 @@ export default function SectorScreen() {
                 y1={currentPx.y}
                 x2={to.x}
                 y2={to.y}
-                stroke={ship.accent}
+                stroke={index === boss ? palette.danger : ship.accent}
                 strokeOpacity={chosen ? 0.85 : 0.2}
                 strokeWidth={chosen ? 1.8 : 1}
                 strokeDasharray={chosen ? undefined : '2 6'}
@@ -174,11 +176,14 @@ export default function SectorScreen() {
             const isReachable = inRange.has(index);
             const isChosen = target === index;
             const wasVisited = visited.has(index);
+            const isBoss = index === boss;
 
-            const radius = isHere ? 7 : isReachable ? 5.5 : 3.5;
-            const fill = isHere
-              ? ship.accent
-              : isChosen
+            // The boss star stays red at every distance — it is the one thing
+            // on this map you should be able to find without looking for it.
+            const radius = isBoss ? 8 : isHere ? 7 : isReachable ? 5.5 : 3.5;
+            const fill = isBoss
+              ? palette.danger
+              : isHere || isChosen
                 ? ship.accent
                 : isReachable
                   ? palette.textPrimary
@@ -186,19 +191,38 @@ export default function SectorScreen() {
                     ? palette.textMuted
                     : palette.textDisabled;
 
+            const halo = isBoss ? palette.danger : ship.accent;
+
             return (
               <React.Fragment key={`node-${index}`}>
-                {isHere || isChosen ? (
-                  <Circle cx={px.x} cy={px.y} r={radius + 7} fill={ship.accent} fillOpacity={0.16} />
+                {isHere || isChosen || isBoss ? (
+                  <Circle
+                    cx={px.x}
+                    cy={px.y}
+                    r={radius + (isBoss ? 11 : 7)}
+                    fill={halo}
+                    fillOpacity={isBoss && !isReachable && !isChosen ? 0.1 : 0.16}
+                  />
                 ) : null}
                 <Circle
                   cx={px.x}
                   cy={px.y}
                   r={radius}
                   fill={fill}
-                  fillOpacity={isReachable || isHere || wasVisited ? 1 : 0.5}
+                  fillOpacity={isBoss || isReachable || isHere || wasVisited ? 1 : 0.5}
                 />
-                {wasVisited && !isHere ? (
+                {isBoss ? (
+                  <Circle
+                    cx={px.x}
+                    cy={px.y}
+                    r={radius + 6}
+                    fill="none"
+                    stroke={palette.danger}
+                    strokeOpacity={isReachable || isChosen ? 0.9 : 0.5}
+                    strokeWidth={1.4}
+                  />
+                ) : null}
+                {wasVisited && !isHere && !isBoss ? (
                   <Circle
                     cx={px.x}
                     cy={px.y}
@@ -235,10 +259,12 @@ export default function SectorScreen() {
       </View>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + 34 }]}>
-        <Text style={styles.prompt}>
+        <Text style={[styles.prompt, target === boss && { color: palette.danger }]}>
           {target === null
             ? `${inRange.size} STARS IN RANGE`
-            : `RANGE ${Math.round(distance(map.nodes[position], map.nodes[target]))} OF ${JUMP_RANGE}`}
+            : `${target === boss ? 'BOSS · ' : ''}RANGE ${Math.round(
+                distance(map.nodes[position], map.nodes[target]),
+              )} OF ${JUMP_RANGE}`}
         </Text>
         <MenuButton
           label={target === null ? 'SELECT A STAR' : 'JUMP'}

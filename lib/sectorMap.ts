@@ -31,6 +31,11 @@ export type SectorMap = {
   nodes: MapNode[];
   /** Index of the node the ship starts on — always the lone bottom star. */
   start: number;
+  /**
+   * Index of the star holding the boss, drawn red. Always in the top band, so
+   * reaching it is the end of the sector. Nothing happens there yet.
+   */
+  boss: number;
 };
 
 export function distance(a: MapNode, b: MapNode): number {
@@ -117,7 +122,26 @@ export function generateMap(): SectorMap {
     }
   }
 
-  return { nodes, start: 0 };
+  // The boss waits in the top band. That band holds one star today, but
+  // picking at random keeps this honest if the bands are ever reshaped.
+  const top = bandRanges[bandRanges.length - 1];
+  const boss = top.start + Math.floor(Math.random() * (top.end - top.start));
+
+  return { nodes, start: 0, boss };
+}
+
+/**
+ * Which star holds the boss, tolerating maps saved before bosses existed by
+ * falling back to the furthest band.
+ */
+export function bossIndex(map: SectorMap): number {
+  if (typeof map.boss === 'number' && map.nodes[map.boss]) return map.boss;
+
+  let best = 0;
+  for (let i = 1; i < map.nodes.length; i++) {
+    if (map.nodes[i].band > map.nodes[best].band) best = i;
+  }
+  return best;
 }
 
 /**

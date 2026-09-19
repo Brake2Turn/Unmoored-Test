@@ -20,6 +20,10 @@ export const palette = {
   accent: '#5FD9E8',
   accentDim: '#387E8A',
 
+  /** Hostile red — the boss star, and anything else that means trouble. */
+  danger: '#FF5D6B',
+  dangerDim: '#8C3640',
+
   textPrimary: '#DCE6FF',
   textMuted: '#7A87A8',
   textDisabled: '#525C75',
