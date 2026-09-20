@@ -1,0 +1,248 @@
+/**
+ * The jump map for a run: twenty stars scattered across a fixed logical space.
+ *
+ * Coordinates live in a 100×160 box rather than screen pixels or 0–1 fractions,
+ * so a jump that is in range on one phone is in range on every phone. The
+ * renderer scales this box to fit whatever space it has.
+ */
+
+export const MAP_W = 100;
+export const MAP_H = 160;
+export const NODE_COUNT = 20;
+
+/** How far the ship can jump, in the same units as the map box. */
+export const JUMP_RANGE = 34;
+
+/** Share of the sector a full tank can reach. */
+export const FUEL_COVERAGE = 0.5;
+
+/**
+ * Jumps in a full tank. One jump costs one fuel wherever it goes — including
+ * a hop back to a star already visited — so a tank with no backtracking
+ * reaches half the sector: 10 of 20. Derived from NODE_COUNT so the ratio
+ * survives the sector growing.
+ */
+export const FUEL_PER_RUN = Math.round(NODE_COUNT * FUEL_COVERAGE);
+
+/** Nodes per band, bottom (the start) to top. Sums to NODE_COUNT. */
+const BANDS = [1, 3, 4, 4, 4, 3, 1] as const;
+
+const EDGE_PADDING = 11;
+const TOP_MARGIN = 14;
+const BOTTOM_MARGIN = 10;
+
+/**
+ * What is waiting at a star. Exactly one enemy type exists — the Shrike — and
+ * the boss star holds a larger one of the same kind.
+ */
+export type Encounter = 'empty' | 'enemy' | 'merchant' | 'boss';
+
+export type MapNode = {
+  x: number;
+  y: number;
+  /** 0 is the starting band at the bottom; higher means further out. */
+  band: number;
+  /** What is waiting here. Absent on maps saved before encounters existed. */
+  encounter?: Encounter;
+};
+
+export type SectorMap = {
+  nodes: MapNode[];
+  /** Index of the node the ship starts on — always the lone bottom star. */
+  start: number;
+  /**
+   * Index of the star holding the boss, drawn red. Always in the top band, so
+   * reaching it is the end of the sector. Nothing happens there yet.
+   */
+  boss: number;
+};
+
+export function distance(a: MapNode, b: MapNode): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+export function isInRange(a: MapNode, b: MapNode): boolean {
+  return distance(a, b) <= JUMP_RANGE;
+}
+
+/** Indices the ship could jump to from `from`, ignoring where it has been. */
+export function reachableFrom(map: SectorMap, from: number): number[] {
+  const origin = map.nodes[from];
+  if (!origin) return [];
+  return map.nodes
+    .map((node, index) => ({ node, index }))
+    .filter(({ node, index }) => index !== from && isInRange(origin, node))
+    .map(({ index }) => index);
+}
+
+/**
+ * Builds a fresh map.
+ *
+ * Bands are laid out bottom to top and each band's nodes are spread across
+ * evenly sized slots with jitter, so the field looks scattered without ever
+ * clumping into one corner. Any node that lands out of reach of every node in
+ * the band below is then nudged sideways until it is reachable — which
+ * guarantees a route from the start to the top without rejecting and
+ * regenerating maps until one happens to work.
+ */
+export function generateMap(): SectorMap {
+  const usableHeight = MAP_H - TOP_MARGIN - BOTTOM_MARGIN;
+  const bandGap = usableHeight / (BANDS.length - 1);
+  const nodes: MapNode[] = [];
+  const bandRanges: { start: number; end: number }[] = [];
+
+  BANDS.forEach((count, band) => {
+    const rangeStart = nodes.length;
+    // Band 0 sits at the bottom of the box; each later band steps upward.
+    const baseY = MAP_H - BOTTOM_MARGIN - band * bandGap;
+    const slot = (MAP_W - EDGE_PADDING * 2) / count;
+
+    for (let i = 0; i < count; i++) {
+      const centre = EDGE_PADDING + slot * i + slot / 2;
+      const jitterX = count === 1 ? rand(-9, 9) : rand(-slot * 0.3, slot * 0.3);
+      const jitterY = band === 0 ? 0 : rand(-bandGap * 0.22, bandGap * 0.22);
+
+      nodes.push({
+        x: clamp(centre + jitterX, EDGE_PADDING, MAP_W - EDGE_PADDING),
+        y: clamp(baseY + jitterY, TOP_MARGIN, MAP_H - BOTTOM_MARGIN),
+        band,
+      });
+    }
+
+    bandRanges.push({ start: rangeStart, end: nodes.length });
+  });
+
+  // Pull any stranded node toward its nearest neighbour in the band below.
+  for (let band = 1; band < BANDS.length; band++) {
+    const below = bandRanges[band - 1];
+    const here = bandRanges[band];
+
+    for (let i = here.start; i < here.end; i++) {
+      const node = nodes[i];
+      let nearest = below.start;
+      let best = Infinity;
+
+      for (let j = below.start; j < below.end; j++) {
+        const d = distance(node, nodes[j]);
+        if (d < best) {
+          best = d;
+          nearest = j;
+        }
+      }
+
+      if (best <= JUMP_RANGE) continue;
+
+      // Keep the vertical gap, close the horizontal one until it fits.
+      const anchor = nodes[nearest];
+      const dy = Math.abs(node.y - anchor.y);
+      const maxDx = Math.sqrt(Math.max(JUMP_RANGE * JUMP_RANGE - dy * dy, 1)) * 0.92;
+      const direction = node.x >= anchor.x ? 1 : -1;
+      node.x = clamp(anchor.x + direction * maxDx, EDGE_PADDING, MAP_W - EDGE_PADDING);
+    }
+  }
+
+  // The boss waits in the top band. That band holds one star today, but
+  // picking at random keeps this honest if the bands are ever reshaped.
+  const top = bandRanges[bandRanges.length - 1];
+  const boss = top.start + Math.floor(Math.random() * (top.end - top.start));
+
+  const map: SectorMap = { nodes, start: 0, boss };
+  assignEncounters(map);
+  return map;
+}
+
+/**
+ * Fills every star with what is waiting there.
+ *
+ * The start is left empty — you begin docked, nothing has happened yet — and
+ * the boss star takes the larger enemy. That leaves 18 of the 20 stars, which
+ * divides into three exact sixes: six Shrikes, six merchants, six empty.
+ * Shuffling the whole pool means a run's threats land differently every time.
+ */
+export function assignEncounters(map: SectorMap): void {
+  // Resolved rather than read straight off the map, so a map saved before the
+  // boss field existed still gets one.
+  const boss = bossIndex(map);
+
+  const free: number[] = [];
+  for (let i = 0; i < map.nodes.length; i++) {
+    if (i === map.start || i === boss) continue;
+    free.push(i);
+  }
+
+  shuffle(free);
+
+  const third = Math.floor(free.length / 3);
+  free.forEach((index, rank) => {
+    map.nodes[index].encounter =
+      rank < third ? 'enemy' : rank < third * 2 ? 'merchant' : 'empty';
+  });
+
+  map.nodes[map.start].encounter = 'empty';
+  if (map.nodes[boss]) {
+    map.nodes[boss].encounter = 'boss';
+    // Record it, so a migrated map stops re-deriving the boss on every render.
+    map.boss = boss;
+  }
+}
+
+/** True once every star knows what is waiting on it. */
+export function hasEncounters(map: SectorMap): boolean {
+  return map.nodes.every((node) => typeof node.encounter === 'string');
+}
+
+/** What is at a star, defaulting to empty for maps that predate encounters. */
+export function encounterAt(map: SectorMap, index: number): Encounter {
+  return map.nodes[index]?.encounter ?? 'empty';
+}
+
+/** Clamps a value into a range. */
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+/** Fisher-Yates, in place. */
+function shuffle<T>(items: T[]): void {
+  for (let i = items.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [items[i], items[j]] = [items[j], items[i]];
+  }
+}
+
+/**
+ * Which star holds the boss, tolerating maps saved before bosses existed by
+ * falling back to the furthest band.
+ */
+export function bossIndex(map: SectorMap): number {
+  if (typeof map.boss === 'number' && map.nodes[map.boss]) return map.boss;
+
+  let best = 0;
+  for (let i = 1; i < map.nodes.length; i++) {
+    if (map.nodes[i].band > map.nodes[best].band) best = i;
+  }
+  return best;
+}
+
+/**
+ * True when every node can be reached from the start by some chain of jumps.
+ * The generator aims for this; this is here so it can be asserted in tests.
+ */
+export function allNodesReachable(map: SectorMap): boolean {
+  const seen = new Set<number>([map.start]);
+  const queue = [map.start];
+
+  while (queue.length) {
+    const current = queue.shift() as number;
+    for (const next of reachableFrom(map, current)) {
+      if (seen.has(next)) continue;
+      seen.add(next);
+      queue.push(next);
+    }
+  }
+
+  return seen.size === map.nodes.length;
+}
+
+function rand(min: number, max: number): number {
+  return min + Math.random() * (max - min);
+}

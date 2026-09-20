@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "Unmoored",
+    "slug": "unmoored",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "unmoored",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#05070F",
+    "splash": {
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#05070F"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.unmoored.game"
+    },
+    "android": {
+      "package": "com.unmoored.game",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#05070F"
+      }
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "tsconfigPaths": true
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/icon.png"
+    }
+  }
+}
