@@ -130,8 +130,21 @@ const RIB_PATH = (() => {
 const FLAME_BASE = 16;
 const FLAME_PER_LEVEL = 11;
 
+/**
+ * Each bar does more than lengthen the plume — it burns harder.
+ *
+ * Length alone made four bars read as "longer", not "hotter". These ramp the
+ * whole flame together: the plume widens a little, the plume and its core both
+ * brighten, a heat haze builds around it, and the pulse itself gets deeper.
+ */
+const FLAME_OPACITY = (level: number) => 0.6 + 0.1 * level;
+const PLUME_WIDTH = (level: number) => 0.98 + 0.05 * level;
+const PLUME_FILL = (level: number) => 0.36 + 0.1 * level;
+const CORE_FILL = (level: number) => 0.3 + 0.14 * level;
+const HAZE_FILL = (level: number) => 0.04 + 0.05 * level;
+
 /** How far the flame stretches at the top of its pulse. */
-const FLICKER_SCALE = 1.16;
+const FLICKER_SCALE = (level: number) => 1.1 + 0.025 * level;
 const FLICKER_MS = 420;
 
 /**
@@ -282,13 +295,16 @@ function Thruster({
 
     flicker.value = 1;
     flicker.value = withRepeat(
-      withTiming(FLICKER_SCALE, { duration: FLICKER_MS, easing: Easing.inOut(Easing.quad) }),
+      withTiming(FLICKER_SCALE(level), {
+        duration: FLICKER_MS,
+        easing: Easing.inOut(Easing.quad),
+      }),
       -1,
       true,
     );
 
     return () => cancelAnimation(flicker);
-  }, [animate, flicker, lit]);
+  }, [animate, flicker, level, lit]);
 
   // Where the nozzle sits inside this box, so the stretch can be pinned to it.
   const scale = Math.min(width / VIEW_W, height / VIEW_H);
@@ -297,7 +313,7 @@ function Thruster({
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scaleY: flicker.value }],
     // Brightest at full stretch, which is what makes it read as burning.
-    opacity: 0.72 + (flicker.value - 1) * 1.4,
+    opacity: FLAME_OPACITY(level) + (flicker.value - 1) * 1.4,
   }));
 
   if (!lit) return null;
@@ -317,16 +333,23 @@ function Thruster({
       <Svg width={width} height={height} viewBox={VIEW_BOX}>
         {nozzles.map((engine, i) => (
           <React.Fragment key={i}>
+            {/* Heat haze: wider and shorter than the plume, barely there at one
+                bar and a real glow at four. */}
             <Path
-              d={flamePath(engine.x, engine.y, engine.width * 1.05, length)}
+              d={flamePath(engine.x, engine.y, engine.width * 2, length * 0.86)}
               fill={tint}
-              fillOpacity={0.55}
+              fillOpacity={HAZE_FILL(level)}
+            />
+            <Path
+              d={flamePath(engine.x, engine.y, engine.width * PLUME_WIDTH(level), length)}
+              fill={tint}
+              fillOpacity={PLUME_FILL(level)}
             />
             {/* The hot core, shorter and narrower than the plume around it. */}
             <Path
               d={flamePath(engine.x, engine.y, engine.width * 0.5, length * 0.62)}
               fill="#FFFFFF"
-              fillOpacity={0.5}
+              fillOpacity={CORE_FILL(level)}
             />
           </React.Fragment>
         ))}

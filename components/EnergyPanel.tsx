@@ -1,5 +1,13 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import Animated, {
+  Easing,
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 
 import {
@@ -20,6 +28,8 @@ type Props = {
   reactor: number;
   width: number;
   onShift: (subsystem: Subsystem, delta: number) => void;
+  /** False fills and empties the cells instantly, with no surge. */
+  animate?: boolean;
 };
 
 /**
@@ -35,6 +45,26 @@ export const ENERGY_PANEL_HEIGHT = 134;
 const ROW_HEIGHT = 26;
 const PIP_HEIGHT = 9;
 
+/** An unlit cell. Every powered one animates up from this and back down to it. */
+const EMPTY_CELL = 'rgba(255,255,255,0.13)';
+
+/** How long a cell takes to come up to full, and the kick as the current lands. */
+const CHARGE_MS = 240;
+const SURGE_UP_MS = 110;
+const SURGE_DOWN_MS = 300;
+
+/**
+ * When a cell stops waiting for its animation and simply shows the truth.
+ *
+ * The panel reports an allocation the player just changed, so it must never be
+ * hostage to a frame that may not arrive — the same reason `FadeInView` exists.
+ * Reanimated drives these off `requestAnimationFrame` on web, and a starved
+ * tab would otherwise leave a cell stranded showing the old level. Once the
+ * animation should have finished, the value is set outright; if it did finish,
+ * setting the same value again is invisible.
+ */
+const SETTLE_MS = SURGE_UP_MS + SURGE_DOWN_MS + 120;
+
 /**
  * The reactor panel: a pool of energy and three subsystems to spread it over.
  *
@@ -46,7 +76,7 @@ const PIP_HEIGHT = 9;
  * It lives on the helm, where the ship is in front of you. The sector map is
  * for choosing where to go and deliberately carries none of this.
  */
-export function EnergyPanel({ energy, reactor, width, onShift }: Props) {
+export function EnergyPanel({ energy, reactor, width, onShift, animate = true }: Props) {
   const free = freeEnergy(energy, reactor);
 
   return (
@@ -59,12 +89,12 @@ export function EnergyPanel({ energy, reactor, width, onShift }: Props) {
         {/* Total output, lit for the bars nothing has claimed yet. */}
         <View style={styles.reactorPips}>
           {Array.from({ length: reactor }, (_, i) => (
-            <View
+            <EnergyCell
               key={i}
-              style={[
-                styles.reactorPip,
-                i < free ? { backgroundColor: palette.accent } : styles.reactorPipSpent,
-              ]}
+              lit={i < free}
+              accent={palette.accent}
+              animate={animate}
+              style={styles.reactorPip}
             />
           ))}
         </View>
@@ -86,6 +116,7 @@ export function EnergyPanel({ energy, reactor, width, onShift }: Props) {
             canAddMore={canAdd(energy, reactor, subsystem)}
             canTakeAway={canRemove(energy, subsystem)}
             onShift={onShift}
+            animate={animate}
           />
         ))}
       </View>
@@ -99,12 +130,14 @@ function SubsystemRow({
   canAddMore,
   canTakeAway,
   onShift,
+  animate,
 }: {
   subsystem: Subsystem;
   level: number;
   canAddMore: boolean;
   canTakeAway: boolean;
   onShift: (subsystem: Subsystem, delta: number) => void;
+  animate: boolean;
 }) {
   const style = SUBSYSTEM_STYLE[subsystem];
 
@@ -127,9 +160,12 @@ function SubsystemRow({
 
       <View style={styles.pips}>
         {Array.from({ length: SUBSYSTEM_CAPACITY }, (_, i) => (
-          <View
+          <EnergyCell
             key={i}
-            style={[styles.pip, i < level ? { backgroundColor: style.accent } : null]}
+            lit={i < level}
+            accent={style.accent}
+            animate={animate}
+            style={styles.pip}
           />
         ))}
       </View>
@@ -142,6 +178,74 @@ function SubsystemRow({
         onPress={() => onShift(subsystem, 1)}
       />
     </View>
+  );
+}
+
+/**
+ * One cell of energy, which powers up and down rather than just changing
+ * colour.
+ *
+ * Two things happen at once: the cell fades between unlit and its subsystem's
+ * colour, and it kicks — a quick stretch and a white flash as the current
+ * arrives or leaves, settling back afterwards. That makes a bar moving between
+ * two rows read as something travelling rather than two independent redraws.
+ *
+ * The very first render is deliberately silent: mounting the helm should not
+ * set the whole panel flashing.
+ */
+function EnergyCell({
+  lit,
+  accent,
+  animate,
+  style,
+}: {
+  lit: boolean;
+  accent: string;
+  animate: boolean;
+  style: ViewStyle;
+}) {
+  const charge = useSharedValue(lit ? 1 : 0);
+  const surge = useSharedValue(0);
+  const settled = useRef(false);
+
+  useEffect(() => {
+    if (!settled.current || !animate) {
+      settled.current = true;
+      charge.value = lit ? 1 : 0;
+      surge.value = 0;
+      return;
+    }
+
+    charge.value = withTiming(lit ? 1 : 0, {
+      duration: CHARGE_MS,
+      easing: Easing.out(Easing.quad),
+    });
+    surge.value = withSequence(
+      withTiming(1, { duration: SURGE_UP_MS, easing: Easing.out(Easing.quad) }),
+      withTiming(0, { duration: SURGE_DOWN_MS, easing: Easing.out(Easing.quad) }),
+    );
+
+    const settle = setTimeout(() => {
+      charge.value = lit ? 1 : 0;
+      surge.value = 0;
+    }, SETTLE_MS);
+    return () => clearTimeout(settle);
+  }, [animate, charge, lit, surge]);
+
+  const cellStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(charge.value, [0, 1], [EMPTY_CELL, accent]),
+    transform: [{ scaleY: 1 + surge.value * 0.7 }],
+  }));
+
+  const flashStyle = useAnimatedStyle(() => ({ opacity: surge.value * 0.55 }));
+
+  return (
+    <Animated.View style={[style, cellStyle]}>
+      <Animated.View
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFill, styles.flash, flashStyle]}
+      />
+    </Animated.View>
   );
 }
 
@@ -248,8 +352,14 @@ const styles = StyleSheet.create({
     letterSpacing: tracking.caption,
   },
   reactorPips: { flexDirection: 'row', alignItems: 'center', gap: 3, flex: 1 },
-  reactorPip: { flex: 1, maxWidth: 12, height: 6, borderRadius: 1.5 },
-  reactorPipSpent: { backgroundColor: 'rgba(255,255,255,0.13)' },
+  reactorPip: {
+    flex: 1,
+    maxWidth: 12,
+    height: 6,
+    borderRadius: 1.5,
+    backgroundColor: EMPTY_CELL,
+    overflow: 'hidden',
+  },
   freeCount: {
     fontFamily: fonts.bodyBold,
     fontSize: 9,
@@ -274,8 +384,10 @@ const styles = StyleSheet.create({
     flex: 1,
     height: PIP_HEIGHT,
     borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.11)',
+    backgroundColor: EMPTY_CELL,
+    overflow: 'hidden',
   },
+  flash: { backgroundColor: '#FFFFFF' },
 
   step: {
     width: 24,

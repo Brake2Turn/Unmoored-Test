@@ -192,6 +192,7 @@ export default function RunScreen() {
             reactor={reactorOf(run)}
             width={buttonWidth}
             onShift={onShift}
+            animate={!settings.reduceMotion}
           />
         ) : (
           <View style={{ height: ENERGY_PANEL_HEIGHT }} />

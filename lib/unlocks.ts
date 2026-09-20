@@ -40,6 +40,25 @@ export async function unlockShip(shipId: string): Promise<string[]> {
   return next;
 }
 
+/**
+ * Unlocks every ship at once, for the dev button on the title screen.
+ *
+ * There is no unlock trigger in the game yet, so the locked ships are
+ * otherwise unreachable and untestable. It writes through the same store as an
+ * earned ship rather than holding a flag of its own, which means Reset Progress
+ * in Settings clears it exactly like anything else the player earned — no
+ * second thing to remember to reset.
+ */
+export async function unlockAll(): Promise<string[]> {
+  const every = SHIPS.map((ship) => ship.id);
+  try {
+    await AsyncStorage.setItem(KEY, JSON.stringify(every));
+  } catch {
+    // The unlock is lost on a write failure, but the app keeps running.
+  }
+  return every;
+}
+
 /** Wipes earned ships back to the starters. Used by Reset Progress. */
 export async function resetUnlocks(): Promise<void> {
   try {

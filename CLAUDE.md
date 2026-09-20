@@ -110,6 +110,13 @@ The gate cannot strand anyone: the smallest reactor is four bars, so a bar can
 always be moved back into the engines, and `verify:energy` holds that every
 ship's opening split already has the engines running.
 
+There is no unlock trigger in the game yet, so the locked half of the roster is
+otherwise unflyable. The title screen carries a quiet **DEV · UNLOCK ALL SHIPS**
+button for that. It writes through the normal unlock store rather than holding a
+flag of its own, so Reset Progress in Settings clears it like anything earned,
+and the title screen re-reads the unlocks on focus so the label tells the truth
+again afterwards.
+
 Engines shipped as **piloting** first, and that name is still on disk in older
 saves. `LEGACY_KEYS` in `lib/energy.ts` carries those bars over — dropping them
 would have loaded a run that could not move. If a subsystem is ever renamed
@@ -125,9 +132,20 @@ Two of the three subsystems are drawn on the ship itself
 (`components/ships/ShipSystems.tsx`): shields as a bubble that holds one size
 and grows brighter with each bar, engines as an exhaust plume that lengthens
 with each bar. Both are invisible at zero and use their subsystem's colour from
-`SUBSYSTEM_STYLE`, so a cyan bubble is the shields row and a violet flame is
-the engines row — and a ship with no flame is a ship that cannot jump. Weapons
-has no mark yet — there is nothing to shoot.
+`SUBSYSTEM_STYLE`, so a purple bubble is the shields row and an orange flame
+is the engines row — and a ship with no flame is a ship that cannot jump. Each
+bar does more to the exhaust than lengthen it: the plume widens, the plume and
+its white core both brighten, the heat haze around it builds and the pulse
+deepens, so four bars reads as hotter rather than merely longer. Weapons (bright
+red) has no mark yet — there is nothing to shoot.
+
+The panel's cells animate between unlit and their subsystem's colour, with a
+kick and a white flash as the current lands, so a bar moving between two rows
+reads as something travelling. **They also settle by timer.** Reanimated drives
+them off `requestAnimationFrame` on web, and the panel reports an allocation the
+player just changed, so a starved tab must not strand a cell showing the old
+level — the same reason `FadeInView` exists. This was not theoretical: a
+screenshot taken before the guard showed 2/2/2 while the save held 0/2/4.
 
 The shield's fill is a radial gradient that is fully transparent inside
 `SHIELD_CLEAR` and piles up on the rim. That number is measured, not chosen:
@@ -193,6 +211,15 @@ These cost real debugging time. Do not rediscover them.
   animation finishing.**
 - **`adjustsFontSizeToFit` is native-only.** On web it ellipsises instead, so web
   relies on `titleSizeFor()` sizing correctly.
+- **`Alert.alert` is an empty function on react-native-web.** Not a stub that
+  logs — `class Alert { static alert() {} }`. Reset Progress used it to
+  confirm, so on web the dialog never appeared and nothing was ever reset. It
+  now confirms in the row itself (tap, then tap again), which works everywhere
+  and looks like the rest of the app. Do not reach for a system dialog.
+- **Progress is more than the run.** Reset Progress was disabled unless a run
+  was in progress, which left earned ships unclearable on a fresh save — the
+  dev unlock button made that reachable in one tap. It now enables on a run
+  *or* any earned ship.
 - **A pulsing flame cannot be checked from a screenshot here.** The thruster
   animates with `withRepeat`, which needs `requestAnimationFrame`; headless
   throttles it, so a capture shows the flame at rest. That is the resting

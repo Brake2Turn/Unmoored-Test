@@ -29,11 +29,12 @@ export const palette = {
 
   /**
    * The three reactor subsystems, each its own tint so a glance at the helm
-   * panel says which row is which without reading the labels.
+   * panel says which row is which without reading the labels. These carry
+   * beyond the panel: the shield bubble and the exhaust are drawn in them.
    */
-  shields: '#5FD9E8',
-  weapons: '#E8A85F',
-  engines: '#9B7FE8',
+  shields: '#B9A5F5',
+  weapons: '#FF4A4A',
+  engines: '#FF9A3C',
 
   textPrimary: '#DCE6FF',
   textMuted: '#7A87A8',

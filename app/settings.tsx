@@ -1,43 +1,72 @@
 import Slider from '@react-native-community/slider';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useSettings } from '@/lib/settings';
+import { useHaptics, useSettings } from '@/lib/settings';
 import { fonts, palette, tracking } from '@/lib/theme';
 import { clearRun, loadRun } from '@/lib/runStore';
-import { resetUnlocks } from '@/lib/unlocks';
+import { STARTER_SHIP_IDS } from '@/lib/ships';
+import { loadUnlocked, resetUnlocks } from '@/lib/unlocks';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { settings, update } = useSettings();
+  const haptics = useHaptics();
   const [hasRun, setHasRun] = useState(false);
+  const [hasShips, setHasShips] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     loadRun().then((run) => {
       if (!cancelled) setHasRun(run !== null);
     });
+    // Earned ships are progress too, and they outlive any single run — a
+    // roster opened by the dev button has to be clearable with no run going.
+    loadUnlocked().then((ids) => {
+      if (!cancelled) setHasShips(ids.length > STARTER_SHIP_IDS.length);
+    });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const onReset = useCallback(() => {
-    Alert.alert('Reset progress?', 'Your current run and any earned ships will be discarded.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Reset Progress',
-        style: 'destructive',
-        onPress: async () => {
-          await Promise.all([clearRun(), resetUnlocks()]);
-          setHasRun(false);
-        },
-      },
-    ]);
-  }, []);
+  const canReset = hasRun || hasShips;
+
+  // An armed confirmation lapses on its own, so a stray tap cannot leave the
+  // next one primed to wipe a save.
+  useEffect(() => {
+    if (!confirming) return;
+    const timer = setTimeout(() => setConfirming(false), 4000);
+    return () => clearTimeout(timer);
+  }, [confirming]);
+
+  /**
+   * Reset asks twice, in the row itself.
+   *
+   * It used to raise a system alert, which `react-native-web` implements as an
+   * empty function — on web the dialog never appeared and nothing was ever
+   * reset. Confirming in place works the same on every platform, and looks
+   * like the rest of the app rather than like the operating system.
+   */
+  const onReset = useCallback(async () => {
+    if (!canReset) return;
+
+    if (!confirming) {
+      haptics.tap();
+      setConfirming(true);
+      return;
+    }
+
+    haptics.confirm();
+    await Promise.all([clearRun(), resetUnlocks()]);
+    setHasRun(false);
+    setHasShips(false);
+    setConfirming(false);
+  }, [canReset, confirming, haptics]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + 12 }]}>
@@ -90,16 +119,23 @@ export default function SettingsScreen() {
         <Text style={styles.section}>PROGRESS</Text>
         <Pressable
           accessibilityRole="button"
+          accessibilityLabel={
+            confirming ? 'Tap again to reset progress' : 'Reset progress'
+          }
           onPress={onReset}
-          disabled={!hasRun}
-          style={[styles.card, styles.resetRow, { opacity: hasRun ? 1 : 0.45 }]}
+          disabled={!canReset}
+          style={[styles.card, styles.resetRow, { opacity: canReset ? 1 : 0.45 }]}
         >
-          <Text style={styles.resetLabel}>Reset Progress</Text>
+          <Text style={styles.resetLabel}>
+            {confirming ? 'Tap again to confirm' : 'Reset Progress'}
+          </Text>
         </Pressable>
         <Text style={styles.footnote}>
-          {hasRun
-            ? 'Discards the run currently in progress. This cannot be undone.'
-            : 'There is no run in progress.'}
+          {confirming
+            ? 'Discards the run and every earned ship. This cannot be undone.'
+            : canReset
+              ? 'Discards the run in progress and any ships earned. This cannot be undone.'
+              : 'There is no run in progress and no ships earned.'}
         </Text>
       </ScrollView>
     </View>
