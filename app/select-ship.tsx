@@ -1,16 +1,9 @@
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-} from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Animated, {
+  runOnJS,
+  useAnimatedReaction,
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
@@ -51,9 +44,6 @@ export default function SelectShipScreen() {
     };
   }, []);
   const scrollX = useSharedValue(0);
-  // Tracked in a ref so the scroll handler can tell a real change from a
-  // settle on the same card without re-rendering.
-  const indexRef = useRef(0);
 
   // The card leaves a margin on both sides, so the neighbouring ships stay
   // visible at the screen edges — that peek is what invites the swipe.
@@ -65,17 +55,39 @@ export default function SelectShipScreen() {
     scrollX.value = event.contentOffset.x;
   });
 
-  const onMomentumEnd = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const next = Math.round(event.nativeEvent.contentOffset.x / snapInterval);
-      const clamped = Math.max(0, Math.min(SHIPS.length - 1, next));
-      if (clamped !== indexRef.current) {
-        indexRef.current = clamped;
-        setIndex(clamped);
-        haptics.tap();
+  const commitIndex = useCallback(
+    (next: number) => {
+      setIndex(next);
+      haptics.tap();
+    },
+    [haptics],
+  );
+
+  // The selection follows whichever card is centred, recomputed from the
+  // scroll offset itself.
+  //
+  // `onMomentumScrollEnd` is the obvious place to commit it, and it is what
+  // this screen used to do — but react-native-web's ScrollView never calls
+  // that prop (its only scroll callback is `onScroll`), so on web the index
+  // stayed at 0 no matter how far you scrolled: the carousel moved and the
+  // ship below it never changed. Native has a smaller version of the same
+  // hole, where a slow drag released without any flick ends in
+  // `onScrollEndDrag` and never reaches momentum at all.
+  //
+  // Reading the offset works on both, and owes nothing to an event firing.
+  useAnimatedReaction(
+    () => {
+      if (snapInterval <= 0) return 0;
+      const raw = Math.round(scrollX.value / snapInterval);
+      return Math.min(SHIPS.length - 1, Math.max(0, raw));
+    },
+    (next, previous) => {
+      // `previous` is null on the first run, which is the mount, not a move.
+      if (previous !== null && next !== previous) {
+        runOnJS(commitIndex)(next);
       }
     },
-    [haptics, snapInterval],
+    [commitIndex, snapInterval],
   );
 
   const selected = SHIPS[index];
@@ -117,7 +129,6 @@ export default function SelectShipScreen() {
           decelerationRate="fast"
           disableIntervalMomentum
           onScroll={onScroll}
-          onMomentumScrollEnd={onMomentumEnd}
           scrollEventThrottle={16}
           contentContainerStyle={{ paddingHorizontal: sidePadding, gap: CARD_GAP }}
         >
