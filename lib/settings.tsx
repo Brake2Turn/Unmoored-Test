@@ -89,5 +89,7 @@ export function useHaptics() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
   }, [settings.hapticsEnabled]);
 
-  return { tap, confirm };
+  // Memoised: a fresh object here makes `haptics` a changing dependency, which
+  // silently defeats every useCallback that lists it.
+  return useMemo(() => ({ tap, confirm }), [tap, confirm]);
 }

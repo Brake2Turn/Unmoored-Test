@@ -1,7 +1,8 @@
 import React from 'react';
 import Svg, { Defs, Ellipse, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 
-import { palette } from '@/lib/theme';
+import { ENCOUNTER_STYLE } from '@/lib/encounters';
+import { HULL, HULL_DEEP } from '@/components/ships/ShipArt';
 import type { Encounter } from '@/lib/sectorMap';
 
 type Props = {
@@ -18,11 +19,14 @@ type Props = {
  * silhouettes match the ones the sector map used to carry: the Shrike is all
  * swept angles, the merchant is a blunt slab.
  */
-export function EncounterShip({ encounter, width, height }: Props) {
+export const EncounterShip = React.memo(function EncounterShip({
+  encounter,
+  width,
+  height,
+}: Props) {
   if (encounter === 'empty') return null;
 
-  const hostile = encounter === 'enemy' || encounter === 'boss';
-  const accent = hostile ? palette.danger : palette.trade;
+  const { accent, hostile } = ENCOUNTER_STYLE[encounter];
 
   return (
     <Svg width={width} height={height} viewBox="0 0 200 260">
@@ -32,14 +36,18 @@ export function EncounterShip({ encounter, width, height }: Props) {
           <Stop offset="1" stopColor={accent} stopOpacity={0.25} />
         </LinearGradient>
         <LinearGradient id="enc-plate" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor={hostile ? '#1E1320' : '#141A2E'} />
-          <Stop offset="1" stopColor={hostile ? '#0C0711' : '#0B0F1E'} />
+          <Stop offset="0" stopColor={hostile ? HOSTILE_HULL : HULL} />
+          <Stop offset="1" stopColor={hostile ? HOSTILE_HULL_DEEP : HULL_DEEP} />
         </LinearGradient>
       </Defs>
       {hostile ? <Shrike accent={accent} /> : <Merchant accent={accent} />}
     </Svg>
   );
-}
+});
+
+/** Raider plating runs warmer than the player's, so the red reads as its own. */
+const HOSTILE_HULL = '#1E1320';
+const HOSTILE_HULL_DEEP = '#0C0711';
 
 /** Swept raider, nose down. The Elder Shrike is this same hull, drawn bigger. */
 function Shrike({ accent }: { accent: string }) {

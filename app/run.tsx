@@ -11,10 +11,11 @@ import { StarField } from '@/components/StarField';
 import { EncounterShip } from '@/components/ships/EncounterShip';
 import { ShipArt } from '@/components/ships/ShipArt';
 import { useHaptics, useSettings } from '@/lib/settings';
-import { fonts, layout, palette, tracking } from '@/lib/theme';
-import { loadRun, saveRun, hydrateRun, type RunState } from '@/lib/runStore';
+import { fonts, palette, tracking, useMenuWidth } from '@/lib/theme';
+import { loadRun, type RunState } from '@/lib/runStore';
 import { shipById } from '@/lib/ships';
-import { FUEL_PER_RUN, encounterAt } from '@/lib/sectorMap';
+import { encounterAt } from '@/lib/sectorMap';
+import { ENCOUNTER_STYLE } from '@/lib/encounters';
 
 /**
  * The helm: the ship adrift in open space with a single thing to do.
@@ -37,10 +38,7 @@ export default function RunScreen() {
     useCallback(() => {
       let cancelled = false;
       loadRun().then((value) => {
-        if (cancelled || !value) return;
-        const filled = hydrateRun(value);
-        if (filled !== value) saveRun(filled);
-        setRun(filled);
+        if (!cancelled && value) setRun(value);
       });
       return () => {
         cancelled = true;
@@ -49,18 +47,14 @@ export default function RunScreen() {
   );
 
   const ship = shipById(run?.shipId);
-  const fuel = run?.fuel ?? FUEL_PER_RUN;
+  const fuel = run?.fuel ?? 0;
   const dry = fuel <= 0;
 
   // What is here is only learned by arriving — the sector map shows plain dots.
-  const encounter =
-    run?.map && typeof run.position === 'number' ? encounterAt(run.map, run.position) : 'empty';
-  const isBossFight = encounter === 'boss';
+  const encounter = run ? encounterAt(run.map, run.position) : 'empty';
+  const waiting = ENCOUNTER_STYLE[encounter];
 
-  const buttonWidth = Math.min(
-    layout.buttonWidth,
-    width - layout.screenMargin * 2 - insets.left - insets.right,
-  );
+  const buttonWidth = useMenuWidth();
 
   const onJump = useCallback(() => {
     if (dry) return;
@@ -96,11 +90,7 @@ export default function RunScreen() {
           entering={settings.reduceMotion ? undefined : FadeIn.duration(520).delay(160)}
           style={[styles.encounterHolder, { paddingTop: insets.top + 74 }]}
         >
-          <EncounterShip
-            encounter={encounter}
-            width={isBossFight ? 188 : 132}
-            height={isBossFight ? 244 : 172}
-          />
+          <EncounterShip encounter={encounter} width={waiting.width} height={waiting.height} />
         </Animated.View>
       )}
 
@@ -113,7 +103,7 @@ export default function RunScreen() {
       </Animated.View>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + 44 }]}>
-        <FuelBadge remaining={fuel} capacity={FUEL_PER_RUN} accent={ship.accent} />
+        <FuelBadge remaining={fuel} accent={ship.accent} />
         <MenuButton
           label={dry ? 'OUT OF FUEL' : 'JUMP'}
           onPress={onJump}

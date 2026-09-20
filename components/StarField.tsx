@@ -53,6 +53,19 @@ function makeStars(band: (typeof BANDS)[number], width: number, height: number):
   }));
 }
 
+function dotStyle(star: Star) {
+  return {
+    position: 'absolute' as const,
+    left: star.x,
+    top: star.y,
+    width: star.size,
+    height: star.size,
+    borderRadius: star.size / 2,
+    backgroundColor: star.color,
+    opacity: star.opacity,
+  };
+}
+
 function TwinklingStar({ star }: { star: Star }) {
   const opacity = useSharedValue(star.opacity);
 
@@ -66,49 +79,36 @@ function TwinklingStar({ star }: { star: Star }) {
 
   const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
 
-  return (
-    <Animated.View
-      style={[
-        {
-          position: 'absolute',
-          left: star.x,
-          top: star.y,
-          width: star.size,
-          height: star.size,
-          borderRadius: star.size / 2,
-          backgroundColor: star.color,
-        },
-        style,
-      ]}
-    />
-  );
+  // Opacity comes from the animation, not the base style.
+  return <Animated.View style={[dotStyle(star), { opacity: undefined }, style]} />;
 }
 
-function Tile({ stars, offsetY }: { stars: Star[]; offsetY: number }) {
+/** Static dot. Also the resting look of a twinkling star when motion is off. */
+function StaticStar({ star }: { star: Star }) {
+  return <View style={dotStyle(star)} />;
+}
+
+const Tile = React.memo(function Tile({
+  stars,
+  offsetY,
+  reduceMotion,
+}: {
+  stars: Star[];
+  offsetY: number;
+  reduceMotion: boolean;
+}) {
   return (
     <View style={[StyleSheet.absoluteFill, { transform: [{ translateY: offsetY }] }]}>
       {stars.map((star, index) =>
-        star.twinkle ? (
+        star.twinkle && !reduceMotion ? (
           <TwinklingStar key={index} star={star} />
         ) : (
-          <View
-            key={index}
-            style={{
-              position: 'absolute',
-              left: star.x,
-              top: star.y,
-              width: star.size,
-              height: star.size,
-              borderRadius: star.size / 2,
-              backgroundColor: star.color,
-              opacity: star.opacity,
-            }}
-          />
+          <StaticStar key={index} star={star} />
         ),
       )}
     </View>
   );
-}
+});
 
 /**
  * One depth band. The tile of stars is drawn twice — once at y=0 and once a
@@ -152,13 +152,13 @@ function Layer({
 
   return (
     <Animated.View style={[StyleSheet.absoluteFill, style]}>
-      <Tile stars={stars} offsetY={0} />
-      <Tile stars={stars} offsetY={-height} />
+      <Tile stars={stars} offsetY={0} reduceMotion={reduceMotion} />
+      <Tile stars={stars} offsetY={-height} reduceMotion={reduceMotion} />
     </Animated.View>
   );
 }
 
-export function StarField({
+export const StarField = React.memo(function StarField({
   width,
   height,
   reduceMotion,
@@ -176,4 +176,4 @@ export function StarField({
       ))}
     </View>
   );
-}
+});

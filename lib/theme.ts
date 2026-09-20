@@ -1,4 +1,5 @@
-import { Platform } from 'react-native';
+import { Platform, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /**
  * Central palette and type scale. Every colour and font in the app comes from
@@ -22,7 +23,6 @@ export const palette = {
 
   /** Hostile red — enemy ships, the boss star, anything that means trouble. */
   danger: '#FF5D6B',
-  dangerDim: '#8C3640',
 
   /** Merchant gold — someone willing to trade rather than shoot. */
   trade: '#E8C15F',
@@ -74,3 +74,23 @@ export const layout = {
   /** Gap between the lowest button and the bottom safe area. */
   menuBottomOffset: 96,
 } as const;
+
+/**
+ * Width of a full-bleed menu button on this screen.
+ *
+ * Every screen that shows a MenuButton had its own copy of this clamp, which
+ * meant four places to change the gutter rule and four chances to miss one.
+ */
+export function useMenuWidth(): number {
+  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  return Math.min(
+    layout.buttonWidth,
+    width - layout.screenMargin * 2 - insets.left - insets.right,
+  );
+}
+
+/** Title size for the wordmark, which scales with the screen but has bounds. */
+export function titleSizeFor(width: number): number {
+  return Math.min(Math.max(width * 0.155, 40), 72);
+}

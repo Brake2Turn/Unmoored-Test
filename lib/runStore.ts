@@ -12,32 +12,48 @@ import {
 const KEY = 'unmoored.currentRun';
 
 /**
- * A single in-progress run. Deliberately small for now — it exists so the start
- * screen has something real to save, resume and describe. Gameplay fields get
- * added here as the game itself grows.
+ * A run as it exists in memory: every gameplay field present.
+ *
+ * Nothing outside this file constructs one. `loadRun` is the only way to get
+ * hold of a run, and it hydrates before handing it over, so screens can read
+ * `run.fuel` and `run.map` without defending against absence.
  */
 export type RunState = {
   id: string;
   startedAt: number;
   lastPlayedAt: number;
-  /** How far the ship has drifted. Doubles as the run's headline progress. */
-  sector: number;
-  /** Seconds of play accumulated across all sessions of this run. */
-  elapsed: number;
-  hullIntegrity: number;
-  /** Which ship this run launched in. Absent on saves from before ship select. */
-  shipId?: string;
+  /** Which ship this run launched in. */
+  shipId: string;
   /** The jump map, rolled once when the run is created. */
-  map?: SectorMap;
+  map: SectorMap;
   /** Index of the node the ship is currently sitting on. */
-  position?: number;
+  position: number;
   /** Distinct nodes stood on, oldest first. Revisiting one does not re-add it. */
-  visited?: number[];
+  visited: number[];
   /** Jumps made, counting a hop back to a star already visited. */
-  jumps?: number;
+  jumps: number;
   /** Jumps left in the tank. Each jump costs one, wherever it goes. */
-  fuel?: number;
+  fuel: number;
 };
+
+/**
+ * A run as it comes off disk. Every field is suspect: saves written by earlier
+ * versions are missing whole features, and `sector` is a field this game no
+ * longer keeps (it is `jumps + 1`).
+ */
+type StoredRun = Partial<RunState> & { sector?: number };
+
+/** Which sector the run is in. Derived, so it cannot drift out of step. */
+export function sectorOf(run: RunState): number {
+  return run.jumps + 1;
+}
+
+/**
+ * Cached so the sector screen and the helm do not each pay a round trip to
+ * AsyncStorage for a value one of them just wrote. `undefined` means "not read
+ * yet"; `null` means "read, and there is no run".
+ */
+let cached: RunState | null | undefined;
 
 function createRun(shipId: string): RunState {
   const now = Date.now();
@@ -46,9 +62,6 @@ function createRun(shipId: string): RunState {
     id: `${now}-${Math.random().toString(36).slice(2, 10)}`,
     startedAt: now,
     lastPlayedAt: now,
-    sector: 1,
-    elapsed: 0,
-    hullIntegrity: 1,
     shipId,
     map,
     position: map.start,
@@ -58,22 +71,45 @@ function createRun(shipId: string): RunState {
   };
 }
 
+/**
+ * The only way to get a run. Reads once, hydrates whatever it finds, and
+ * writes the hydrated shape straight back so the migration happens exactly
+ * once rather than differently on each screen.
+ */
 export async function loadRun(): Promise<RunState | null> {
+  if (cached !== undefined) return cached;
+
   try {
     const raw = await AsyncStorage.getItem(KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as RunState;
-    // Guard against a half-written or older save shape.
-    if (typeof parsed?.sector !== 'number') return null;
-    return parsed;
+    if (!raw) {
+      cached = null;
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as StoredRun;
+    // A run has always had an id; anything without one is a half-written save.
+    if (typeof parsed?.id !== 'string') {
+      cached = null;
+      return null;
+    }
+
+    const hydrated = hydrate(parsed);
+    cached = hydrated;
+    // Hydration rolls fresh maps for very old saves, so persist it or the next
+    // load would roll a different one.
+    await saveRun(hydrated);
+    return hydrated;
   } catch {
+    cached = null;
     return null;
   }
 }
 
 export async function saveRun(run: RunState): Promise<void> {
+  const next = { ...run, lastPlayedAt: Date.now() };
+  cached = next;
   try {
-    await AsyncStorage.setItem(KEY, JSON.stringify({ ...run, lastPlayedAt: Date.now() }));
+    await AsyncStorage.setItem(KEY, JSON.stringify(next));
   } catch {
     // A failed save should never take the screen down with it.
   }
@@ -86,6 +122,7 @@ export async function startNewRun(shipId: string = DEFAULT_SHIP_ID): Promise<Run
 }
 
 export async function clearRun(): Promise<void> {
+  cached = null;
   try {
     await AsyncStorage.removeItem(KEY);
   } catch {
@@ -94,49 +131,66 @@ export async function clearRun(): Promise<void> {
 }
 
 /**
- * Fills in anything a save predates — a jump map, a position, a tank of fuel —
- * so an older run opens instead of being thrown away.
+ * Spends a jump.
+ *
+ * The rule lives here rather than in the screen that draws the button, so the
+ * cost of a jump is defined once. Fuel comes off wherever the jump goes — a
+ * hop back to a star already visited costs the same as a new one.
  */
-export function hydrateRun(run: RunState): RunState {
-  const complete =
-    run.map &&
-    typeof run.position === 'number' &&
-    run.visited?.length &&
-    typeof run.fuel === 'number' &&
-    run.fuel <= FUEL_PER_RUN &&
-    typeof run.jumps === 'number' &&
-    hasEncounters(run.map);
-  if (complete) return run;
+export function applyJump(run: RunState, target: number): RunState {
+  return {
+    ...run,
+    position: target,
+    visited: run.visited.includes(target) ? run.visited : [...run.visited, target],
+    jumps: run.jumps + 1,
+    fuel: Math.max(run.fuel - 1, 0),
+  };
+}
 
-  const map = run.map ?? generateMap();
+/**
+ * Fills in anything a save predates — a ship, a jump map, a tank of fuel — so
+ * an older run opens instead of being thrown away.
+ *
+ * Kept private: `loadRun` is the only caller, which is what makes `RunState`
+ * safe to declare fully required.
+ */
+function hydrate(stored: StoredRun): RunState {
+  const map = stored.map ?? generateMap();
   // A map saved before encounters existed gets them rolled in place, so an
   // in-progress run keeps its layout and its history.
   if (!hasEncounters(map)) assignEncounters(map);
 
-  const position = typeof run.position === 'number' ? run.position : map.start;
+  const position = typeof stored.position === 'number' ? stored.position : map.start;
   // Older saves appended a duplicate on every backtrack; collapse them.
-  const visited = run.visited?.length ? [...new Set(run.visited)] : [position];
-  const jumps = typeof run.jumps === 'number' ? run.jumps : Math.max((run.visited?.length ?? 1) - 1, 0);
+  const visited = stored.visited?.length ? [...new Set(stored.visited)] : [position];
+  const jumps =
+    typeof stored.jumps === 'number' ? stored.jumps : Math.max(visited.length - 1, 0);
 
+  const now = Date.now();
   return {
-    ...run,
+    id: stored.id ?? `${now}-${Math.random().toString(36).slice(2, 10)}`,
+    startedAt: stored.startedAt ?? now,
+    lastPlayedAt: stored.lastPlayedAt ?? now,
+    shipId: stored.shipId ?? DEFAULT_SHIP_ID,
     map,
     position,
     visited,
     jumps,
-    // Clamped, so a save made when tanks were bigger cannot hold more fuel
-    // than the badge is able to show.
-    fuel:
-      typeof run.fuel === 'number'
-        ? Math.min(run.fuel, FUEL_PER_RUN)
-        : Math.max(FUEL_PER_RUN - jumps, 0),
+    // Clamped unconditionally: a save made when tanks were bigger must not
+    // hold more fuel than the badge can show.
+    fuel: Math.min(
+      typeof stored.fuel === 'number' ? stored.fuel : Math.max(FUEL_PER_RUN - jumps, 0),
+      FUEL_PER_RUN,
+    ),
   };
 }
 
-/** One-line description shown under Continue Run, e.g. "SECTOR 3 · 12:40 · HULL 84%". */
+/**
+ * One-line description shown under Continue Run, e.g. "SECTOR 4 · 7 FUEL".
+ *
+ * Both halves are live: the sector is derived from jumps made, and the fuel is
+ * what is actually left in the tank.
+ */
 export function summarize(run: RunState): string {
-  const minutes = Math.floor(run.elapsed / 60);
-  const seconds = Math.floor(run.elapsed % 60);
-  const clock = `${minutes}:${String(seconds).padStart(2, '0')}`;
-  return `SECTOR ${run.sector} · ${clock} · HULL ${Math.round(run.hullIntegrity * 100)}%`;
+  return `SECTOR ${sectorOf(run)} · ${run.fuel} FUEL`;
 }

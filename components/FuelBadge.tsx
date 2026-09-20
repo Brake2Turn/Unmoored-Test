@@ -1,11 +1,11 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { FUEL_PER_RUN } from '@/lib/sectorMap';
 import { fonts, palette } from '@/lib/theme';
 
 type Props = {
   remaining: number;
-  capacity: number;
   /** Tints a healthy tank; a low one goes red regardless. */
   accent: string;
   size?: 'regular' | 'compact';
@@ -20,17 +20,15 @@ const SIZES = {
 } as const;
 
 /** Jumps left in the tank, as an F badge and a count. */
-export function FuelBadge({ remaining, capacity, accent, size = 'regular' }: Props) {
-  const safeCapacity = Math.max(capacity, 1);
-  const clamped = Math.min(Math.max(remaining, 0), safeCapacity);
-  const low = clamped / safeCapacity <= LOW_MARK;
+export function FuelBadge({ remaining, accent, size = 'regular' }: Props) {
+  const low = remaining / FUEL_PER_RUN <= LOW_MARK;
   const colour = low ? palette.danger : accent;
   const s = SIZES[size];
 
   return (
     <View
       accessibilityRole="text"
-      accessibilityLabel={`Fuel: ${clamped} of ${safeCapacity} jumps remaining`}
+      accessibilityLabel={`Fuel: ${remaining} of ${FUEL_PER_RUN} jumps remaining`}
       style={[styles.row, { gap: s.gap }]}
     >
       <View
@@ -47,7 +45,7 @@ export function FuelBadge({ remaining, capacity, accent, size = 'regular' }: Pro
       >
         <Text style={[styles.letter, { fontSize: s.letter, color: colour }]}>F</Text>
       </View>
-      <Text style={[styles.count, { fontSize: s.count, color: colour }]}>{clamped}</Text>
+      <Text style={[styles.count, { fontSize: s.count, color: colour }]}>{remaining}</Text>
     </View>
   );
 }

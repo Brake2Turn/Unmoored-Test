@@ -6,7 +6,8 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "verify:map": "node --experimental-strip-types scripts/verify-map.ts"
   },
   "dependencies": {
     "@expo/metro-runtime": "~5.0.4",

@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
   resetLabel: {
     fontFamily: fonts.body,
     fontSize: 15,
-    color: '#FF6B6B',
+    color: palette.danger,
   },
   footnote: {
     fontFamily: fonts.body,

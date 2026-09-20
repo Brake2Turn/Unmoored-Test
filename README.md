@@ -101,6 +101,20 @@ wired. Once gameplay exists, granting one is a single `unlockShip(id)` call
 and the carousel already reacts. Reset Progress clears earned ships along
 with the run.
 
+## The run state
+
+`lib/runStore.ts` owns the run. `loadRun()` is the only way to get one: it
+reads once, migrates whatever shape it finds, writes the result back, and
+caches it — so every screen sees the same run and older saves are migrated
+exactly once rather than differently per screen. `RunState` therefore has no
+optional gameplay fields, and screens read `run.fuel` without defending
+against absence.
+
+The rules live there too. `applyJump()` spends the fuel and records the hop, so
+what a jump costs is defined in one place rather than in a button handler.
+Anything derivable is derived: the sector number is `sectorOf(run)`, never
+stored, so it cannot drift from the jump count.
+
 ## Project layout
 
 ```
@@ -120,6 +134,7 @@ components/
   MenuButton.tsx         Menu entry with pressed and disabled states
   TitleBlock.tsx         Wordmark, rule and tagline
 lib/
+  encounters.ts          How each kind of star presents itself
   sectorMap.ts           Jump-map generation and range maths
   ships.ts               Ship roster, stats, accents and unlock hints
   unlocks.ts             Which ships the player has earned
@@ -165,7 +180,15 @@ maps it leaves no node unreachable, always gives the start at least 3 options, a
 averages 4.9 choices per node. A range of 30 strands nodes on 1.4% of maps; 46
 inflates the average to 7.9 choices and makes the decision mushy.
 
-`allNodesReachable()` is exported so the property can be asserted in a test.
+These promises are asserted rather than assumed:
+
+```powershell
+npm run verify:map
+```
+
+`scripts/verify-map.ts` rolls thousands of maps and checks every star is
+reachable, the boss sits in the top band and is never the start, the encounter
+split is exactly six/six/six, and the boss is always within one tank.
 
 ### What is on each star
 

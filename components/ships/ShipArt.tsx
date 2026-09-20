@@ -14,15 +14,22 @@ type Props = {
 const LOCKED_TINT = '#3E4763';
 
 /** Dark silhouette that lets the accent-coloured edges and glass do the work. */
-const HULL = '#141A2E';
-const HULL_DEEP = '#0B0F1E';
+export const HULL = '#141A2E';
+export const HULL_DEEP = '#0B0F1E';
 
 /**
  * Vector art for each ship, drawn in a shared 200×260 box so every silhouette
  * sits on the same baseline and swipes between cleanly.
  */
-export function ShipArt({ shipId, accent, width, height, locked = false }: Props) {
+export const ShipArt = React.memo(function ShipArt({
+  shipId,
+  accent,
+  width,
+  height,
+  locked = false,
+}: Props) {
   const tint = locked ? LOCKED_TINT : accent;
+  const Art = ART[shipId] ?? Drifter;
   return (
     <Svg width={width} height={height} viewBox="0 0 200 260">
       <Defs>
@@ -35,22 +42,10 @@ export function ShipArt({ shipId, accent, width, height, locked = false }: Props
           <Stop offset="1" stopColor={HULL_DEEP} />
         </LinearGradient>
       </Defs>
-      {shipId === 'lance' ? (
-        <Lance accent={tint} />
-      ) : shipId === 'bulwark' ? (
-        <Bulwark accent={tint} />
-      ) : shipId === 'halo' ? (
-        <Halo accent={tint} />
-      ) : shipId === 'mantis' ? (
-        <Mantis accent={tint} />
-      ) : shipId === 'vesper' ? (
-        <Vesper accent={tint} />
-      ) : (
-        <Drifter accent={tint} />
-      )}
+      <Art accent={tint} />
     </Svg>
   );
-}
+});
 
 /** Survey cutter: twin forward prongs, domed canopy, V-notched hull. */
 function Drifter({ accent }: { accent: string }) {
@@ -212,3 +207,13 @@ function Vesper({ accent }: { accent: string }) {
     </>
   );
 }
+
+/** One entry per ship id, so the roster and the art can be read side by side. */
+const ART: Record<string, (props: { accent: string }) => React.JSX.Element> = {
+  drifter: Drifter,
+  lance: Lance,
+  bulwark: Bulwark,
+  halo: Halo,
+  mantis: Mantis,
+  vesper: Vesper,
+};

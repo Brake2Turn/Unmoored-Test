@@ -37,14 +37,6 @@ const BOTTOM_MARGIN = 10;
  */
 export type Encounter = 'empty' | 'enemy' | 'merchant' | 'boss';
 
-/** Flavour names, shown when a star is selected. Nothing acts on these yet. */
-export const ENCOUNTER_NAMES: Record<Encounter, string> = {
-  empty: 'EMPTY',
-  enemy: 'SHRIKE',
-  merchant: 'MERCHANT',
-  boss: 'ELDER SHRIKE',
-};
-
 export type MapNode = {
   x: number;
   y: number;
@@ -187,7 +179,11 @@ export function assignEncounters(map: SectorMap): void {
   });
 
   map.nodes[map.start].encounter = 'empty';
-  if (map.nodes[boss]) map.nodes[boss].encounter = 'boss';
+  if (map.nodes[boss]) {
+    map.nodes[boss].encounter = 'boss';
+    // Record it, so a migrated map stops re-deriving the boss on every render.
+    map.boss = boss;
+  }
 }
 
 /** True once every star knows what is waiting on it. */
@@ -198,6 +194,11 @@ export function hasEncounters(map: SectorMap): boolean {
 /** What is at a star, defaulting to empty for maps that predate encounters. */
 export function encounterAt(map: SectorMap, index: number): Encounter {
   return map.nodes[index]?.encounter ?? 'empty';
+}
+
+/** Clamps a value into a range. */
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
 }
 
 /** Fisher-Yates, in place. */
@@ -244,8 +245,4 @@ export function allNodesReachable(map: SectorMap): boolean {
 
 function rand(min: number, max: number): number {
   return min + Math.random() * (max - min);
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
 }

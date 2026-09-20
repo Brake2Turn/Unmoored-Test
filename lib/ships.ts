@@ -1,3 +1,5 @@
+import { palette } from '@/lib/theme';
+
 /**
  * The ships a player can launch a run in.
  *
@@ -37,7 +39,7 @@ export const SHIPS: Ship[] = [
     name: 'DRIFTER',
     className: 'SURVEY CUTTER',
     tagline: 'Slow, stubborn, and built to come home.',
-    accent: '#5FD9E8',
+    accent: palette.accent,
     stats: { hull: 0.8, speed: 0.4, cargo: 0.6 },
   },
   {

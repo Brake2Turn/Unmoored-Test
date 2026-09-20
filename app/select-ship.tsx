@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -23,7 +23,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MenuButton } from '@/components/MenuButton';
 import { ShipArt } from '@/components/ships/ShipArt';
 import { useHaptics } from '@/lib/settings';
-import { fonts, layout, palette, tracking } from '@/lib/theme';
+import { fonts, palette, tracking, useMenuWidth } from '@/lib/theme';
 import { SHIPS, STARTER_SHIP_IDS, type Ship } from '@/lib/ships';
 import { loadUnlocked } from '@/lib/unlocks';
 import { startNewRun } from '@/lib/runStore';
@@ -90,10 +90,7 @@ export default function SelectShipScreen() {
     router.replace('/run');
   }, [haptics, isLocked, launching, router, selected.id]);
 
-  const buttonWidth = Math.min(
-    layout.buttonWidth,
-    width - layout.screenMargin * 2 - insets.left - insets.right,
-  );
+  const buttonWidth = useMenuWidth();
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -192,7 +189,7 @@ export default function SelectShipScreen() {
  * One ship in the strip. The centred card sits at full size and full opacity;
  * its neighbours shrink and dim as they slide toward the edges.
  */
-function ShipCard({
+const ShipCard = React.memo(function ShipCard({
   ship,
   position,
   scrollX,
@@ -207,12 +204,14 @@ function ShipCard({
   cardWidth: number;
   locked: boolean;
 }) {
+  // Constant for this card's lifetime, so it is built once rather than on
+  // every scroll frame inside the worklet.
+  const range = useMemo(
+    () => [(position - 1) * snapInterval, position * snapInterval, (position + 1) * snapInterval],
+    [position, snapInterval],
+  );
+
   const animatedStyle = useAnimatedStyle(() => {
-    const range = [
-      (position - 1) * snapInterval,
-      position * snapInterval,
-      (position + 1) * snapInterval,
-    ];
     return {
       transform: [
         { scale: interpolate(scrollX.value, range, [0.9, 1, 0.9], Extrapolation.CLAMP) },
@@ -246,7 +245,7 @@ function ShipCard({
       </View>
     </Animated.View>
   );
-}
+});
 
 function StatBar({
   label,

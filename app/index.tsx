@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,7 +9,7 @@ import { MenuButton } from '@/components/MenuButton';
 import { StarField } from '@/components/StarField';
 import { TitleBlock } from '@/components/TitleBlock';
 import { useHaptics, useSettings } from '@/lib/settings';
-import { fonts, layout, palette, tracking } from '@/lib/theme';
+import { fonts, layout, palette, titleSizeFor, tracking, useMenuWidth } from '@/lib/theme';
 import { loadRun, summarize, type RunState } from '@/lib/runStore';
 
 const VERSION = 'V0.1.0 (1)';
@@ -22,24 +22,13 @@ export default function StartScreen() {
   const haptics = useHaptics();
 
   const [run, setRun] = useState<RunState | null>(null);
-  const [loaded, setLoaded] = useState(false);
-  /** The entrance plays on first mount only — returning from a run should feel
-      like a return, not a fresh launch. */
-  const [entranceDone, setEntranceDone] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setEntranceDone(true), 2200);
-    return () => clearTimeout(timer);
-  }, []);
 
   // Re-read the save every time this screen comes back to the front.
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
       loadRun().then((value) => {
-        if (cancelled) return;
-        setRun(value);
-        setLoaded(true);
+        if (!cancelled) setRun(value);
       });
       return () => {
         cancelled = true;
@@ -47,13 +36,9 @@ export default function StartScreen() {
     }, []),
   );
 
-  const buttonWidth = Math.min(
-    layout.buttonWidth,
-    width - layout.screenMargin * 2 - insets.left - insets.right,
-  );
-  const titleSize = Math.min(Math.max(width * 0.155, 40), 72);
-
-  const animate = !settings.reduceMotion && !entranceDone;
+  const buttonWidth = useMenuWidth();
+  const titleSize = titleSizeFor(width);
+  const animate = !settings.reduceMotion;
 
   const onNewRun = useCallback(() => {
     haptics.confirm();
@@ -100,7 +85,7 @@ export default function StartScreen() {
               label="CONTINUE RUN"
               caption={run ? summarize(run) : 'NO RUN IN PROGRESS'}
               onPress={onContinue}
-              disabled={!loaded || !run}
+              disabled={!run}
               width={buttonWidth}
             />
           </Animated.View>
