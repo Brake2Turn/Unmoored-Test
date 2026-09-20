@@ -21,8 +21,8 @@ type Props = {
   height: number;
   /** Bars in shields: 0 draws nothing, and each one makes the bubble stronger. */
   shields: number;
-  /** Bars in piloting: 0 means cold engines, and each one lengthens the flame. */
-  piloting: number;
+  /** Bars in engines: 0 means cold engines, and each one lengthens the flame. */
+  engines: number;
   /** False holds the flame at a steady length instead of pulsing. */
   animate?: boolean;
 };
@@ -83,6 +83,49 @@ const SHIELD_STROKE = (level: number) => 0.16 + 0.17 * level;
  */
 const SHIELD_CLEAR = 0.82;
 
+/**
+ * The plating: dashed shells and radial ribs, drawn only in the band between
+ * `SHIELD_CLEAR` and the rim.
+ *
+ * Each element carries its own opacity rather than sampling the gradient,
+ * because a gradient in `objectBoundingBox` units is measured against *each
+ * element's own* box — an inner ring would get its own little gradient
+ * instead of the shield's. Spelling the weights out keeps the fade honest:
+ * the outermost shell is solid-looking and densely dashed, and each one
+ * further in is thinner, sparser and fainter, until nothing is drawn at all.
+ */
+const TEXTURE_RINGS = [
+  { t: 0.975, dash: '14 7', weight: 1, width: 1.1 },
+  { t: 0.93, dash: '7 11', weight: 0.66, width: 0.9 },
+  { t: 0.87, dash: '3 14', weight: 0.4, width: 0.8 },
+];
+
+/** Ribs run inward from the rim, stopping short of the ship. */
+const RIB_COUNT = 16;
+const RIB_INNER = 0.88;
+const RIB_WEIGHT = 0.5;
+
+/** How strongly the plating shows, before each element's own weight. */
+const TEXTURE_OPACITY = (level: number) => 0.1 + 0.16 * level;
+
+/**
+ * The ribs as a single path, built once: sixteen short spokes around the rim.
+ */
+const RIB_PATH = (() => {
+  const round = (n: number) => Math.round(n * 100) / 100;
+  const parts: string[] = [];
+  for (let i = 0; i < RIB_COUNT; i++) {
+    const angle = (i / RIB_COUNT) * Math.PI * 2;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    parts.push(
+      `M ${round(SHIELD_CX + SHIELD_RX * RIB_INNER * cos)} ${round(SHIELD_CY + SHIELD_RY * RIB_INNER * sin)}`,
+      `L ${round(SHIELD_CX + SHIELD_RX * cos)} ${round(SHIELD_CY + SHIELD_RY * sin)}`,
+    );
+  }
+  return parts.join(' ');
+})();
+
 /** Exhaust length per bar, in ship units. Four bars runs to 60 of the 260. */
 const FLAME_BASE = 16;
 const FLAME_PER_LEVEL = 11;
@@ -96,7 +139,7 @@ const FLICKER_MS = 420;
  *
  * Both are read straight off the reactor allocation, and both use their
  * subsystem's colour from `SUBSYSTEM_STYLE` — a cyan bubble is the shields
- * row, a violet flame is the piloting row. Moving a bar in the panel is meant
+ * row, a violet flame is the engines row. Moving a bar in the panel is meant
  * to be visible on the ship without reading a number: the shield holds its
  * shape and grows brighter, the exhaust grows longer.
  *
@@ -109,10 +152,11 @@ export function ShipSystems({
   width,
   height,
   shields,
-  piloting,
+  engines,
   animate = true,
 }: Props) {
-  const engines = enginesFor(shipId);
+  // The hull's exhaust ports, as distinct from the bars powering them.
+  const nozzles = enginesFor(shipId);
 
   return (
     <View
@@ -120,8 +164,8 @@ export function ShipSystems({
       pointerEvents="none"
     >
       <Thruster
-        engines={engines}
-        level={piloting}
+        nozzles={nozzles}
+        level={engines}
         width={width * SYSTEMS_SPAN}
         height={height * SYSTEMS_SPAN}
         animate={animate}
@@ -140,7 +184,9 @@ export function ShipSystems({
  * Fixed size, and the power level is carried entirely by how strongly it
  * shows. The fill is a radial gradient that is clear through the middle and
  * gathers at the rim, so more power makes a brighter edge rather than a
- * cloudier ship — at four bars the hull is as legible as it is at one.
+ * cloudier ship — at four bars the hull is as legible as it is at one. The
+ * plating over it follows the same rule: dashed shells and ribs in the outer
+ * band only, nothing across the ship.
  *
  * The gradient runs in `objectBoundingBox` units (the default), so it takes
  * the ellipse's own proportions and needs no separate x and y radii.
@@ -162,6 +208,7 @@ function Shield({ level, width, height }: { level: number; width: number; height
         </RadialGradient>
       </Defs>
 
+      {/* The glow, clear through the middle and gathered on the rim. */}
       <Ellipse
         cx={SHIELD_CX}
         cy={SHIELD_CY}
@@ -172,6 +219,31 @@ function Shield({ level, width, height }: { level: number; width: number; height
         stroke={tint}
         strokeOpacity={SHIELD_STROKE(level)}
         strokeWidth={2}
+      />
+
+      {/* Plating, in the same outer band and fading the same way. */}
+      {TEXTURE_RINGS.map((ring) => (
+        <Ellipse
+          key={ring.t}
+          cx={SHIELD_CX}
+          cy={SHIELD_CY}
+          rx={SHIELD_RX * ring.t}
+          ry={SHIELD_RY * ring.t}
+          fill="none"
+          stroke={tint}
+          strokeOpacity={TEXTURE_OPACITY(level) * ring.weight}
+          strokeWidth={ring.width}
+          strokeDasharray={ring.dash}
+        />
+      ))}
+
+      <Path
+        d={RIB_PATH}
+        fill="none"
+        stroke={tint}
+        strokeOpacity={TEXTURE_OPACITY(level) * RIB_WEIGHT}
+        strokeWidth={0.9}
+        strokeLinecap="round"
       />
     </Svg>
   );
@@ -186,13 +258,13 @@ function Shield({ level, width, height }: { level: number; width: number; height
  * them, including the Bulwark's pair.
  */
 function Thruster({
-  engines,
+  nozzles,
   level,
   width,
   height,
   animate,
 }: {
-  engines: Engine[];
+  nozzles: Engine[];
   level: number;
   width: number;
   height: number;
@@ -220,7 +292,7 @@ function Thruster({
 
   // Where the nozzle sits inside this box, so the stretch can be pinned to it.
   const scale = Math.min(width / VIEW_W, height / VIEW_H);
-  const nozzleY = (height - VIEW_H * scale) / 2 + (engines[0].y - VIEW_Y) * scale;
+  const nozzleY = (height - VIEW_H * scale) / 2 + (nozzles[0].y - VIEW_Y) * scale;
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scaleY: flicker.value }],
@@ -230,7 +302,7 @@ function Thruster({
 
   if (!lit) return null;
 
-  const tint = SUBSYSTEM_STYLE.piloting.accent;
+  const tint = SUBSYSTEM_STYLE.engines.accent;
   const length = FLAME_BASE + FLAME_PER_LEVEL * level;
 
   return (
@@ -243,7 +315,7 @@ function Thruster({
       pointerEvents="none"
     >
       <Svg width={width} height={height} viewBox={VIEW_BOX}>
-        {engines.map((engine, i) => (
+        {nozzles.map((engine, i) => (
           <React.Fragment key={i}>
             <Path
               d={flamePath(engine.x, engine.y, engine.width * 1.05, length)}

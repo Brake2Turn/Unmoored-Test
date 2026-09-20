@@ -93,14 +93,27 @@ helm. The boss is the single exception, red from the start.
 ### The reactor is a set of trade-offs, not a set of sliders
 
 `lib/energy.ts` holds a pool of reactor energy and three subsystems — shields,
-weapons, piloting — that hold four bars each. Twelve bars of capacity against a
+weapons, engines — that hold four bars each. Twelve bars of capacity against a
 reactor of four to seven means **no ship can power everything**, so every bar is
 somewhere it is not somewhere else. `npm run verify:energy` fails if a ship's
 reactor ever creeps up to `TOTAL_CAPACITY`.
 
-**Nothing reads the levels yet.** There is no combat to spend them on. The
-allocation is real, lives on the run and survives a reload; what it *does*
-arrives with the systems that need it.
+**One level is read so far: the engines gate the jump.** `jumpBlocker(run)`
+(`lib/runStore.ts`) returns `'fuel'`, `'engines'` or null, and both the helm
+and the sector map ask it rather than each deciding for itself, so the button
+that offers a jump and the button that performs it can never disagree.
+`applyJump` refuses a blocked jump and hands the run straight back, the same
+way `shiftEnergy` refuses an illegal move. Shields and weapons still do
+nothing — there is no combat to spend them on.
+
+The gate cannot strand anyone: the smallest reactor is four bars, so a bar can
+always be moved back into the engines, and `verify:energy` holds that every
+ship's opening split already has the engines running.
+
+Engines shipped as **piloting** first, and that name is still on disk in older
+saves. `LEGACY_KEYS` in `lib/energy.ts` carries those bars over — dropping them
+would have loaded a run that could not move. If a subsystem is ever renamed
+again, it gets an entry there and a check in `verify:energy`.
 
 The panel is on the helm only, where the ship is in front of you — the sector
 map is for choosing where to go, and deliberately carries none of it. Because
@@ -110,18 +123,22 @@ sizes dropped the Elder Shrike through the player's ship on a short phone.
 
 Two of the three subsystems are drawn on the ship itself
 (`components/ships/ShipSystems.tsx`): shields as a bubble that holds one size
-and grows brighter with each bar, piloting as an exhaust plume that lengthens
+and grows brighter with each bar, engines as an exhaust plume that lengthens
 with each bar. Both are invisible at zero and use their subsystem's colour from
 `SUBSYSTEM_STYLE`, so a cyan bubble is the shields row and a violet flame is
-the piloting row. Weapons has no mark yet — there is nothing to shoot.
+the engines row — and a ship with no flame is a ship that cannot jump. Weapons
+has no mark yet — there is nothing to shoot.
 
 The shield's fill is a radial gradient that is fully transparent inside
 `SHIELD_CLEAR` and piles up on the rim. That number is measured, not chosen:
 the furthest corner of any hull sits at about 0.80 of the bubble's radii, so
 0.82 means the colour only starts once the ship has ended, and more power
-brightens the edge instead of fogging the hull. Checked by sampling the
-rendered pixels — inside the clear zone they match the bare background exactly
-at every level, while the rim climbs with each bar.
+brightens the edge instead of fogging the hull. The plating over it — dashed
+shells and radial ribs — lives in that same outer band, and each element
+carries its own opacity rather than sampling the gradient, because a gradient
+in `objectBoundingBox` units is measured against *each element's own* box.
+Checked by sampling the rendered pixels — inside the clear zone they match the
+bare background exactly at every level, while the rim climbs with each bar.
 
 Two things there are worth keeping:
 

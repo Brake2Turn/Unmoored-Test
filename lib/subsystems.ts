@@ -11,5 +11,5 @@ import type { Subsystem } from '@/lib/energy';
 export const SUBSYSTEM_STYLE: Record<Subsystem, { label: string; accent: string }> = {
   shields: { label: 'SHIELDS', accent: palette.shields },
   weapons: { label: 'WEAPONS', accent: palette.weapons },
-  piloting: { label: 'PILOTING', accent: palette.piloting },
+  engines: { label: 'ENGINES', accent: palette.engines },
 };

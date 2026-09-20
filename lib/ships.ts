@@ -28,7 +28,7 @@ export type Ship = {
   cargo: number;
   /**
    * Bars of reactor output, the pool the helm panel spreads across shields,
-   * weapons and piloting.
+   * weapons and engines.
    *
    * Always short of `TOTAL_CAPACITY` (12) — a ship that could run everything
    * at once would have nothing to decide. `npm run verify:energy` fails if one

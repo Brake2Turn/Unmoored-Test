@@ -214,7 +214,7 @@ function SubsystemGlyph({ subsystem, color }: { subsystem: Subsystem; color: str
     );
   }
 
-  // Piloting: a dart, nose up, the same silhouette the ships are built from.
+  // Engines: a dart, nose up, the same silhouette the ships are built from.
   return (
     <Svg width={13} height={14} viewBox="0 0 16 17">
       <Path
@@ -266,7 +266,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: palette.textMuted,
     letterSpacing: tracking.caption,
-    // PILOTING is eight tracked capitals: at 58 it wrapped to "PILOTIN G".
+    // ENGINES is eight tracked capitals: at 58 it wrapped to "PILOTIN G".
     width: 70,
   },
   pips: { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 },

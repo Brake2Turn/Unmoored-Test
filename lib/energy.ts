@@ -15,10 +15,10 @@
  * bare node. The colours and labels live in `lib/subsystems.ts`, which is to
  * this file what `encounters.ts` is to `sectorMap.ts`.
  */
-export type Subsystem = 'shields' | 'weapons' | 'piloting';
+export type Subsystem = 'shields' | 'weapons' | 'engines';
 
 /** Allocation order, which is also the order they are drawn in. */
-export const SUBSYSTEMS: readonly Subsystem[] = ['shields', 'weapons', 'piloting'] as const;
+export const SUBSYSTEMS: readonly Subsystem[] = ['shields', 'weapons', 'engines'] as const;
 
 /** Bars one subsystem holds when fully powered. */
 export const SUBSYSTEM_CAPACITY = 4;
@@ -31,6 +31,17 @@ export const TOTAL_CAPACITY = SUBSYSTEMS.length * SUBSYSTEM_CAPACITY;
 
 /** Bars currently routed to each subsystem. */
 export type EnergyState = Record<Subsystem, number>;
+
+/**
+ * Names a subsystem used to be saved under.
+ *
+ * Engines shipped as "piloting" first. A save written under the old name has
+ * to keep its bars — and now that the engines must be running to jump at all,
+ * silently dropping them would leave a loaded run unable to move.
+ */
+const LEGACY_KEYS: Partial<Record<Subsystem, string>> = {
+  engines: 'piloting',
+};
 
 /** Bars the reactor is currently carrying. */
 export function spentEnergy(energy: EnergyState): number {
@@ -80,7 +91,7 @@ export function shift(
  * subsystem is visibly part-powered.
  */
 export function defaultEnergy(reactor: number): EnergyState {
-  const energy: EnergyState = { shields: 0, weapons: 0, piloting: 0 };
+  const energy: EnergyState = { shields: 0, weapons: 0, engines: 0 };
   let left = reactorBudget(reactor);
 
   while (left > 0) {
@@ -113,11 +124,14 @@ export function clampEnergy(value: unknown, reactor: number): EnergyState {
   if (typeof value !== 'object' || value === null) return defaultEnergy(reactor);
 
   const source = value as Partial<Record<Subsystem, unknown>>;
-  const energy: EnergyState = { shields: 0, weapons: 0, piloting: 0 };
+  const energy: EnergyState = { shields: 0, weapons: 0, engines: 0 };
   let sawOne = false;
 
   for (const subsystem of SUBSYSTEMS) {
-    const raw = source[subsystem];
+    const legacy = LEGACY_KEYS[subsystem];
+    const raw =
+      source[subsystem] ??
+      (legacy ? (source as Record<string, unknown>)[legacy] : undefined);
     if (typeof raw === 'number' && Number.isFinite(raw)) {
       energy[subsystem] = Math.max(0, Math.min(SUBSYSTEM_CAPACITY, Math.floor(raw)));
       sawOne = true;

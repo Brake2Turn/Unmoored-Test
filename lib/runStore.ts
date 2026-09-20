@@ -61,6 +61,32 @@ export function sectorOf(run: RunState): number {
 }
 
 /**
+ * Bars the engines need before the ship can jump at all.
+ *
+ * One is enough: this is a gate, not a cost. It exists so the reactor has
+ * teeth — energy in the engines is energy not in the shields, and now that
+ * trade is a real one.
+ */
+export const MIN_JUMP_ENGINES = 1;
+
+/** Why a jump cannot happen, or null when it can. */
+export type JumpBlock = 'fuel' | 'engines' | null;
+
+/**
+ * What is stopping this run from jumping.
+ *
+ * Both the helm and the sector map ask this rather than each deciding for
+ * itself, so the button that offers the jump and the button that performs it
+ * can never disagree. Fuel is reported first: an empty tank is the harder
+ * stop, since the engines can be powered again in a moment and fuel cannot.
+ */
+export function jumpBlocker(run: RunState): JumpBlock {
+  if (run.fuel <= 0) return 'fuel';
+  if (run.energy.engines < MIN_JUMP_ENGINES) return 'engines';
+  return null;
+}
+
+/**
  * Reactor output for the ship this run launched in.
  *
  * Derived from the ship rather than copied into the run, so retuning a ship's
@@ -162,6 +188,11 @@ export async function clearRun(): Promise<void> {
  * hop back to a star already visited costs the same as a new one.
  */
 export function applyJump(run: RunState, target: number): RunState {
+  // Belt-and-braces, the same way `shiftEnergy` refuses an illegal move: the
+  // screens disable the button, and a refused jump hands the run back
+  // unchanged so a caller can tell nothing happened.
+  if (jumpBlocker(run)) return run;
+
   return {
     ...run,
     position: target,

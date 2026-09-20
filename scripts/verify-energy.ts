@@ -122,10 +122,10 @@ const JUNK: unknown[] = [
   'shields',
   [],
   {},
-  { shields: 99, weapons: -4, piloting: 2.7 },
-  { shields: NaN, weapons: Infinity, piloting: -Infinity },
-  { shields: 4, weapons: 4, piloting: 4 },
-  { shields: '3', weapons: null, piloting: 1 },
+  { shields: 99, weapons: -4, engines: 2.7 },
+  { shields: NaN, weapons: Infinity, engines: -Infinity },
+  { shields: 4, weapons: 4, engines: 4 },
+  { shields: '3', weapons: null, engines: 1 },
   { hull: 3, speed: 2 },
 ];
 
@@ -149,8 +149,26 @@ for (let i = 0; i < RUNS; i++) {
 // An all-zero allocation is a choice the player can make, not a missing field.
 check(
   'an emptied reactor is kept, not refilled',
-  spentEnergy(clampEnergy({ shields: 0, weapons: 0, piloting: 0 }, 6)) === 0,
+  spentEnergy(clampEnergy({ shields: 0, weapons: 0, engines: 0 }, 6)) === 0,
 );
+
+// Engines shipped as "piloting". A save under the old name must keep its bars:
+// losing them would leave a loaded run unable to jump at all.
+const legacy = clampEnergy({ shields: 1, weapons: 2, piloting: 3 }, 6);
+check('a save written as "piloting" becomes engines', legacy.engines === 3);
+check('the rest of a legacy save is untouched', legacy.shields === 1 && legacy.weapons === 2);
+checkLegal('legacy save', legacy, 6);
+
+// The new name wins if a save somehow carries both.
+check(
+  'a save carrying both names prefers engines',
+  clampEnergy({ engines: 1, piloting: 4 }, 6).engines === 1,
+);
+
+// Every ship must start able to move, or a new run would open stranded.
+for (const reactor of declared) {
+  check(`reactor ${reactor} starts with engines running`, defaultEnergy(reactor).engines >= 1);
+}
 
 console.log(`sequences checked  ${RUNS}`);
 console.log(`ships in the table ${shipCount} (reactors ${declared.join(', ')} of ${TOTAL_CAPACITY})`);

@@ -9,7 +9,14 @@ import { MenuButton } from '@/components/MenuButton';
 import { useHaptics, useSettings } from '@/lib/settings';
 import { StarField } from '@/components/StarField';
 import { fonts, palette, tracking, useMenuWidth } from '@/lib/theme';
-import { applyJump, loadRun, saveRun, sectorOf, type RunState } from '@/lib/runStore';
+import {
+  applyJump,
+  jumpBlocker,
+  loadRun,
+  saveRun,
+  sectorOf,
+  type RunState,
+} from '@/lib/runStore';
 import { shipById } from '@/lib/ships';
 import {
   JUMP_RANGE,
@@ -59,6 +66,9 @@ export default function SectorScreen() {
   const ship = shipById(run?.shipId);
   const fuel = run?.fuel ?? 0;
   const dry = fuel <= 0;
+  // The helm will not open this screen with the engines cold, but a run
+  // loaded straight into the map still has to be told why it cannot move.
+  const blocked = run ? jumpBlocker(run) : 'fuel';
 
   const inRange = useMemo(
     () => (map && !dry ? new Set(reachableFrom(map, position)) : new Set<number>()),
@@ -94,10 +104,17 @@ export default function SectorScreen() {
 
   const onConfirmJump = useCallback(async () => {
     if (target === null || !run || jumping) return;
+
+    // `applyJump` refuses a jump the run cannot make and hands back the same
+    // object, so an unchanged run means nothing happened — do not spend the
+    // press or navigate away on it.
+    const jumped = applyJump(run, target);
+    if (jumped === run) return;
+
     setJumping(true);
     haptics.confirm();
 
-    await saveRun(applyJump(run, target));
+    await saveRun(jumped);
     router.back();
   }, [haptics, jumping, router, run, target]);
 
@@ -257,11 +274,13 @@ export default function SectorScreen() {
         <Text
           style={[
             styles.prompt,
-            (target === boss || dry) && { color: palette.danger },
+            (target === boss || !!blocked) && { color: palette.danger },
           ]}
         >
           {dry
             ? 'NO FUEL — THE SHIP IS ADRIFT'
+            : blocked === 'engines'
+            ? 'ENGINES COLD — POWER THEM AT THE HELM'
             : target === null
             ? `${inRange.size} STARS IN RANGE`
             : `${target === boss ? 'BOSS · ' : ''}RANGE ${Math.round(
@@ -269,10 +288,18 @@ export default function SectorScreen() {
               )} OF ${JUMP_RANGE}`}
         </Text>
         <MenuButton
-          label={dry ? 'OUT OF FUEL' : target === null ? 'SELECT A STAR' : 'JUMP'}
+          label={
+            blocked === 'fuel'
+              ? 'OUT OF FUEL'
+              : blocked
+                ? 'ENGINES OFFLINE'
+                : target === null
+                  ? 'SELECT A STAR'
+                  : 'JUMP'
+          }
           onPress={onConfirmJump}
-          primary={!dry && target !== null}
-          disabled={dry || target === null}
+          primary={!blocked && target !== null}
+          disabled={!!blocked || target === null}
           width={buttonWidth}
         />
       </View>

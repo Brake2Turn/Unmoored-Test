@@ -33,7 +33,7 @@ export const palette = {
    */
   shields: '#5FD9E8',
   weapons: '#E8A85F',
-  piloting: '#9B7FE8',
+  engines: '#9B7FE8',
 
   textPrimary: '#DCE6FF',
   textMuted: '#7A87A8',

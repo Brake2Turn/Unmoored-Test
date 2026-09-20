@@ -13,7 +13,14 @@ import { EncounterShip } from '@/components/ships/EncounterShip';
 import { SYSTEMS_SPAN, ShipSystems } from '@/components/ships/ShipSystems';
 import { useHaptics, useSettings } from '@/lib/settings';
 import { fonts, layout, palette, tracking, useMenuWidth } from '@/lib/theme';
-import { loadRun, reactorOf, saveRun, shiftEnergy, type RunState } from '@/lib/runStore';
+import {
+  jumpBlocker,
+  loadRun,
+  reactorOf,
+  saveRun,
+  shiftEnergy,
+  type RunState,
+} from '@/lib/runStore';
 import { shipById } from '@/lib/ships';
 import { encounterAt } from '@/lib/sectorMap';
 import { ENCOUNTER_STYLE } from '@/lib/encounters';
@@ -70,7 +77,9 @@ export default function RunScreen() {
 
   const ship = shipById(run?.shipId);
   const fuel = run?.fuel ?? 0;
-  const dry = fuel <= 0;
+  // Until the run has loaded there is nothing to jump with, so the button
+  // stays closed rather than briefly offering a jump it cannot make.
+  const blocked = run ? jumpBlocker(run) : 'fuel';
 
   // What is here is only learned by arriving — the sector map shows plain dots.
   const encounter = run ? encounterAt(run.map, run.position) : 'empty';
@@ -98,10 +107,10 @@ export default function RunScreen() {
   const artScale = Math.max(0.55, Math.min(1, artBudget / (waiting.height + SHIP_SLOT_HEIGHT)));
 
   const onJump = useCallback(() => {
-    if (dry) return;
+    if (blocked) return;
     haptics.confirm();
     router.push('/sector');
-  }, [dry, haptics, router]);
+  }, [blocked, haptics, router]);
 
   const onLeave = useCallback(() => {
     haptics.tap();
@@ -163,7 +172,7 @@ export default function RunScreen() {
         </View>
 
         {/* The reactor allocation, drawn on the ship: a bubble for shields, a
-            longer exhaust for piloting. */}
+            longer exhaust for engines. */}
         <FadeInView enabled={!settings.reduceMotion} duration={700}>
           <ShipSystems
             shipId={ship.id}
@@ -171,7 +180,7 @@ export default function RunScreen() {
             width={SHIP_WIDTH * artScale}
             height={SHIP_HEIGHT * artScale}
             shields={run?.energy.shields ?? 0}
-            piloting={run?.energy.piloting ?? 0}
+            engines={run?.energy.engines ?? 0}
             animate={!settings.reduceMotion}
           />
         </FadeInView>
@@ -190,10 +199,11 @@ export default function RunScreen() {
 
         <FuelBadge remaining={fuel} accent={ship.accent} />
         <MenuButton
-          label={dry ? 'OUT OF FUEL' : 'JUMP'}
+          label={blocked === 'fuel' ? 'OUT OF FUEL' : blocked ? 'ENGINES OFFLINE' : 'JUMP'}
+          caption={blocked === 'engines' ? 'PUT A BAR INTO ENGINES' : undefined}
           onPress={onJump}
-          primary={!dry}
-          disabled={dry}
+          primary={!blocked}
+          disabled={!!blocked}
           width={buttonWidth}
         />
       </View>
