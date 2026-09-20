@@ -63,6 +63,15 @@ export type RunState = {
    * matching it. A float: the envelope fades up as it charges.
    */
   shieldCharge: number;
+  /**
+   * How many hits this shield has taken, only ever counted up.
+   *
+   * The envelope plays a shimmer when a layer breaks and a shatter when the
+   * last one goes, and it has to tell a hit from the player simply pulling the
+   * power — both lower the level, but only one is something striking the ship.
+   * A counter says "that was a hit" without the drawing having to guess.
+   */
+  shieldHits: number;
 };
 
 /**
@@ -163,6 +172,7 @@ function createRun(shipId: string): RunState {
     fuel: FUEL_PER_RUN,
     energy: energyAtStart,
     detain: 0,
+    shieldHits: 0,
     // A run opens with its shields already up; the charge time is for changes
     // made in flight, not a penalty for launching.
     shieldCharge: energyAtStart.shields,
@@ -290,7 +300,8 @@ export function shiftEnergy(run: RunState, subsystem: Subsystem, delta: number):
  */
 export function damageShield(run: RunState): RunState {
   const shieldCharge = damagedShield(run.shieldCharge);
-  return shieldCharge === run.shieldCharge ? run : { ...run, shieldCharge };
+  if (shieldCharge === run.shieldCharge) return run;
+  return { ...run, shieldCharge, shieldHits: run.shieldHits + 1 };
 }
 
 /**
@@ -339,6 +350,9 @@ function hydrate(stored: StoredRun): RunState {
     // for, so a reload does not strip a run of its shields.
     detain: clampNumber(stored.detain, 0, DETAIN_UNITS, 0),
     shieldCharge: clampNumber(stored.shieldCharge, 0, energy.shields, energy.shields),
+    // Only ever compared against itself to spot a change, so any finite
+    // number will do; a save from before the counter starts at nothing.
+    shieldHits: clampNumber(stored.shieldHits, 0, Number.MAX_SAFE_INTEGER, 0),
   };
 }
 

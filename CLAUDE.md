@@ -141,6 +141,30 @@ eye. Squares past the ceiling are drawn as bare outlines; the one currently
 charging fills across, so the five-second wait is visible instead of a number
 that jumps.
 
+**A break is felt as well as counted.** `ShieldBreak` plays a shimmer round the
+rim when a layer goes and sends the shell out in wedges when the last one does.
+Which plays is decided by the level *before* the hit against the level after,
+and it fires on a change in `run.shieldHits` rather than on the level dropping
+— pulling the power lowers the level too, and that must stay silent. Both
+effects unmount when they finish, and neither is load-bearing: if they never
+play, the bar and the bubble still tell the truth.
+
+Two things there:
+
+- **Rotate a circle, then squash it.** The shimmer travels the rim by rotating,
+  but rotating an *ellipse* swings its long axis round and the highlight leaves
+  the rim. So the comet is drawn on a circle of radius `SHIELD_RX`, rotated,
+  and the parent view scales it by `SHIELD_RY / SHIELD_RX` — which traces the
+  ellipse exactly. Both are plain view transforms, which behave the same
+  everywhere; animated SVG attributes were avoided on purpose.
+- **The shatter is one animated view, not ten.** Scaling the whole group about
+  the shield's centre carries every wedge outward along its own radius, which
+  is what a shell coming apart does anyway.
+
+Both flashes start at full brightness and fade, rather than easing in. A hit
+should land; it also means the effect is visible where frames are scarce
+instead of being stuck at the transparent end of a fade-in.
+
 Both clocks are advanced by `tickRun`, and **only the helm ticks** — it is the
 only screen that sits still. It writes back when a clock finishes, every two
 seconds along the way, and on leaving the screen, rather than four times a

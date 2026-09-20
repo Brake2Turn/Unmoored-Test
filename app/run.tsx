@@ -285,6 +285,7 @@ export default function RunScreen() {
             width={SHIP_WIDTH * artScale}
             height={SHIP_HEIGHT * artScale}
             shields={shieldLevel(run?.shieldCharge ?? 0)}
+            shieldHits={run?.shieldHits ?? 0}
             engines={run?.energy.engines ?? 0}
             animate={!settings.reduceMotion}
           />

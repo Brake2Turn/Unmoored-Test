@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
@@ -25,6 +25,12 @@ type Props = {
    * snapping to it. Nothing is drawn below a whisker of charge.
    */
   shields: number;
+  /**
+   * The run's running count of hits taken. Only ever compared against its own
+   * last value: a change means something struck the shield, which is how a
+   * break is told apart from the player pulling the power.
+   */
+  shieldHits: number;
   /** Bars in engines: 0 means cold engines, and each one lengthens the flame. */
   engines: number;
   /** False holds the flame at a steady length instead of pulsing. */
@@ -116,7 +122,6 @@ const TEXTURE_OPACITY = (level: number) => 0.1 + 0.16 * level;
  * The ribs as a single path, built once: sixteen short spokes around the rim.
  */
 const RIB_PATH = (() => {
-  const round = (n: number) => Math.round(n * 100) / 100;
   const parts: string[] = [];
   for (let i = 0; i < RIB_COUNT; i++) {
     const angle = (i / RIB_COUNT) * Math.PI * 2;
@@ -152,6 +157,77 @@ const FLICKER_SCALE = (level: number) => 1.1 + 0.025 * level;
 const FLICKER_MS = 420;
 
 /**
+ * A shimmer runs right round the rim when a layer breaks.
+ *
+ * Drawn as a comet — a bright head with a fading tail — on a **circle** of
+ * radius `SHIELD_RX`, not on the ellipse. Rotating an ellipse would swing its
+ * long axis around and the highlight would leave the rim; rotating a circle
+ * and squashing the result by `SHIELD_RY / SHIELD_RX` traces the ellipse
+ * exactly. That is also why this uses plain view transforms: a rotate and a
+ * scale, which behave the same on every platform, rather than animated SVG
+ * attributes.
+ */
+const SHIMMER_SQUASH = SHIELD_RY / SHIELD_RX;
+const SHIMMER_TAIL = [
+  { from: 0, to: 26, opacity: 0.95, width: 3.2 },
+  { from: 26, to: 58, opacity: 0.5, width: 2.4 },
+  { from: 58, to: 94, opacity: 0.26, width: 1.8 },
+  { from: 94, to: 134, opacity: 0.1, width: 1.2 },
+].map((seg) => ({ ...seg, d: circleArc(SHIELD_RX, seg.from, seg.to) }));
+
+/**
+ * The shell breaks into wedges when the last layer goes.
+ *
+ * Straight-edged pieces with gaps between them, sitting in the same rim band
+ * as the plating. The burst is one scale-and-fade of the whole group: scaling
+ * about the centre carries every shard outward along its own radius, which is
+ * what a shell coming apart does, for the cost of a single animated view.
+ */
+const SHARD_COUNT = 10;
+const SHARD_INNER = 0.84;
+const SHARD_OUTER = 1.03;
+const SHARD_GAP_DEG = 9;
+const SHARDS = (() => {
+  const step = 360 / SHARD_COUNT;
+  const point = (t: number, deg: number) => {
+    const a = (deg * Math.PI) / 180;
+    return `${round(SHIELD_CX + SHIELD_RX * t * Math.cos(a))} ${round(
+      SHIELD_CY + SHIELD_RY * t * Math.sin(a),
+    )}`;
+  };
+
+  return Array.from({ length: SHARD_COUNT }, (_, i) => {
+    const from = i * step + SHARD_GAP_DEG / 2;
+    const to = (i + 1) * step - SHARD_GAP_DEG / 2;
+    return [
+      `M ${point(SHARD_INNER, from)}`,
+      `L ${point(SHARD_OUTER, from)}`,
+      `L ${point(SHARD_OUTER, to)}`,
+      `L ${point(SHARD_INNER, to)}`,
+      'Z',
+    ].join(' ');
+  });
+})();
+
+/** How long each effect runs before it is taken off the screen entirely. */
+const SHIMMER_MS = 620;
+const SHATTER_MS = 560;
+
+/** An arc of a circle centred on the shield, in degrees. */
+function circleArc(radius: number, fromDeg: number, toDeg: number): string {
+  const at = (deg: number) => {
+    const a = (deg * Math.PI) / 180;
+    return `${round(SHIELD_CX + radius * Math.cos(a))} ${round(SHIELD_CY + radius * Math.sin(a))}`;
+  };
+  const large = Math.abs(toDeg - fromDeg) > 180 ? 1 : 0;
+  return `M ${at(fromDeg)} A ${radius} ${radius} 0 ${large} 1 ${at(toDeg)}`;
+}
+
+function round(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/**
  * The player's ship with its powered systems drawn on it.
  *
  * Both are read straight off the reactor allocation, and both use their
@@ -169,6 +245,7 @@ export function ShipSystems({
   width,
   height,
   shields,
+  shieldHits,
   engines,
   animate = true,
 }: Props) {
@@ -191,6 +268,14 @@ export function ShipSystems({
       <ShipArt shipId={shipId} accent={accent} width={width} height={height} />
 
       <Shield level={shields} width={width * SYSTEMS_SPAN} height={height * SYSTEMS_SPAN} />
+
+      <ShieldBreak
+        level={shields}
+        hits={shieldHits}
+        width={width * SYSTEMS_SPAN}
+        height={height * SYSTEMS_SPAN}
+        animate={animate}
+      />
     </View>
   );
 }
@@ -265,6 +350,146 @@ function Shield({ level, width, height }: { level: number; width: number; height
         strokeLinecap="round"
       />
     </Svg>
+  );
+}
+
+/**
+ * What the shield does when it is hit.
+ *
+ * A layer breaking sends a shimmer round the rim; the last layer going sends
+ * the shell out in pieces. Which one plays is decided by the level *before*
+ * the hit against the level after, so pulling the power — which also lowers
+ * the level — never sets anything off.
+ *
+ * The effect unmounts once it has run. Nothing here is load-bearing: if these
+ * animations never play, the shield still reads correctly from its own bar
+ * and bubble.
+ */
+function ShieldBreak({
+  level,
+  hits,
+  width,
+  height,
+  animate,
+}: {
+  level: number;
+  hits: number;
+  width: number;
+  height: number;
+  animate: boolean;
+}) {
+  const [effect, setEffect] = useState<{ id: number; kind: 'shimmer' | 'shatter' } | null>(null);
+  const lastHits = useRef(hits);
+  const lastLevel = useRef(level);
+
+  useEffect(() => {
+    const struck = hits !== lastHits.current;
+    const before = lastLevel.current;
+    lastHits.current = hits;
+    lastLevel.current = level;
+
+    if (!struck || !animate) return;
+    // Nothing was standing, so nothing broke.
+    if (before <= 0) return;
+    setEffect({ id: hits, kind: level <= 0 ? 'shatter' : 'shimmer' });
+  }, [animate, hits, level]);
+
+  // Take it off the screen once it has played, rather than leaving a spent
+  // overlay mounted over the ship.
+  useEffect(() => {
+    if (!effect) return;
+    const timer = setTimeout(
+      () => setEffect(null),
+      effect.kind === 'shimmer' ? SHIMMER_MS + 80 : SHATTER_MS + 80,
+    );
+    return () => clearTimeout(timer);
+  }, [effect]);
+
+  const sweep = useSharedValue(0);
+  const burst = useSharedValue(0);
+  const glow = useSharedValue(0);
+
+  useEffect(() => {
+    if (!effect) return;
+
+    sweep.value = 0;
+    burst.value = 0;
+    glow.value = 0;
+
+    // Full brightness on the first frame, then fade. A hit should land, not
+    // ease in — and it means the effect is visible even where frames are
+    // scarce, instead of being stuck at the transparent end of a fade-in.
+    glow.value = 1;
+
+    if (effect.kind === 'shimmer') {
+      sweep.value = withTiming(1, { duration: SHIMMER_MS, easing: Easing.inOut(Easing.quad) });
+      glow.value = withTiming(0, { duration: SHIMMER_MS, easing: Easing.in(Easing.quad) });
+      return;
+    }
+
+    burst.value = withTiming(1, { duration: SHATTER_MS, easing: Easing.out(Easing.quad) });
+    glow.value = withTiming(0, { duration: SHATTER_MS, easing: Easing.in(Easing.quad) });
+  }, [burst, effect, glow, sweep]);
+
+  // The comet starts just behind the top of the rim and runs all the way
+  // round, a little past where it began.
+  const shimmerStyle = useAnimatedStyle(() => ({
+    opacity: glow.value,
+    transform: [{ rotate: `${-40 + sweep.value * 400}deg` }],
+  }));
+
+  const shatterStyle = useAnimatedStyle(() => ({
+    opacity: glow.value,
+    transform: [{ scale: 1 + burst.value * 0.34 }],
+  }));
+
+  if (!effect) return null;
+
+  const tint = SUBSYSTEM_STYLE.shields.accent;
+
+  if (effect.kind === 'shimmer') {
+    return (
+      // Squashing the rotating circle into the ellipse, as above.
+      <View
+        style={[StyleSheet.absoluteFill, { transform: [{ scaleY: SHIMMER_SQUASH }] }]}
+        pointerEvents="none"
+      >
+        <Animated.View style={[StyleSheet.absoluteFill, shimmerStyle]}>
+          <Svg width={width} height={height} viewBox={VIEW_BOX}>
+            {SHIMMER_TAIL.map((seg) => (
+              <Path
+                key={seg.from}
+                d={seg.d}
+                fill="none"
+                stroke={tint}
+                strokeOpacity={seg.opacity}
+                strokeWidth={seg.width}
+                strokeLinecap="round"
+              />
+            ))}
+          </Svg>
+        </Animated.View>
+      </View>
+    );
+  }
+
+  return (
+    <Animated.View style={[StyleSheet.absoluteFill, shatterStyle]} pointerEvents="none">
+      <Svg width={width} height={height} viewBox={VIEW_BOX}>
+        {SHARDS.map((d, i) => (
+          <Path
+            key={i}
+            d={d}
+            fill={tint}
+            fillOpacity={0.18}
+            stroke={tint}
+            strokeOpacity={0.9}
+            strokeWidth={1.4}
+            strokeLinejoin="round"
+          />
+        ))}
+      </Svg>
+    </Animated.View>
   );
 }
 
