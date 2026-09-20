@@ -33,6 +33,54 @@ export const TOTAL_CAPACITY = SUBSYSTEMS.length * SUBSYSTEM_CAPACITY;
 export type EnergyState = Record<Subsystem, number>;
 
 /**
+ * Breaking away from a hostile star.
+ *
+ * The hold is measured in *units of work*, not seconds, and the engines burn
+ * through it at `escapeRate`. One bar clears 40 units in 40 seconds; more bars
+ * burn faster, but on a curve with diminishing returns, so a full tank is a
+ * meaningful head start rather than a free pass. No bars means no rate at all,
+ * which is what pauses the timer rather than ending it.
+ *
+ * The exponent is the whole design: at 1 it would be a straight divide and
+ * four bars would escape in ten seconds. At 0.35 four bars still costs about
+ * twenty-five, and each extra bar buys less than the one before it.
+ */
+export const DETAIN_UNITS = 40;
+export const ESCAPE_EXPONENT = 0.35;
+
+/** Units of hold burned per second at this engine power. Zero bars, zero rate. */
+export function escapeRate(engines: number): number {
+  if (!Number.isFinite(engines) || engines <= 0) return 0;
+  return Math.pow(engines, ESCAPE_EXPONENT);
+}
+
+/** How long a full hold takes at this engine power, or Infinity while paused. */
+export function detainSeconds(engines: number, units: number = DETAIN_UNITS): number {
+  const rate = escapeRate(engines);
+  return rate <= 0 ? Infinity : units / rate;
+}
+
+/**
+ * Shields come up, they do not snap on.
+ *
+ * The bars in the shields row set the level the envelope is heading for; this
+ * is how fast it actually gets there. Pulling power is not symmetrical —
+ * that drops on the spot, in `shiftEnergy` — because the energy is simply no
+ * longer there to hold it.
+ */
+export const SHIELD_REGEN_PER_SECOND = 1 / 3.5;
+
+/** The shield's strength after `seconds` of charging toward `target`. */
+export function regenShield(charge: number, target: number, seconds: number): number {
+  const safeTarget = Math.max(0, Math.min(SUBSYSTEM_CAPACITY, target));
+  const safeCharge = Number.isFinite(charge) ? Math.max(0, charge) : 0;
+
+  // Above the level the reactor is holding: the extra is gone at once.
+  if (safeCharge >= safeTarget) return safeTarget;
+  return Math.min(safeTarget, safeCharge + Math.max(0, seconds) * SHIELD_REGEN_PER_SECOND);
+}
+
+/**
  * Names a subsystem used to be saved under.
  *
  * Engines shipped as "piloting" first. A save written under the old name has

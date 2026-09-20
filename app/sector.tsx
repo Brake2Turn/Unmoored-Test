@@ -279,6 +279,8 @@ export default function SectorScreen() {
         >
           {dry
             ? 'NO FUEL — THE SHIP IS ADRIFT'
+            : blocked === 'held'
+            ? 'HELD FAST — BREAK AWAY AT THE HELM'
             : blocked === 'engines'
             ? 'ENGINES COLD — POWER THEM AT THE HELM'
             : target === null
@@ -291,9 +293,11 @@ export default function SectorScreen() {
           label={
             blocked === 'fuel'
               ? 'OUT OF FUEL'
-              : blocked
-                ? 'ENGINES OFFLINE'
-                : target === null
+              : blocked === 'held'
+                ? 'HELD'
+                : blocked
+                  ? 'ENGINES OFFLINE'
+                  : target === null
                   ? 'SELECT A STAR'
                   : 'JUMP'
           }

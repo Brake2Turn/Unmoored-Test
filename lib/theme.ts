@@ -32,7 +32,7 @@ export const palette = {
    * panel says which row is which without reading the labels. These carry
    * beyond the panel: the shield bubble and the exhaust are drawn in them.
    */
-  shields: '#B9A5F5',
+  shields: '#5FD9E8',
   weapons: '#FF4A4A',
   engines: '#FF9A3C',
 

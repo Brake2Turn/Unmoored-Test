@@ -19,7 +19,11 @@ type Props = {
   /** The ship art's own size. The systems box around it is larger — see below. */
   width: number;
   height: number;
-  /** Bars in shields: 0 draws nothing, and each one makes the bubble stronger. */
+  /**
+   * The shield's *charge*, not its power setting — a float, because the
+   * envelope fades up to the level the reactor is holding rather than
+   * snapping to it. Nothing is drawn below a whisker of charge.
+   */
   shields: number;
   /** Bars in engines: 0 means cold engines, and each one lengthens the flame. */
   engines: number;
@@ -205,7 +209,9 @@ export function ShipSystems({
  * the ellipse's own proportions and needs no separate x and y radii.
  */
 function Shield({ level, width, height }: { level: number; width: number; height: number }) {
-  if (level <= 0) return null;
+  // A charge this small is a shield on its way up or down, not one worth
+  // drawing — without the floor it would flicker on at a hundredth of a bar.
+  if (level < 0.05) return null;
 
   const tint = SUBSYSTEM_STYLE.shields.accent;
 

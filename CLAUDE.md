@@ -98,13 +98,36 @@ reactor of four to seven means **no ship can power everything**, so every bar is
 somewhere it is not somewhere else. `npm run verify:energy` fails if a ship's
 reactor ever creeps up to `TOTAL_CAPACITY`.
 
-**One level is read so far: the engines gate the jump.** `jumpBlocker(run)`
-(`lib/runStore.ts`) returns `'fuel'`, `'engines'` or null, and both the helm
-and the sector map ask it rather than each deciding for itself, so the button
-that offers a jump and the button that performs it can never disagree.
-`applyJump` refuses a blocked jump and hands the run straight back, the same
-way `shiftEnergy` refuses an illegal move. Shields and weapons still do
-nothing — there is no combat to spend them on.
+**Two levels are read so far, both on the engines and the shields.**
+`jumpBlocker(run)` (`lib/runStore.ts`) returns `'fuel'`, `'held'`, `'engines'`
+or null, and both the helm and the sector map ask it rather than each deciding
+for itself, so the button that offers a jump and the button that performs it
+can never disagree. `applyJump` refuses a blocked jump and hands the run
+straight back, the same way `shiftEnergy` refuses an illegal move. Weapons
+still does nothing — there is nothing to shoot.
+
+**Arriving on a hostile star pins the ship there.** The hold is stored as
+`detain`, in *units of work* rather than seconds, and the engines burn through
+it at `escapeRate(engines) = engines ** 0.35`. One bar clears the 40 units in
+40 seconds; four clears it in about 25, and each extra bar buys less than the
+one before it, so power helps without making escape cheap. **No bars means no
+rate**, which pauses the hold rather than ending it — and because the rate is
+read continuously, changing the allocation mid-hold changes the countdown.
+`verify:energy` holds the shape of that curve: monotonic, diminishing, and
+never below half the base time at full power.
+
+**Shields charge rather than switch on.** `energy.shields` is the level the
+envelope is heading for; `shieldCharge` is where it actually is, a float that
+climbs at `SHIELD_REGEN_PER_SECOND` (3.5s a bar) and is what the bubble's
+opacity is drawn from. It is deliberately asymmetric: pulling a bar out drops
+the charge on the spot, in `shiftEnergy`, because the energy holding it is
+simply gone. A new run launches with its shields already up — the charge time
+is for changes made in flight, not a tax on launching.
+
+Both clocks are advanced by `tickRun`, and **only the helm ticks** — it is the
+only screen that sits still. It writes back when a clock finishes, every two
+seconds along the way, and on leaving the screen, rather than four times a
+second.
 
 The gate cannot strand anyone: the smallest reactor is four bars, so a bar can
 always be moved back into the engines, and `verify:energy` holds that every
@@ -132,7 +155,7 @@ Two of the three subsystems are drawn on the ship itself
 (`components/ships/ShipSystems.tsx`): shields as a bubble that holds one size
 and grows brighter with each bar, engines as an exhaust plume that lengthens
 with each bar. Both are invisible at zero and use their subsystem's colour from
-`SUBSYSTEM_STYLE`, so a purple bubble is the shields row and an orange flame
+`SUBSYSTEM_STYLE`, so a cyan bubble is the shields row and an orange flame
 is the engines row — and a ship with no flame is a ship that cannot jump. Each
 bar does more to the exhaust than lengthen it: the plume widens, the plume and
 its white core both brighten, the heat haze around it builds and the pulse
@@ -172,7 +195,9 @@ Two things there are worth keeping:
   a single `transformOrigin` — including the Bulwark's pair.
 
 Hull and speed used to sit beside cargo on the ship cards. They are gone —
-cargo is the one stat that still varies without being energy.
+cargo is the one stat that still varies without being energy. The cards also
+carry an empty **WEAPON** hardpoint above cargo and the reactor; there is no
+weapon table yet, so the slot reads EMPTY and holds the space.
 
 `lib/energy.ts` imports nothing, for the same reason `sectorMap.ts` imports
 nothing: pure rules run under bare node in the verify script. The labels and
@@ -184,7 +209,9 @@ tints live in `lib/subsystems.ts`, which is to it what `encounters.ts` is to
 `lib/theme.ts`, `lib/sectorMap.ts` and `lib/energy.ts` import nothing from the
 project and are the leaves. `lib/ships.ts`, `lib/encounters.ts` and
 `lib/subsystems.ts` depend on the theme; `lib/runStore.ts` depends on ships,
-the map and the energy rules. Keep that direction — the theme
+the map, the energy rules and `encounters.ts` — it reads the `hostile` flag out
+of `ENCOUNTER_STYLE` rather than keeping its own list of which stars mean
+trouble. Keep that direction — the theme
 briefly imported a helper from `sectorMap` and it was the wrong way round.
 
 Presentation belongs in a table, not in a screen. `ENCOUNTER_STYLE`
@@ -220,6 +247,11 @@ These cost real debugging time. Do not rediscover them.
   was in progress, which left earned ships unclearable on a fresh save — the
   dev unlock button made that reachable in one tap. It now enables on a run
   *or* any earned ship.
+- **Two taps in one JavaScript turn are one tap.** Driving the panel from a
+  script, `__step(...); __step(...)` back to back both act on the same render
+  and only one bar moves — React has not re-rendered in between. A test that
+  needs two presses has to space them out, or it will quietly assert the wrong
+  state. This hid the paused-timer case on the first run.
 - **A pulsing flame cannot be checked from a screenshot here.** The thruster
   animates with `withRepeat`, which needs `requestAnimationFrame`; headless
   throttles it, so a capture shows the flame at rest. That is the resting

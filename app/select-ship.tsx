@@ -165,6 +165,17 @@ export default function SelectShipScreen() {
           <Text style={styles.tagline}>{selected.tagline}</Text>
         )}
 
+        {/* The hardpoint. Nothing fits in it yet — there is no combat and no
+            weapon table — but the space is part of reading a ship. */}
+        <View style={styles.weaponRow}>
+          <Text numberOfLines={1} style={styles.statLabel}>
+            WEAPON
+          </Text>
+          <View style={[styles.slot, isLocked && styles.slotLocked]}>
+            <Text style={styles.slotLabel}>EMPTY</Text>
+          </View>
+        </View>
+
         <View style={styles.stats}>
           <StatBar
             label="CARGO"
@@ -422,7 +433,35 @@ const styles = StyleSheet.create({
     marginRight: -tracking.caption,
   },
 
-  stats: { width: '100%', maxWidth: 260, gap: 7, marginTop: 18 },
+  weaponRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    width: '100%',
+    maxWidth: 260,
+    marginTop: 18,
+  },
+  slot: {
+    flex: 1,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  slotLocked: { borderColor: 'rgba(255,255,255,0.08)' },
+  slotLabel: {
+    fontFamily: fonts.body,
+    fontSize: 9,
+    fontWeight: '500',
+    color: palette.textDisabled,
+    letterSpacing: tracking.caption,
+    marginRight: -tracking.caption,
+  },
+
+  stats: { width: '100%', maxWidth: 260, gap: 7, marginTop: 11 },
   statRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   statLabel: {
     fontFamily: fonts.body,

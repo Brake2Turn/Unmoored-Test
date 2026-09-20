@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -14,17 +14,19 @@ import { SYSTEMS_SPAN, ShipSystems } from '@/components/ships/ShipSystems';
 import { useHaptics, useSettings } from '@/lib/settings';
 import { fonts, layout, palette, tracking, useMenuWidth } from '@/lib/theme';
 import {
+  detainRemaining,
   jumpBlocker,
   loadRun,
   reactorOf,
   saveRun,
   shiftEnergy,
+  tickRun,
   type RunState,
 } from '@/lib/runStore';
 import { shipById } from '@/lib/ships';
 import { encounterAt } from '@/lib/sectorMap';
 import { ENCOUNTER_STYLE } from '@/lib/encounters';
-import type { Subsystem } from '@/lib/energy';
+import { escapeRate, type Subsystem } from '@/lib/energy';
 
 /** The player's ship at full size, before the screen decides it has no room. */
 const SHIP_WIDTH = 132;
@@ -45,6 +47,15 @@ const STACK_GAP = 16;
 const FUEL_ROW_HEIGHT = 22;
 
 /**
+ * How often the helm advances the hold timer and the shield charge.
+ *
+ * Four times a second is smooth enough for a countdown and a fade without
+ * writing to storage on every frame — the save is throttled separately below.
+ */
+const TICK_MS = 250;
+const SAVE_EVERY_TICKS = 8;
+
+/**
  * The helm: the ship in front of you, with the reactor to divide up and one
  * place to go.
  *
@@ -62,7 +73,12 @@ export default function RunScreen() {
 
   const [run, setRun] = useState<RunState | null>(null);
 
-  // Re-read on focus so returning from a jump shows the new position.
+  // The ticker reads the live run without being rebuilt on every tick.
+  const runRef = useRef<RunState | null>(null);
+  runRef.current = run;
+
+  // Re-read on focus so returning from a jump shows the new position, and
+  // write back on the way out so the clocks do not rewind.
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
@@ -71,6 +87,7 @@ export default function RunScreen() {
       });
       return () => {
         cancelled = true;
+        if (runRef.current) void saveRun(runRef.current);
       };
     }, []),
   );
@@ -86,6 +103,40 @@ export default function RunScreen() {
   const waiting = ENCOUNTER_STYLE[encounter];
 
   const buttonWidth = useMenuWidth();
+
+  const held = !!run && run.detain > 0;
+  const charging = !!run && run.shieldCharge < run.energy.shields;
+  // A hold with cold engines is not counting down, so there is nothing to
+  // tick for it — that is what "paused" means.
+  const burning = held && escapeRate(run.energy.engines) > 0;
+
+  /**
+   * The helm's clocks.
+   *
+   * It is the only screen that sits still, so it is the only one that
+   * advances them. The interval is rebuilt only when there is something new
+   * to count, not on every tick.
+   */
+  useEffect(() => {
+    if (!burning && !charging) return;
+
+    let ticks = 0;
+    const timer = setInterval(() => {
+      const current = runRef.current;
+      if (!current) return;
+
+      const next = tickRun(current, TICK_MS / 1000);
+      if (next === current) return;
+
+      setRun(next);
+      ticks += 1;
+      // Persist when a clock finishes, and occasionally along the way, rather
+      // than writing to storage four times a second.
+      if (next.detain === 0 || ticks % SAVE_EVERY_TICKS === 0) void saveRun(next);
+    }, TICK_MS);
+
+    return () => clearInterval(timer);
+  }, [burning, charging]);
 
   /**
    * The two pieces of ship art share whatever the controls leave over.
@@ -116,6 +167,28 @@ export default function RunScreen() {
     haptics.tap();
     router.back();
   }, [haptics, router]);
+
+  // What the one button says. The hold is the loud case: it counts down in the
+  // label, and says plainly when it is not counting at all.
+  const secondsHeld = run ? detainRemaining(run) : null;
+  const jumpLabel =
+    blocked === 'fuel'
+      ? 'OUT OF FUEL'
+      : blocked === 'held'
+        ? secondsHeld === Infinity
+          ? 'HELD'
+          : `HELD · ${secondsHeld}S`
+        : blocked === 'engines'
+          ? 'ENGINES OFFLINE'
+          : 'JUMP';
+  const jumpCaption =
+    blocked === 'held'
+      ? secondsHeld === Infinity
+        ? 'ENGINES COLD — THE TIMER IS PAUSED'
+        : 'MORE ENGINE POWER BREAKS AWAY SOONER'
+      : blocked === 'engines'
+        ? 'PUT A BAR INTO ENGINES'
+        : undefined;
 
   /**
    * Moving a bar of energy.
@@ -179,7 +252,7 @@ export default function RunScreen() {
             accent={ship.accent}
             width={SHIP_WIDTH * artScale}
             height={SHIP_HEIGHT * artScale}
-            shields={run?.energy.shields ?? 0}
+            shields={run?.shieldCharge ?? 0}
             engines={run?.energy.engines ?? 0}
             animate={!settings.reduceMotion}
           />
@@ -200,8 +273,8 @@ export default function RunScreen() {
 
         <FuelBadge remaining={fuel} accent={ship.accent} />
         <MenuButton
-          label={blocked === 'fuel' ? 'OUT OF FUEL' : blocked ? 'ENGINES OFFLINE' : 'JUMP'}
-          caption={blocked === 'engines' ? 'PUT A BAR INTO ENGINES' : undefined}
+          label={jumpLabel}
+          caption={jumpCaption}
           onPress={onJump}
           primary={!blocked}
           disabled={!!blocked}

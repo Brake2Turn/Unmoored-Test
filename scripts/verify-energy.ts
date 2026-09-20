@@ -11,9 +11,14 @@
 import { readFileSync } from 'node:fs';
 
 import {
+  DETAIN_UNITS,
+  SHIELD_REGEN_PER_SECOND,
   SUBSYSTEMS,
   SUBSYSTEM_CAPACITY,
   TOTAL_CAPACITY,
+  detainSeconds,
+  escapeRate,
+  regenShield,
   canAdd,
   canRemove,
   clampEnergy,
@@ -170,6 +175,61 @@ for (const reactor of declared) {
   check(`reactor ${reactor} starts with engines running`, defaultEnergy(reactor).engines >= 1);
 }
 
+// ---------------------------------------------------------------------------
+// Breaking away from a hostile star. The curve has to reward engine power
+// without making it cheap, and stop dead at no power.
+// ---------------------------------------------------------------------------
+check('no engines, no escape', escapeRate(0) === 0);
+check('no engines pauses rather than ends the hold', detainSeconds(0) === Infinity);
+check('one bar clears the hold in the full time', Math.round(detainSeconds(1)) === DETAIN_UNITS);
+
+const holdTimes = [1, 2, 3, 4].map((bars) => detainSeconds(bars));
+for (let i = 1; i < holdTimes.length; i++) {
+  check(`${i + 1} bars is faster than ${i}`, holdTimes[i] < holdTimes[i - 1]);
+}
+
+// Diminishing returns: each extra bar must buy less than the one before it,
+// or the fourth would trivialise the hold.
+for (let i = 2; i < holdTimes.length; i++) {
+  const thisGain = holdTimes[i - 1] - holdTimes[i];
+  const lastGain = holdTimes[i - 2] - holdTimes[i - 1];
+  check(`bar ${i + 1} buys less than bar ${i}`, thisGain < lastGain);
+}
+
+// Full engines must still cost real time, or there is no decision to make.
+check('full engines still take over half the hold', holdTimes[3] > DETAIN_UNITS * 0.5);
+check('full engines are faster than a third off', holdTimes[3] < DETAIN_UNITS * 0.8);
+
+// Negative or nonsense power is no power.
+check('nonsense engine power gives no rate', escapeRate(-3) === 0 && escapeRate(NaN) === 0);
+
+// ---------------------------------------------------------------------------
+// Shields charge toward the level they are powered for, and never past it.
+// ---------------------------------------------------------------------------
+for (let target = 0; target <= SUBSYSTEM_CAPACITY; target++) {
+  let charge = 0;
+  for (let step = 0; step < 400; step++) {
+    charge = regenShield(charge, target, 0.25);
+    check(`charge toward ${target} never overshoots`, charge <= target + 1e-9);
+    check(`charge toward ${target} never goes negative`, charge >= 0);
+  }
+  check(`charge reaches ${target}`, Math.abs(charge - target) < 1e-9);
+}
+
+// Pulling power drops the envelope at once rather than draining it.
+check('over-charge falls to the new level immediately', regenShield(4, 1, 0.25) === 1);
+check('a shield with no power goes out at once', regenShield(3, 0, 0.25) === 0);
+
+// A full charge takes a sensible handful of seconds, not an instant.
+const secondsPerBar = 1 / SHIELD_REGEN_PER_SECOND;
+check('a bar of shield takes a moment to come up', secondsPerBar >= 2 && secondsPerBar <= 8);
+
+// Junk in, legal out.
+check('junk charge starts from nothing', regenShield(NaN, 2, 1) > 0);
+check('negative time does not drain a shield', regenShield(1, 3, -5) === 1);
+
+console.log(`hold at 1-4 bars  ${holdTimes.map((t) => t.toFixed(1)).join('s, ')}s`);
+console.log(`shield per bar    ${secondsPerBar.toFixed(1)}s`);
 console.log(`sequences checked  ${RUNS}`);
 console.log(`ships in the table ${shipCount} (reactors ${declared.join(', ')} of ${TOTAL_CAPACITY})`);
 console.log(`moves made         ${movesMade}  refused ${movesRefused}`);

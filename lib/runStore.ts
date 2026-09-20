@@ -1,16 +1,21 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
+  DETAIN_UNITS,
   clampEnergy,
   defaultEnergy,
+  escapeRate,
+  regenShield,
   shift,
   type EnergyState,
   type Subsystem,
 } from '@/lib/energy';
+import { ENCOUNTER_STYLE } from '@/lib/encounters';
 import { DEFAULT_SHIP_ID, shipById } from '@/lib/ships';
 import {
   FUEL_PER_RUN,
   assignEncounters,
+  encounterAt,
   generateMap,
   hasEncounters,
   type SectorMap,
@@ -46,6 +51,17 @@ export type RunState = {
    * run, so a reload comes back to the same allocation.
    */
   energy: EnergyState;
+  /**
+   * Units of hold left before the ship can break away from a hostile star.
+   * Zero means free to go. Counted in units rather than seconds because the
+   * engines burn through it at their own rate — see `escapeRate`.
+   */
+  detain: number;
+  /**
+   * The shield's actual strength, which chases `energy.shields` rather than
+   * matching it. A float: the envelope fades up as it charges.
+   */
+  shieldCharge: number;
 };
 
 /**
@@ -70,7 +86,7 @@ export function sectorOf(run: RunState): number {
 export const MIN_JUMP_ENGINES = 1;
 
 /** Why a jump cannot happen, or null when it can. */
-export type JumpBlock = 'fuel' | 'engines' | null;
+export type JumpBlock = 'fuel' | 'engines' | 'held' | null;
 
 /**
  * What is stopping this run from jumping.
@@ -82,8 +98,34 @@ export type JumpBlock = 'fuel' | 'engines' | null;
  */
 export function jumpBlocker(run: RunState): JumpBlock {
   if (run.fuel <= 0) return 'fuel';
+  // Being held outranks cold engines: both are true while the timer is paused,
+  // and the hold is the thing the player is actually looking at.
+  if (run.detain > 0) return 'held';
   if (run.energy.engines < MIN_JUMP_ENGINES) return 'engines';
   return null;
+}
+
+/** Seconds of hold left at the current engine power, or null when free. */
+export function detainRemaining(run: RunState): number | null {
+  if (run.detain <= 0) return null;
+  const rate = escapeRate(run.energy.engines);
+  // Paused: the hold is not counting down at all, so there is no number.
+  if (rate <= 0) return Infinity;
+  return Math.ceil(run.detain / rate);
+}
+
+/**
+ * Advances the clocks on a run: the hold burns down, the shield charges up.
+ *
+ * Driven by the helm, which is the only screen that sits still. Returns the
+ * same run when neither has anything to do, so a caller can stop ticking.
+ */
+export function tickRun(run: RunState, seconds: number): RunState {
+  const detain = Math.max(0, run.detain - seconds * escapeRate(run.energy.engines));
+  const shieldCharge = regenShield(run.shieldCharge, run.energy.shields, seconds);
+
+  if (detain === run.detain && shieldCharge === run.shieldCharge) return run;
+  return { ...run, detain, shieldCharge };
 }
 
 /**
@@ -107,6 +149,7 @@ let cached: RunState | null | undefined;
 function createRun(shipId: string): RunState {
   const now = Date.now();
   const map = generateMap();
+  const energyAtStart = defaultEnergy(shipById(shipId).reactor);
   return {
     id: `${now}-${Math.random().toString(36).slice(2, 10)}`,
     startedAt: now,
@@ -117,7 +160,11 @@ function createRun(shipId: string): RunState {
     visited: [map.start],
     jumps: 0,
     fuel: FUEL_PER_RUN,
-    energy: defaultEnergy(shipById(shipId).reactor),
+    energy: energyAtStart,
+    detain: 0,
+    // A run opens with its shields already up; the charge time is for changes
+    // made in flight, not a penalty for launching.
+    shieldCharge: energyAtStart.shields,
   };
 }
 
@@ -193,12 +240,19 @@ export function applyJump(run: RunState, target: number): RunState {
   // unchanged so a caller can tell nothing happened.
   if (jumpBlocker(run)) return run;
 
+  // Arriving on something hostile pins the ship there until the engines have
+  // burned through the hold. The `hostile` flag already lives in
+  // `ENCOUNTER_STYLE`, so this does not become a second list of which stars
+  // mean trouble.
+  const arriving = encounterAt(run.map, target);
+
   return {
     ...run,
     position: target,
     visited: run.visited.includes(target) ? run.visited : [...run.visited, target],
     jumps: run.jumps + 1,
     fuel: Math.max(run.fuel - 1, 0),
+    detain: ENCOUNTER_STYLE[arriving].hostile ? DETAIN_UNITS : 0,
   };
 }
 
@@ -213,7 +267,16 @@ export function applyJump(run: RunState, target: number): RunState {
  */
 export function shiftEnergy(run: RunState, subsystem: Subsystem, delta: number): RunState {
   const energy = shift(run.energy, reactorOf(run), subsystem, delta);
-  return energy === run.energy ? run : { ...run, energy };
+  if (energy === run.energy) return run;
+
+  return {
+    ...run,
+    energy,
+    // Charging up takes time; losing power does not. Pulling a bar out of the
+    // shields drops the envelope to the new level on the spot, and it has to
+    // climb back if the bar goes in again.
+    shieldCharge: Math.min(run.shieldCharge, energy.shields),
+  };
 }
 
 /**
@@ -237,6 +300,7 @@ function hydrate(stored: StoredRun): RunState {
 
   const now = Date.now();
   const shipId = stored.shipId ?? DEFAULT_SHIP_ID;
+  const energy = clampEnergy(stored.energy, shipById(shipId).reactor);
   return {
     id: stored.id ?? `${now}-${Math.random().toString(36).slice(2, 10)}`,
     startedAt: stored.startedAt ?? now,
@@ -255,8 +319,19 @@ function hydrate(stored: StoredRun): RunState {
     // Saves predate the reactor entirely, and a ship's output can be retuned
     // under a run in progress, so the stored allocation is forced back into
     // something this ship can actually power rather than trusted.
-    energy: clampEnergy(stored.energy, shipById(shipId).reactor),
+    energy,
+    // Saves predate both clocks. A hold longer than the rules allow is capped;
+    // a shield with no stored charge comes back at the level it is powered
+    // for, so a reload does not strip a run of its shields.
+    detain: clampNumber(stored.detain, 0, DETAIN_UNITS, 0),
+    shieldCharge: clampNumber(stored.shieldCharge, 0, energy.shields, energy.shields),
   };
+}
+
+/** A stored number forced into range, or `fallback` when it is not one. */
+function clampNumber(value: unknown, low: number, high: number, fallback: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  return Math.max(low, Math.min(high, value));
 }
 
 /**
