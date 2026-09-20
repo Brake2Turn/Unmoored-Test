@@ -22,6 +22,14 @@ need to be on the same WiFi network.
 
 Edit any file and save: the screen reloads on your phone in about a second.
 
+### Checking it builds
+
+```powershell
+npx tsc --noEmit        # typecheck
+npm run verify:map      # sector generation properties
+npx expo export --platform web   # full production bundle
+```
+
 ### Previewing in a browser instead
 
 The same code runs in a desktop browser through `react-native-web`:
@@ -35,6 +43,12 @@ layout work without reaching for your phone. Two caveats: haptics are silently
 ignored (browsers have no Taptic Engine), and the volume sliders are the one
 control whose web rendering differs from the phone. Check anything touch-related
 in Expo Go before trusting it.
+
+Note that `query-string` is an explicit dependency. `expo-router` requires it at
+runtime but does not declare it, and `@react-navigation/native` v7 no longer
+pulls it in — without it the web bundle fails to resolve. Dependency versions
+are pinned to what `expo/bundledNativeModules.json` specifies for the installed
+SDK; `npx expo install --fix` keeps them there.
 
 ### If Expo Go says the SDK version doesn't match
 

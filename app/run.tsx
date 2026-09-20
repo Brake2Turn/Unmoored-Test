@@ -1,10 +1,10 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Backdrop } from '@/components/Backdrop';
+import { FadeInView } from '@/components/FadeInView';
 import { FuelBadge } from '@/components/FuelBadge';
 import { MenuButton } from '@/components/MenuButton';
 import { StarField } from '@/components/StarField';
@@ -86,21 +86,24 @@ export default function RunScreen() {
 
       {/* Whatever is waiting here holds the upper half, facing down. */}
       {encounter === 'empty' ? null : (
-        <Animated.View
-          entering={settings.reduceMotion ? undefined : FadeIn.duration(520).delay(160)}
+        <FadeInView
+          enabled={!settings.reduceMotion}
+          duration={520}
+          delay={160}
           style={[styles.encounterHolder, { paddingTop: insets.top + 74 }]}
         >
           <EncounterShip encounter={encounter} width={waiting.width} height={waiting.height} />
-        </Animated.View>
+        </FadeInView>
       )}
 
       {/* The ship sits low, with the emptiness above it doing the work. */}
-      <Animated.View
-        entering={settings.reduceMotion ? undefined : FadeIn.duration(700)}
+      <FadeInView
+        enabled={!settings.reduceMotion}
+        duration={700}
         style={[styles.shipHolder, { paddingBottom: insets.bottom + 188 }]}
       >
         <ShipArt shipId={ship.id} accent={ship.accent} width={132} height={172} />
-      </Animated.View>
+      </FadeInView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + 44 }]}>
         <FuelBadge remaining={fuel} accent={ship.accent} />

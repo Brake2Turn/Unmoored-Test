@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 
 import { fonts, palette, tracking } from '@/lib/theme';
 
@@ -7,8 +7,13 @@ import { fonts, palette, tracking } from '@/lib/theme';
 export function TitleBlock({ size, ruleWidth }: { size: number; ruleWidth: number }) {
   return (
     <View style={styles.container}>
+      {/* Native can shrink text to fit, which guards the sizing estimate on a
+          device. React Native Web cannot, and numberOfLines there ellipsises
+          instead — so web relies on the measured size alone. */}
       <Text
         accessibilityRole="header"
+        numberOfLines={Platform.OS === 'web' ? undefined : 1}
+        adjustsFontSizeToFit={Platform.OS !== 'web'}
         style={[styles.title, { fontSize: size, lineHeight: size * 1.12 }]}
       >
         UNMOORED

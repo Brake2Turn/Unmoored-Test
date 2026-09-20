@@ -90,7 +90,24 @@ export function useMenuWidth(): number {
   );
 }
 
-/** Title size for the wordmark, which scales with the screen but has bounds. */
-export function titleSizeFor(width: number): number {
-  return Math.min(Math.max(width * 0.155, 40), 72);
+/**
+ * Advance width of one capital in the display face, as a fraction of the font
+ * size. Measured in a browser rather than estimated — capitals are far wider
+ * than a mixed-case guess suggests (0.83, not the 0.62 that first clipped the
+ * wordmark to "NMOORE").
+ *
+ * iOS and Android resolve a genuinely condensed face, so they need less room;
+ * the web fallback is not condensed at all.
+ */
+const DISPLAY_ADVANCE = Platform.select({ ios: 0.66, android: 0.78, default: 0.83 }) as number;
+
+/**
+ * Size for the wordmark: it scales with the screen, but never past what
+ * actually fits once `tracking.display` between each glyph is counted.
+ */
+export function titleSizeFor(width: number, word = 'UNMOORED'): number {
+  const available = width - layout.screenMargin * 2;
+  const trackingTotal = tracking.display * (word.length - 1);
+  const fits = (available - trackingTotal) / (word.length * DISPLAY_ADVANCE);
+  return Math.min(Math.max(Math.min(width * 0.155, fits), 28), 72);
 }
