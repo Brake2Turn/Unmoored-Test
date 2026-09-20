@@ -113,7 +113,7 @@ app/                     Screens (expo-router: one file = one route)
   settings.tsx           Settings sheet
 components/
   FuelBadge.tsx          Ⓕ badge and count, shared by the helm and the map
-  ships/EncounterGlyph.tsx  Shrike and merchant markers for the map
+  ships/EncounterShip.tsx   Shrike and merchant, drawn at helm size
   ships/ShipArt.tsx      Vector art for each ship
   StarField.tsx          Looping parallax star layers
   Backdrop.tsx           Sky gradient, nebulae, planet
@@ -135,8 +135,9 @@ SVG or native views, so the art scales to any screen.
 
 ## The run
 
-**The helm** (`app/run.tsx`) is the ship adrift in open space, deliberately close
-to empty — the emptiness above it is the point. The only control is JUMP. A quiet
+**The helm** (`app/run.tsx`) is the ship adrift in open space. The only control
+is JUMP, and the space above the ship is where whatever is waiting at this star
+appears. A quiet
 LEAVE sits at the top so a player is never stuck with no way back to the title.
 
 **The sector map** (`app/sector.tsx`) is twenty stars scattered across the
@@ -169,9 +170,8 @@ inflates the average to 7.9 choices and makes the decision mushy.
 ### What is on each star
 
 Every star carries an encounter, rolled once with the map. There is exactly one
-enemy type — the **Shrike**, a sharp dart turned nose-down toward anything
-coming up the sector — and the boss star holds an **Elder Shrike**, the same
-ship drawn larger.
+enemy type — the **Shrike** — and the boss star holds an **Elder Shrike**, the
+same hull drawn larger.
 
 The start is left empty (you begin docked, nothing has happened) and the boss
 star is spoken for, which leaves **18 stars that divide into three exact
@@ -180,12 +180,13 @@ land differently every run. Verified over 5,000 maps — the split is exact ever
 time and the per-star enemy rate sits between 0.326 and 0.345 against an
 expected 0.333.
 
-Shape carries the kind and colour reinforces it: red darts fight, gold pods
-trade, plain dots are empty. Out-of-range stars still show what is on them,
-just dimmer — seeing what lies ahead is the point of showing the sector at all.
-Selecting a star names it in the footer.
+**The map does not show any of this.** Every star is a plain dot; the only thing
+visible ahead of time is the boss, red from the moment you can see it. What is
+actually at a star is learned by jumping there: the ship waiting for you appears
+in the open space above your own at the helm, nose down, facing you. Red is a
+Shrike, gold is a merchant, and an empty star stays empty.
 
-**None of them do anything yet.** They are markers.
+**None of them do anything yet.** They are there to be seen.
 
 ### The boss star
 

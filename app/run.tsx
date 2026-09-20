@@ -8,12 +8,13 @@ import { Backdrop } from '@/components/Backdrop';
 import { FuelBadge } from '@/components/FuelBadge';
 import { MenuButton } from '@/components/MenuButton';
 import { StarField } from '@/components/StarField';
+import { EncounterShip } from '@/components/ships/EncounterShip';
 import { ShipArt } from '@/components/ships/ShipArt';
 import { useHaptics, useSettings } from '@/lib/settings';
 import { fonts, layout, palette, tracking } from '@/lib/theme';
 import { loadRun, saveRun, hydrateRun, type RunState } from '@/lib/runStore';
 import { shipById } from '@/lib/ships';
-import { FUEL_PER_RUN } from '@/lib/sectorMap';
+import { FUEL_PER_RUN, encounterAt } from '@/lib/sectorMap';
 
 /**
  * The helm: the ship adrift in open space with a single thing to do.
@@ -51,6 +52,11 @@ export default function RunScreen() {
   const fuel = run?.fuel ?? FUEL_PER_RUN;
   const dry = fuel <= 0;
 
+  // What is here is only learned by arriving — the sector map shows plain dots.
+  const encounter =
+    run?.map && typeof run.position === 'number' ? encounterAt(run.map, run.position) : 'empty';
+  const isBossFight = encounter === 'boss';
+
   const buttonWidth = Math.min(
     layout.buttonWidth,
     width - layout.screenMargin * 2 - insets.left - insets.right,
@@ -84,6 +90,20 @@ export default function RunScreen() {
         </Pressable>
       </View>
 
+      {/* Whatever is waiting here holds the upper half, facing down. */}
+      {encounter === 'empty' ? null : (
+        <Animated.View
+          entering={settings.reduceMotion ? undefined : FadeIn.duration(520).delay(160)}
+          style={[styles.encounterHolder, { paddingTop: insets.top + 74 }]}
+        >
+          <EncounterShip
+            encounter={encounter}
+            width={isBossFight ? 188 : 132}
+            height={isBossFight ? 244 : 172}
+          />
+        </Animated.View>
+      )}
+
       {/* The ship sits low, with the emptiness above it doing the work. */}
       <Animated.View
         entering={settings.reduceMotion ? undefined : FadeIn.duration(700)}
@@ -116,6 +136,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: palette.textDisabled,
     letterSpacing: tracking.caption,
+  },
+  encounterHolder: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
   },
   shipHolder: {
     ...StyleSheet.absoluteFillObject,

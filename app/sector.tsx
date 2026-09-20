@@ -4,24 +4,20 @@ import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-na
 import Svg, { Circle, Line } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { EncounterGlyph } from '@/components/ships/EncounterGlyph';
 import { FuelBadge } from '@/components/FuelBadge';
 import { MenuButton } from '@/components/MenuButton';
 import { useHaptics, useSettings } from '@/lib/settings';
 import { StarField } from '@/components/StarField';
 import { fonts, layout, palette, tracking } from '@/lib/theme';
 import { loadRun, saveRun, hydrateRun, type RunState } from '@/lib/runStore';
-import type { Encounter } from '@/lib/sectorMap';
 import { shipById } from '@/lib/ships';
 import {
   FUEL_PER_RUN,
   JUMP_RANGE,
   MAP_H,
   MAP_W,
-  ENCOUNTER_NAMES,
   bossIndex,
   distance,
-  encounterAt,
   reachableFrom,
   type SectorMap,
 } from '@/lib/sectorMap';
@@ -197,77 +193,60 @@ export default function SectorScreen() {
             const isReachable = inRange.has(index);
             const isChosen = target === index;
             const wasVisited = visited.has(index);
-            const encounter = encounterAt(map, index);
-            const isBoss = encounter === 'boss';
+            const isBoss = index === boss;
 
-            // Where the ship is matters more than what is there, so the
-            // current star keeps the plain accent marker and no glyph.
-            if (isHere) {
-              return (
-                <React.Fragment key={`node-${index}`}>
-                  <Circle cx={px.x} cy={px.y} r={14} fill={ship.accent} fillOpacity={0.16} />
-                  <Circle cx={px.x} cy={px.y} r={7} fill={ship.accent} />
-                </React.Fragment>
-              );
-            }
+            // Plain dots: what is waiting at a star is only revealed on arrival.
+            // The boss is the one exception, red from the moment you can see it.
+            const radius = isBoss ? 8 : isHere ? 7 : isReachable ? 5.5 : 3.5;
+            const fill = isBoss
+              ? palette.danger
+              : isHere || isChosen
+                ? ship.accent
+                : isReachable
+                  ? palette.textPrimary
+                  : wasVisited
+                    ? palette.textMuted
+                    : palette.textDisabled;
 
-            const tint = encounterTint(encounter);
-            // Out of reach still reads, just quieter — seeing what lies ahead
-            // is the whole point of showing the sector.
-            const opacity = isChosen ? 1 : isReachable ? 0.95 : wasVisited ? 0.5 : 0.42;
-            const glyphSize = isBoss ? 26 : 15;
+            const halo = isBoss ? palette.danger : ship.accent;
 
             return (
               <React.Fragment key={`node-${index}`}>
-                {isChosen || isBoss ? (
+                {isHere || isChosen || isBoss ? (
                   <Circle
                     cx={px.x}
                     cy={px.y}
-                    r={isBoss ? 19 : 13}
-                    fill={isBoss ? palette.danger : ship.accent}
+                    r={radius + (isBoss ? 11 : 7)}
+                    fill={halo}
                     fillOpacity={isBoss && !isReachable && !isChosen ? 0.1 : 0.16}
                   />
                 ) : null}
-
-                {encounter === 'empty' ? (
-                  <Circle
-                    cx={px.x}
-                    cy={px.y}
-                    r={isReachable ? 5.5 : 3.5}
-                    fill={isChosen ? ship.accent : isReachable ? palette.textPrimary : palette.textDisabled}
-                    fillOpacity={opacity}
-                  />
-                ) : (
-                  <EncounterGlyph
-                    encounter={encounter}
-                    cx={px.x}
-                    cy={px.y}
-                    size={glyphSize}
-                    colour={tint}
-                    opacity={opacity}
-                  />
-                )}
-
+                <Circle
+                  cx={px.x}
+                  cy={px.y}
+                  r={radius}
+                  fill={fill}
+                  fillOpacity={isBoss || isReachable || isHere || wasVisited ? 1 : 0.5}
+                />
                 {isBoss ? (
                   <Circle
                     cx={px.x}
                     cy={px.y}
-                    r={17}
+                    r={radius + 6}
                     fill="none"
                     stroke={palette.danger}
                     strokeOpacity={isReachable || isChosen ? 0.9 : 0.5}
                     strokeWidth={1.4}
                   />
                 ) : null}
-
-                {wasVisited && !isBoss ? (
+                {wasVisited && !isHere && !isBoss ? (
                   <Circle
                     cx={px.x}
                     cy={px.y}
-                    r={11}
+                    r={radius + 4}
                     fill="none"
                     stroke={palette.textMuted}
-                    strokeOpacity={0.45}
+                    strokeOpacity={0.55}
                     strokeWidth={1}
                   />
                 ) : null}
@@ -300,18 +279,14 @@ export default function SectorScreen() {
         <Text
           style={[
             styles.prompt,
-            (dry ||
-              (target !== null &&
-                (encounterAt(map, target) === 'boss' || encounterAt(map, target) === 'enemy'))) && {
-              color: palette.danger,
-            },
+            (target === boss || dry) && { color: palette.danger },
           ]}
         >
           {dry
             ? 'NO FUEL — THE SHIP IS ADRIFT'
             : target === null
             ? `${inRange.size} STARS IN RANGE`
-            : `${ENCOUNTER_NAMES[encounterAt(map, target)]} · RANGE ${Math.round(
+            : `${target === boss ? 'BOSS · ' : ''}RANGE ${Math.round(
                 distance(map.nodes[position], map.nodes[target]),
               )} OF ${JUMP_RANGE}`}
         </Text>
@@ -325,19 +300,6 @@ export default function SectorScreen() {
       </View>
     </View>
   );
-}
-
-/** Colour for each kind of star: red means a fight, gold means a trade. */
-function encounterTint(encounter: Encounter): string {
-  switch (encounter) {
-    case 'enemy':
-    case 'boss':
-      return palette.danger;
-    case 'merchant':
-      return palette.trade;
-    default:
-      return palette.textPrimary;
-  }
 }
 
 const styles = StyleSheet.create({
