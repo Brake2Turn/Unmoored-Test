@@ -1,0 +1,75 @@
+<title>Unmoored</title>
+<style>
+  /* react-native-web's recommended reset, from Expo's own index.html. */
+  html, body { height: 100%; }
+  body {
+    overflow: hidden;
+    margin: 0;
+    /* The game's void, so there is no pale flash before the bundle boots. */
+    background: #05070F;
+  }
+  #root { display: flex; height: 100%; flex: 1; }
+
+  /* Shown until React mounts, then replaced by the app itself. */
+  #boot {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #525C75; background: #05070F;
+    font: 500 10px/1.6 "Avenir Next", "Helvetica Neue", sans-serif;
+    letter-spacing: 2.5px; text-align: center; padding: 0 24px;
+  }
+</style>
+
+<div id="boot">LOADING</div>
+<div id="root"></div>
+
+<script>
+  (function () {
+    // Order matters here, and getting it wrong is silent.
+    //
+    // expo-router picks its route from location.pathname. This page is not
+    // served at the site root, so without a rewrite the router boots on a
+    // path matching no route and renders "Unmatched Route".
+    //
+    // But that rewrite also moves the document URL that relative asset paths
+    // resolve against. A static <script src="bundle/entry.js"> tag is
+    // resolved *after* this runs, so it would be fetched from the site root
+    // and 404 — leaving the page on LOADING forever. So: resolve the bundle
+    // against the real URL first, pin a <base> for anything the bundle asks
+    // for later, rewrite the path, and only then inject the script.
+    var bundleUrl = new URL('bundle/entry.js', document.baseURI).href;
+
+    var base = document.createElement('base');
+    base.href = document.baseURI;
+    document.head.appendChild(base);
+
+    try {
+      if (window.location.pathname !== '/') {
+        window.history.replaceState(null, '', '/' + window.location.search + window.location.hash);
+      }
+    } catch (e) {
+      // A sandbox that blocks history leaves the router where it started.
+    }
+
+    var script = document.createElement('script');
+    script.src = bundleUrl;
+    script.defer = true;
+    script.onerror = function () {
+      document.getElementById('boot').textContent = 'COULD NOT LOAD THE GAME BUNDLE';
+    };
+    document.head.appendChild(script);
+  })();
+
+  // Expo renders into #root; clear the placeholder once it has.
+  (function () {
+    var root = document.getElementById('root');
+    var stop = setInterval(function () {
+      if (root && root.childNodes.length) {
+        var boot = document.getElementById('boot');
+        if (boot && boot.parentNode) boot.parentNode.removeChild(boot);
+        clearInterval(stop);
+      }
+    }, 100);
+    setTimeout(function () { clearInterval(stop); }, 20000);
+  })();
+</script>

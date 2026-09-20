@@ -25,10 +25,14 @@ Edit any file and save: the screen reloads on your phone in about a second.
 ### Checking it builds
 
 ```powershell
-npx tsc --noEmit        # typecheck
-npm run verify:map      # sector generation properties
-npx expo export --platform web   # full production bundle
+npm run verify       # typecheck + sector generation properties
+npm run build:web    # full production bundle — catches what the typecheck cannot
 ```
+
+There is no test runner or linter; `npm run verify` is the automated safety net.
+`CLAUDE.md` carries the architecture notes and the platform traps already paid
+for, and `.claude/skills/run-unmoored/` has the verified recipe for running and
+screenshotting the app in a container.
 
 ### Previewing in a browser instead
 
