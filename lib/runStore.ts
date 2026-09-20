@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   DETAIN_UNITS,
   clampEnergy,
+  damagedShield,
   defaultEnergy,
   escapeRate,
   regenShield,
@@ -277,6 +278,19 @@ export function shiftEnergy(run: RunState, subsystem: Subsystem, delta: number):
     // climb back if the bar goes in again.
     shieldCharge: Math.min(run.shieldCharge, energy.shields),
   };
+}
+
+/**
+ * Takes a level off the shield.
+ *
+ * The one thing that damages a shield today is the dev control on the helm —
+ * there is no combat yet. The rule lives here anyway, so that when something
+ * does start shooting it calls this rather than inventing its own idea of what
+ * a hit costs. Returns the run unchanged when there is nothing to knock down.
+ */
+export function damageShield(run: RunState): RunState {
+  const shieldCharge = damagedShield(run.shieldCharge);
+  return shieldCharge === run.shieldCharge ? run : { ...run, shieldCharge };
 }
 
 /**

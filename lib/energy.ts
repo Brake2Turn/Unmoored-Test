@@ -61,14 +61,47 @@ export function detainSeconds(engines: number, units: number = DETAIN_UNITS): nu
 }
 
 /**
- * Shields come up, they do not snap on.
+ * Shields come up a level at a time, and they do not snap on.
  *
- * The bars in the shields row set the level the envelope is heading for; this
- * is how fast it actually gets there. Pulling power is not symmetrical —
- * that drops on the spot, in `shiftEnergy` — because the energy is simply no
- * longer there to hold it.
+ * The bars in the shields row set the *ceiling* — three bars means the shield
+ * can reach level three and no further. Getting there is separate business:
+ * every level takes `SHIELD_SECONDS_PER_LEVEL` to charge, whether it is the
+ * first one back after a hit or the last one up to the cap.
+ *
+ * Pulling power is not symmetrical — that drops on the spot, in `shiftEnergy`
+ * — because the energy is simply no longer there to hold it.
  */
-export const SHIELD_REGEN_PER_SECOND = 1 / 3.5;
+export const SHIELD_SECONDS_PER_LEVEL = 5;
+export const SHIELD_REGEN_PER_SECOND = 1 / SHIELD_SECONDS_PER_LEVEL;
+
+/**
+ * The whole levels currently standing.
+ *
+ * Charge is a float because it has to creep toward the next level, but only
+ * completed levels count for anything — a shield nine tenths of the way to
+ * its second layer still has one.
+ */
+export function shieldLevel(charge: number): number {
+  if (!Number.isFinite(charge)) return 0;
+  return Math.max(0, Math.floor(charge));
+}
+
+/** How far the level above `shieldLevel` has charged, 0 to 1. */
+export function shieldProgress(charge: number): number {
+  if (!Number.isFinite(charge)) return 0;
+  return Math.max(0, charge - shieldLevel(charge));
+}
+
+/**
+ * A hit takes a whole level off.
+ *
+ * Part-charged progress toward the next level goes with it: a shield caught at
+ * 2.9 drops to 2, not to 1.9. Losing a layer means starting the next one over,
+ * which is what makes being hit while regenerating expensive.
+ */
+export function damagedShield(charge: number): number {
+  return Math.max(0, shieldLevel(charge) - 1);
+}
 
 /** The shield's strength after `seconds` of charging toward `target`. */
 export function regenShield(charge: number, target: number, seconds: number): number {

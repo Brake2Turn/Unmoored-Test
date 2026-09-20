@@ -14,6 +14,7 @@ import { SYSTEMS_SPAN, ShipSystems } from '@/components/ships/ShipSystems';
 import { useHaptics, useSettings } from '@/lib/settings';
 import { fonts, layout, palette, tracking, useMenuWidth } from '@/lib/theme';
 import {
+  damageShield,
   detainRemaining,
   jumpBlocker,
   loadRun,
@@ -26,7 +27,7 @@ import {
 import { shipById } from '@/lib/ships';
 import { encounterAt } from '@/lib/sectorMap';
 import { ENCOUNTER_STYLE } from '@/lib/encounters';
-import { escapeRate, type Subsystem } from '@/lib/energy';
+import { escapeRate, shieldLevel, type Subsystem } from '@/lib/energy';
 
 /** The player's ship at full size, before the screen decides it has no room. */
 const SHIP_WIDTH = 132;
@@ -104,6 +105,7 @@ export default function RunScreen() {
 
   const buttonWidth = useMenuWidth();
 
+  const canHitShield = !!run && shieldLevel(run.shieldCharge) > 0;
   const held = !!run && run.detain > 0;
   const charging = !!run && run.shieldCharge < run.energy.shields;
   // A hold with cold engines is not counting down, so there is nothing to
@@ -191,6 +193,19 @@ export default function RunScreen() {
         : undefined;
 
   /**
+   * Dev only: knock a level off the shield so the bar and the regen can be
+   * watched without any combat to do it. Delete this with the button.
+   */
+  const onHitShield = useCallback(() => {
+    if (!run) return;
+    const next = damageShield(run);
+    if (next === run) return;
+    setRun(next);
+    haptics.tap();
+    void saveRun(next);
+  }, [haptics, run]);
+
+  /**
    * Moving a bar of energy.
    *
    * `shiftEnergy` hands back the same run when the move is not legal, so a
@@ -225,6 +240,23 @@ export default function RunScreen() {
         </Pressable>
       </View>
 
+      {/* Dev only, opposite LEAVE: there is nothing to shoot the shield yet. */}
+      <View style={[styles.devRow, { top: insets.top + 6 }]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Developer: take one level off the shield"
+          accessibilityState={{ disabled: !canHitShield }}
+          disabled={!canHitShield}
+          onPress={onHitShield}
+          hitSlop={16}
+          style={styles.leave}
+        >
+          <Text style={[styles.leaveLabel, canHitShield && { color: palette.danger }]}>
+            DEV · HIT SHIELD
+          </Text>
+        </Pressable>
+      </View>
+
       <View
         style={[
           styles.stack,
@@ -252,7 +284,7 @@ export default function RunScreen() {
             accent={ship.accent}
             width={SHIP_WIDTH * artScale}
             height={SHIP_HEIGHT * artScale}
-            shields={run?.shieldCharge ?? 0}
+            shields={shieldLevel(run?.shieldCharge ?? 0)}
             engines={run?.energy.engines ?? 0}
             animate={!settings.reduceMotion}
           />
@@ -264,6 +296,7 @@ export default function RunScreen() {
             energy={run.energy}
             reactor={reactorOf(run)}
             width={buttonWidth}
+            shieldCharge={run.shieldCharge}
             onShift={onShift}
             animate={!settings.reduceMotion}
           />
@@ -288,6 +321,7 @@ export default function RunScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: palette.void },
   leaveRow: { position: 'absolute', left: 20, zIndex: 5 },
+  devRow: { position: 'absolute', right: 20, zIndex: 5 },
   leave: { paddingVertical: 6, paddingHorizontal: 4 },
   leaveLabel: {
     fontFamily: fonts.body,

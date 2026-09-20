@@ -16,6 +16,8 @@ import {
   canAdd,
   canRemove,
   freeEnergy,
+  shieldLevel,
+  shieldProgress,
   type EnergyState,
   type Subsystem,
 } from '@/lib/energy';
@@ -27,6 +29,11 @@ type Props = {
   /** Bars this ship's reactor makes. Always fewer than the rows can hold. */
   reactor: number;
   width: number;
+  /**
+   * The shield's live strength. Separate from `energy.shields`, which only
+   * sets the ceiling — this is how much of it is actually standing.
+   */
+  shieldCharge: number;
   onShift: (subsystem: Subsystem, delta: number) => void;
   /** False fills and empties the cells instantly, with no surge. */
   animate?: boolean;
@@ -40,10 +47,19 @@ type Props = {
  * front. So the panel is given an explicit height and its rows divide it,
  * rather than the height being whatever the content happens to add up to.
  */
-export const ENERGY_PANEL_HEIGHT = 134;
+export const ENERGY_PANEL_HEIGHT = 150;
 
 const ROW_HEIGHT = 26;
 const PIP_HEIGHT = 9;
+
+/**
+ * Column widths, shared so the shield's level strip lines up exactly under
+ * the cells of the row it belongs to rather than by eye.
+ */
+const GLYPH_W = 13;
+const STEP_W = 24;
+const ROW_GAP = 8;
+const STRENGTH_ROW_HEIGHT = 15;
 
 /** An unlit cell. Every powered one animates up from this and back down to it. */
 const EMPTY_CELL = 'rgba(255,255,255,0.13)';
@@ -76,7 +92,14 @@ const SETTLE_MS = SURGE_UP_MS + SURGE_DOWN_MS + 120;
  * It lives on the helm, where the ship is in front of you. The sector map is
  * for choosing where to go and deliberately carries none of this.
  */
-export function EnergyPanel({ energy, reactor, width, onShift, animate = true }: Props) {
+export function EnergyPanel({
+  energy,
+  reactor,
+  width,
+  shieldCharge,
+  onShift,
+  animate = true,
+}: Props) {
   const free = freeEnergy(energy, reactor);
 
   return (
@@ -109,15 +132,20 @@ export function EnergyPanel({ energy, reactor, width, onShift, animate = true }:
 
       <View style={styles.rows}>
         {SUBSYSTEMS.map((subsystem) => (
-          <SubsystemRow
-            key={subsystem}
-            subsystem={subsystem}
-            level={energy[subsystem]}
-            canAddMore={canAdd(energy, reactor, subsystem)}
-            canTakeAway={canRemove(energy, subsystem)}
-            onShift={onShift}
-            animate={animate}
-          />
+          <React.Fragment key={subsystem}>
+            <SubsystemRow
+              subsystem={subsystem}
+              level={energy[subsystem]}
+              canAddMore={canAdd(energy, reactor, subsystem)}
+              canTakeAway={canRemove(energy, subsystem)}
+              onShift={onShift}
+              animate={animate}
+            />
+            {/* What is actually standing, under the power that caps it. */}
+            {subsystem === 'shields' ? (
+              <ShieldStrength charge={shieldCharge} cap={energy.shields} />
+            ) : null}
+          </React.Fragment>
         ))}
       </View>
     </View>
@@ -177,6 +205,58 @@ function SubsystemRow({
         label={`Put one bar of energy into ${style.label.toLowerCase()}, now ${level} of ${SUBSYSTEM_CAPACITY}`}
         onPress={() => onShift(subsystem, 1)}
       />
+    </View>
+  );
+}
+
+/**
+ * The shield's live strength: four squares under the shields row.
+ *
+ * Filled squares are levels standing. The next one fills across as it charges,
+ * so the wait is visible rather than a number that jumps every five seconds.
+ * Squares past what the reactor is paying for are drawn as bare outlines —
+ * that is the ceiling, and no amount of waiting will light them.
+ */
+function ShieldStrength({ charge, cap }: { charge: number; cap: number }) {
+  const level = shieldLevel(charge);
+  const progress = shieldProgress(charge);
+  const tint = SUBSYSTEM_STYLE.shields.accent;
+
+  return (
+    <View
+      accessibilityRole="text"
+      accessibilityLabel={`Shield strength ${level} of ${cap} levels`}
+      style={styles.strengthRow}
+    >
+      <View style={{ width: GLYPH_W }} />
+      <Text numberOfLines={1} style={styles.strengthLabel}>
+        LEVEL
+      </Text>
+      <View style={{ width: STEP_W }} />
+
+      <View style={styles.squares}>
+        {Array.from({ length: SUBSYSTEM_CAPACITY }, (_, i) => {
+          const capped = i >= cap;
+          const charging = i === level && !capped;
+          return (
+            <View key={i} style={[styles.square, capped && styles.squareCapped]}>
+              {i < level ? (
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: tint }]} />
+              ) : null}
+              {charging ? (
+                <View
+                  style={[
+                    styles.squareCharge,
+                    { width: `${Math.round(progress * 100)}%`, backgroundColor: tint },
+                  ]}
+                />
+              ) : null}
+            </View>
+          );
+        })}
+      </View>
+
+      <View style={{ width: STEP_W }} />
     </View>
   );
 }
@@ -369,7 +449,35 @@ const styles = StyleSheet.create({
   },
 
   rows: { flex: 1, justifyContent: 'flex-end' },
-  row: { flexDirection: 'row', alignItems: 'center', height: ROW_HEIGHT, gap: 8 },
+  row: { flexDirection: 'row', alignItems: 'center', height: ROW_HEIGHT, gap: ROW_GAP },
+
+  strengthRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: STRENGTH_ROW_HEIGHT,
+    gap: ROW_GAP,
+  },
+  strengthLabel: {
+    fontFamily: fonts.body,
+    fontSize: 7.5,
+    fontWeight: '500',
+    color: palette.textDisabled,
+    letterSpacing: tracking.caption,
+    width: 70,
+    textAlign: 'right',
+  },
+  squares: { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 },
+  square: {
+    flex: 1,
+    height: 8,
+    borderRadius: 1.5,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.20)',
+    overflow: 'hidden',
+  },
+  /** Past the ceiling the reactor is paying for: an outline and nothing more. */
+  squareCapped: { borderColor: 'rgba(255,255,255,0.07)' },
+  squareCharge: { position: 'absolute', left: 0, top: 0, bottom: 0, opacity: 0.5 },
   rowLabel: {
     fontFamily: fonts.body,
     fontSize: 9,

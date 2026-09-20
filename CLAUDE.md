@@ -116,13 +116,30 @@ read continuously, changing the allocation mid-hold changes the countdown.
 `verify:energy` holds the shape of that curve: monotonic, diminishing, and
 never below half the base time at full power.
 
-**Shields charge rather than switch on.** `energy.shields` is the level the
-envelope is heading for; `shieldCharge` is where it actually is, a float that
-climbs at `SHIELD_REGEN_PER_SECOND` (3.5s a bar) and is what the bubble's
-opacity is drawn from. It is deliberately asymmetric: pulling a bar out drops
-the charge on the spot, in `shiftEnergy`, because the energy holding it is
-simply gone. A new run launches with its shields already up — the charge time
-is for changes made in flight, not a tax on launching.
+**The shields row is a ceiling, not a switch.** Three bars means the shield can
+reach level three and no further. `shieldCharge` is where it actually is — a
+float, because it has to creep toward the next level, but only whole levels
+count: `shieldLevel()` floors it, and that is what the bubble and the LEVEL bar
+are both drawn from, so they cannot disagree. Every level takes
+`SHIELD_SECONDS_PER_LEVEL` (5s), first or last, and `verify:energy` walks each
+one to hold that.
+
+A hit (`damageShield`) takes a whole level and the part-charge with it: caught
+at 2.9 the shield drops to 2, not 1.9, so being hit mid-regen costs the
+progress too. Nothing shoots yet — the only thing that calls it is the
+**DEV · HIT SHIELD** control opposite LEAVE on the helm, there so the bar and
+the regen can be watched. Delete the control with the feature it was testing.
+
+Pulling power is asymmetric on purpose: it drops the charge on the spot, in
+`shiftEnergy`, because the energy holding it is simply gone. A new run launches
+with its shields already up — the charge is for changes made in flight, not a
+tax on launching.
+
+The LEVEL bar sits under the shields row in the panel and lines up with it
+through the shared `GLYPH_W` / `STEP_W` / `ROW_GAP` constants rather than by
+eye. Squares past the ceiling are drawn as bare outlines; the one currently
+charging fills across, so the five-second wait is visible instead of a number
+that jumps.
 
 Both clocks are advanced by `tickRun`, and **only the helm ticks** — it is the
 only screen that sits still. It writes back when a clock finishes, every two

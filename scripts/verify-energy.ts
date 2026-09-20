@@ -13,6 +13,10 @@ import { readFileSync } from 'node:fs';
 import {
   DETAIN_UNITS,
   SHIELD_REGEN_PER_SECOND,
+  SHIELD_SECONDS_PER_LEVEL,
+  damagedShield,
+  shieldLevel,
+  shieldProgress,
   SUBSYSTEMS,
   SUBSYSTEM_CAPACITY,
   TOTAL_CAPACITY,
@@ -220,9 +224,52 @@ for (let target = 0; target <= SUBSYSTEM_CAPACITY; target++) {
 check('over-charge falls to the new level immediately', regenShield(4, 1, 0.25) === 1);
 check('a shield with no power goes out at once', regenShield(3, 0, 0.25) === 0);
 
-// A full charge takes a sensible handful of seconds, not an instant.
+// A level takes the stated time, whichever level it is.
 const secondsPerBar = 1 / SHIELD_REGEN_PER_SECOND;
-check('a bar of shield takes a moment to come up', secondsPerBar >= 2 && secondsPerBar <= 8);
+check('a level takes the stated time', secondsPerBar === SHIELD_SECONDS_PER_LEVEL);
+
+for (let cap = 1; cap <= SUBSYSTEM_CAPACITY; cap++) {
+  // Every level, first or last, costs the same wait.
+  for (let from = 0; from < cap; from++) {
+    let charge = from;
+    let seconds = 0;
+    while (shieldLevel(charge) < from + 1 && seconds < 60) {
+      charge = regenShield(charge, cap, 0.25);
+      seconds += 0.25;
+    }
+    check(
+      `level ${from + 1} of ${cap} takes ${SHIELD_SECONDS_PER_LEVEL}s`,
+      Math.abs(seconds - SHIELD_SECONDS_PER_LEVEL) < 0.3,
+    );
+  }
+
+  // The ceiling is the power, and waiting longer never beats it.
+  let charge = 0;
+  for (let step = 0; step < 400; step++) charge = regenShield(charge, cap, 0.25);
+  check(`power of ${cap} caps the shield at level ${cap}`, shieldLevel(charge) === cap);
+  check(`a capped shield stops charging`, shieldProgress(charge) === 0);
+}
+
+// A hit costs exactly one whole level, and part-charge goes with it.
+check('a hit takes one level', damagedShield(3) === 2);
+check('a hit discards progress toward the next', damagedShield(2.9) === 1);
+check('a hit on a bare shield cannot go negative', damagedShield(0) === 0);
+check('a hit on a part-charged first level clears it', damagedShield(0.8) === 0);
+for (let i = 0; i < 200; i++) {
+  const start = Math.random() * SUBSYSTEM_CAPACITY;
+  const after = damagedShield(start);
+  check('damage never raises the shield', after <= start);
+  check('damage lands on a whole level', Number.isInteger(after));
+  check('damage never goes below nothing', after >= 0);
+}
+
+// Levels and progress always agree with the charge they came from.
+for (let i = 0; i < 500; i++) {
+  const charge = Math.random() * SUBSYSTEM_CAPACITY;
+  check('level plus progress is the charge', Math.abs(shieldLevel(charge) + shieldProgress(charge) - charge) < 1e-9);
+  check('progress is under one whole level', shieldProgress(charge) < 1);
+}
+check('junk charge has no level', shieldLevel(NaN) === 0 && shieldProgress(NaN) === 0);
 
 // Junk in, legal out.
 check('junk charge starts from nothing', regenShield(NaN, 2, 1) > 0);
