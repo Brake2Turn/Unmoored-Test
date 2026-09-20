@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-na
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Backdrop } from '@/components/Backdrop';
+import { ENERGY_PANEL_HEIGHT, EnergyPanel } from '@/components/EnergyPanel';
 import { FadeInView } from '@/components/FadeInView';
 import { FuelBadge } from '@/components/FuelBadge';
 import { MenuButton } from '@/components/MenuButton';
@@ -11,18 +12,31 @@ import { StarField } from '@/components/StarField';
 import { EncounterShip } from '@/components/ships/EncounterShip';
 import { ShipArt } from '@/components/ships/ShipArt';
 import { useHaptics, useSettings } from '@/lib/settings';
-import { fonts, palette, tracking, useMenuWidth } from '@/lib/theme';
-import { loadRun, type RunState } from '@/lib/runStore';
+import { fonts, layout, palette, tracking, useMenuWidth } from '@/lib/theme';
+import { loadRun, reactorOf, saveRun, shiftEnergy, type RunState } from '@/lib/runStore';
 import { shipById } from '@/lib/ships';
 import { encounterAt } from '@/lib/sectorMap';
 import { ENCOUNTER_STYLE } from '@/lib/encounters';
+import type { Subsystem } from '@/lib/energy';
+
+/** The player's ship at full size, before the screen decides it has no room. */
+const SHIP_WIDTH = 132;
+const SHIP_HEIGHT = 172;
+
+/** Space between the stacked pieces of the helm. */
+const STACK_GAP = 16;
+
+/** Roughly what the fuel badge stands up in. */
+const FUEL_ROW_HEIGHT = 22;
 
 /**
- * The helm: the ship adrift in open space with a single thing to do.
+ * The helm: the ship in front of you, with the reactor to divide up and one
+ * place to go.
  *
- * Deliberately close to empty. The only control is JUMP, which opens the
- * sector map; the quiet LEAVE at the top exists so a player is never stuck
- * here with no way back to the title.
+ * The quiet LEAVE at the top exists so a player is never stuck here with no
+ * way back to the title. JUMP opens the sector map — which carries none of
+ * the reactor panel, because choosing where to go is a different decision
+ * from deciding what to power.
  */
 export default function RunScreen() {
   const router = useRouter();
@@ -56,6 +70,25 @@ export default function RunScreen() {
 
   const buttonWidth = useMenuWidth();
 
+  /**
+   * The two pieces of ship art share whatever the controls leave over.
+   *
+   * Worked out rather than guessed: the controls now take a fixed, known
+   * amount of the screen, and fixed art sizes would have dropped the Elder
+   * Shrike straight through the player's ship on a short phone.
+   */
+  const chromeHeight =
+    insets.top +
+    58 +
+    insets.bottom +
+    40 +
+    ENERGY_PANEL_HEIGHT +
+    FUEL_ROW_HEIGHT +
+    layout.buttonHeight +
+    STACK_GAP * 4;
+  const artBudget = height - chromeHeight;
+  const artScale = Math.max(0.55, Math.min(1, artBudget / (waiting.height + SHIP_HEIGHT)));
+
   const onJump = useCallback(() => {
     if (dry) return;
     haptics.confirm();
@@ -66,6 +99,24 @@ export default function RunScreen() {
     haptics.tap();
     router.back();
   }, [haptics, router]);
+
+  /**
+   * Moving a bar of energy.
+   *
+   * `shiftEnergy` hands back the same run when the move is not legal, so a
+   * press on a greyed-out control costs nothing: no write, no buzz, no render.
+   */
+  const onShift = useCallback(
+    (subsystem: Subsystem, delta: number) => {
+      if (!run) return;
+      const next = shiftEnergy(run, subsystem, delta);
+      if (next === run) return;
+      setRun(next);
+      haptics.tap();
+      void saveRun(next);
+    },
+    [haptics, run],
+  );
 
   return (
     <View style={styles.container}>
@@ -84,28 +135,46 @@ export default function RunScreen() {
         </Pressable>
       </View>
 
-      {/* Whatever is waiting here holds the upper half, facing down. */}
-      {encounter === 'empty' ? null : (
-        <FadeInView
-          enabled={!settings.reduceMotion}
-          duration={520}
-          delay={160}
-          style={[styles.encounterHolder, { paddingTop: insets.top + 74 }]}
-        >
-          <EncounterShip encounter={encounter} width={waiting.width} height={waiting.height} />
-        </FadeInView>
-      )}
-
-      {/* The ship sits low, with the emptiness above it doing the work. */}
-      <FadeInView
-        enabled={!settings.reduceMotion}
-        duration={700}
-        style={[styles.shipHolder, { paddingBottom: insets.bottom + 188 }]}
+      <View
+        style={[
+          styles.stack,
+          { paddingTop: insets.top + 58, paddingBottom: insets.bottom + 40 },
+        ]}
       >
-        <ShipArt shipId={ship.id} accent={ship.accent} width={132} height={172} />
-      </FadeInView>
+        {/* Whatever is waiting here holds the upper half, facing down. */}
+        <View style={styles.encounterSlot}>
+          {encounter === 'empty' ? null : (
+            <FadeInView enabled={!settings.reduceMotion} duration={520} delay={160}>
+              <EncounterShip
+                encounter={encounter}
+                width={waiting.width * artScale}
+                height={waiting.height * artScale}
+              />
+            </FadeInView>
+          )}
+        </View>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 44 }]}>
+        <FadeInView enabled={!settings.reduceMotion} duration={700}>
+          <ShipArt
+            shipId={ship.id}
+            accent={ship.accent}
+            width={SHIP_WIDTH * artScale}
+            height={SHIP_HEIGHT * artScale}
+          />
+        </FadeInView>
+
+        {/* Only here, with the ship in front of you — never on the sector map. */}
+        {run ? (
+          <EnergyPanel
+            energy={run.energy}
+            reactor={reactorOf(run)}
+            width={buttonWidth}
+            onShift={onShift}
+          />
+        ) : (
+          <View style={{ height: ENERGY_PANEL_HEIGHT }} />
+        )}
+
         <FuelBadge remaining={fuel} accent={ship.accent} />
         <MenuButton
           label={dry ? 'OUT OF FUEL' : 'JUMP'}
@@ -130,22 +199,13 @@ const styles = StyleSheet.create({
     color: palette.textDisabled,
     letterSpacing: tracking.caption,
   },
-  encounterHolder: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-  },
-  shipHolder: {
+
+  stack: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'flex-end',
+    gap: STACK_GAP,
   },
-  footer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: 'center',
-    gap: 18,
-  },
+  /** Takes the slack, so everything below it sits at a fixed height. */
+  encounterSlot: { flex: 1, minHeight: 0, alignItems: 'center', justifyContent: 'flex-start' },
 });

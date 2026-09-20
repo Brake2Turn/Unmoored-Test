@@ -1,6 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { DEFAULT_SHIP_ID } from '@/lib/ships';
+import {
+  clampEnergy,
+  defaultEnergy,
+  shift,
+  type EnergyState,
+  type Subsystem,
+} from '@/lib/energy';
+import { DEFAULT_SHIP_ID, shipById } from '@/lib/ships';
 import {
   FUEL_PER_RUN,
   assignEncounters,
@@ -34,6 +41,11 @@ export type RunState = {
   jumps: number;
   /** Jumps left in the tank. Each jump costs one, wherever it goes. */
   fuel: number;
+  /**
+   * How the reactor is currently spread across the subsystems. Part of the
+   * run, so a reload comes back to the same allocation.
+   */
+  energy: EnergyState;
 };
 
 /**
@@ -46,6 +58,17 @@ type StoredRun = Partial<RunState> & { sector?: number };
 /** Which sector the run is in. Derived, so it cannot drift out of step. */
 export function sectorOf(run: RunState): number {
   return run.jumps + 1;
+}
+
+/**
+ * Reactor output for the ship this run launched in.
+ *
+ * Derived from the ship rather than copied into the run, so retuning a ship's
+ * reactor takes effect on the next load instead of leaving old saves on the
+ * old number.
+ */
+export function reactorOf(run: RunState): number {
+  return shipById(run.shipId).reactor;
 }
 
 /**
@@ -68,6 +91,7 @@ function createRun(shipId: string): RunState {
     visited: [map.start],
     jumps: 0,
     fuel: FUEL_PER_RUN,
+    energy: defaultEnergy(shipById(shipId).reactor),
   };
 }
 
@@ -148,6 +172,20 @@ export function applyJump(run: RunState, target: number): RunState {
 }
 
 /**
+ * Moves one bar of reactor energy into or out of a subsystem.
+ *
+ * The rule lives here, beside `applyJump`, rather than in the panel that draws
+ * the buttons: what counts as a legal move is a property of the run, not of
+ * one screen's controls. An illegal move — no spare energy, a full subsystem,
+ * an empty one — returns the run unchanged *by identity*, which is how the
+ * caller knows to skip the save and the haptic.
+ */
+export function shiftEnergy(run: RunState, subsystem: Subsystem, delta: number): RunState {
+  const energy = shift(run.energy, reactorOf(run), subsystem, delta);
+  return energy === run.energy ? run : { ...run, energy };
+}
+
+/**
  * Fills in anything a save predates — a ship, a jump map, a tank of fuel — so
  * an older run opens instead of being thrown away.
  *
@@ -167,11 +205,12 @@ function hydrate(stored: StoredRun): RunState {
     typeof stored.jumps === 'number' ? stored.jumps : Math.max(visited.length - 1, 0);
 
   const now = Date.now();
+  const shipId = stored.shipId ?? DEFAULT_SHIP_ID;
   return {
     id: stored.id ?? `${now}-${Math.random().toString(36).slice(2, 10)}`,
     startedAt: stored.startedAt ?? now,
     lastPlayedAt: stored.lastPlayedAt ?? now,
-    shipId: stored.shipId ?? DEFAULT_SHIP_ID,
+    shipId,
     map,
     position,
     visited,
@@ -182,6 +221,10 @@ function hydrate(stored: StoredRun): RunState {
       typeof stored.fuel === 'number' ? stored.fuel : Math.max(FUEL_PER_RUN - jumps, 0),
       FUEL_PER_RUN,
     ),
+    // Saves predate the reactor entirely, and a ship's output can be retuned
+    // under a run in progress, so the stored allocation is forced back into
+    // something this ship can actually power rather than trusted.
+    energy: clampEnergy(stored.energy, shipById(shipId).reactor),
   };
 }
 

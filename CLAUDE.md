@@ -15,9 +15,10 @@ rather than native Swift — Expo builds the iOS binary on hosted machines
 
 ```bash
 npm install
-npm run verify        # typecheck + map property checks — run this before claiming anything works
+npm run verify        # typecheck + map and energy property checks — run this before claiming anything works
 npm run typecheck     # tsc --noEmit on its own
 npm run verify:map    # sector generation properties, 2000 maps (pass a count: ... verify:map 5000)
+npm run verify:energy # reactor properties: legal allocations, moves, and junk saves
 npm run build:web     # full production web bundle into dist/ — catches what tsc cannot
 npm run web           # dev server at localhost:8081
 ```
@@ -89,17 +90,45 @@ exact sixes. **The map does not reveal them**: every star is a plain dot, and
 what is waiting is only learned by jumping there, where the ship appears at the
 helm. The boss is the single exception, red from the start.
 
+### The reactor is a set of trade-offs, not a set of sliders
+
+`lib/energy.ts` holds a pool of reactor energy and three subsystems — shields,
+weapons, piloting — that hold four bars each. Twelve bars of capacity against a
+reactor of four to seven means **no ship can power everything**, so every bar is
+somewhere it is not somewhere else. `npm run verify:energy` fails if a ship's
+reactor ever creeps up to `TOTAL_CAPACITY`.
+
+**Nothing reads the levels yet.** There is no combat to spend them on. The
+allocation is real, lives on the run and survives a reload; what it *does*
+arrives with the systems that need it.
+
+The panel is on the helm only, where the ship is in front of you — the sector
+map is for choosing where to go, and deliberately carries none of it. Because
+the panel takes a fixed, known slice of the helm, the two pieces of ship art
+there are scaled from the space left over rather than sized by hand; fixed
+sizes dropped the Elder Shrike through the player's ship on a short phone.
+
+Hull and speed used to sit beside cargo on the ship cards. They are gone —
+cargo is the one stat that still varies without being energy.
+
+`lib/energy.ts` imports nothing, for the same reason `sectorMap.ts` imports
+nothing: pure rules run under bare node in the verify script. The labels and
+tints live in `lib/subsystems.ts`, which is to it what `encounters.ts` is to
+`sectorMap.ts`.
+
 ### Layer boundaries
 
-`lib/theme.ts` and `lib/sectorMap.ts` import nothing from the project and are the
-leaves. `lib/ships.ts` and `lib/encounters.ts` depend on the theme;
-`lib/runStore.ts` depends on ships and the map. Keep that direction — the theme
+`lib/theme.ts`, `lib/sectorMap.ts` and `lib/energy.ts` import nothing from the
+project and are the leaves. `lib/ships.ts`, `lib/encounters.ts` and
+`lib/subsystems.ts` depend on the theme; `lib/runStore.ts` depends on ships,
+the map and the energy rules. Keep that direction — the theme
 briefly imported a helper from `sectorMap` and it was the wrong way round.
 
 Presentation belongs in a table, not in a screen. `ENCOUNTER_STYLE`
 (`lib/encounters.ts`) holds each encounter's label, colour and size because those
 three facts were previously spelled out separately in the map, the helm and the
-ship art.
+ship art. `SUBSYSTEM_STYLE` (`lib/subsystems.ts`) does the same for the reactor
+rows.
 
 ## Platform traps already paid for
 

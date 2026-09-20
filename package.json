@@ -9,7 +9,8 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "verify:map": "node --experimental-strip-types scripts/verify-map.ts",
-    "verify": "npm run typecheck && npm run verify:map",
+    "verify:energy": "node --experimental-strip-types scripts/verify-energy.ts",
+    "verify": "npm run typecheck && npm run verify:map && npm run verify:energy",
     "build:web": "expo export --platform web"
   },
   "dependencies": {

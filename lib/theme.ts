@@ -27,6 +27,14 @@ export const palette = {
   /** Merchant gold — someone willing to trade rather than shoot. */
   trade: '#E8C15F',
 
+  /**
+   * The three reactor subsystems, each its own tint so a glance at the helm
+   * panel says which row is which without reading the labels.
+   */
+  shields: '#5FD9E8',
+  weapons: '#E8A85F',
+  piloting: '#9B7FE8',
+
   textPrimary: '#DCE6FF',
   textMuted: '#7A87A8',
   textDisabled: '#525C75',

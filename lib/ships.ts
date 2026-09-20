@@ -10,13 +10,6 @@ import { palette } from '@/lib/theme';
  * because seeing what is coming is half the reason to keep playing, but it
  * cannot be launched until `lib/unlocks.ts` says otherwise.
  */
-export type ShipStats = {
-  /** All three are 0–1 and render as five-segment bars. */
-  hull: number;
-  speed: number;
-  cargo: number;
-};
-
 export type Ship = {
   id: string;
   name: string;
@@ -25,7 +18,23 @@ export type Ship = {
   tagline: string;
   /** Tints this ship's glow, its stat bars and the launch button. */
   accent: string;
-  stats: ShipStats;
+  /**
+   * Hold space, 0–1, drawn as a five-segment bar.
+   *
+   * The one thing that still varies ship to ship without being energy. Hull
+   * and speed used to sit beside it; they are gone, folded into what the
+   * reactor can power.
+   */
+  cargo: number;
+  /**
+   * Bars of reactor output, the pool the helm panel spreads across shields,
+   * weapons and piloting.
+   *
+   * Always short of `TOTAL_CAPACITY` (12) — a ship that could run everything
+   * at once would have nothing to decide. `npm run verify:energy` fails if one
+   * ever creeps up to it.
+   */
+  reactor: number;
   /**
    * What the player has to do to earn this ship. Present means locked by
    * default; absent means available from the first launch.
@@ -40,7 +49,8 @@ export const SHIPS: Ship[] = [
     className: 'SURVEY CUTTER',
     tagline: 'Slow, stubborn, and built to come home.',
     accent: palette.accent,
-    stats: { hull: 0.8, speed: 0.4, cargo: 0.6 },
+    cargo: 0.6,
+    reactor: 6,
   },
   {
     id: 'lance',
@@ -48,7 +58,8 @@ export const SHIPS: Ship[] = [
     className: 'INTERCEPTOR',
     tagline: 'Outrun the dark. Nothing spare aboard.',
     accent: '#E8A85F',
-    stats: { hull: 0.4, speed: 1.0, cargo: 0.2 },
+    cargo: 0.2,
+    reactor: 5,
   },
   {
     id: 'bulwark',
@@ -56,7 +67,8 @@ export const SHIPS: Ship[] = [
     className: 'HEAVY HAULER',
     tagline: 'Carries everything. Hurries for nothing.',
     accent: '#9B7FE8',
-    stats: { hull: 1.0, speed: 0.2, cargo: 1.0 },
+    cargo: 1.0,
+    reactor: 7,
     unlockHint: 'REACH SECTOR 5',
   },
   {
@@ -65,7 +77,8 @@ export const SHIPS: Ship[] = [
     className: 'RING TENDER',
     tagline: 'Built around a hole. Holds what others cannot.',
     accent: '#7FE8C4',
-    stats: { hull: 0.6, speed: 0.5, cargo: 0.9 },
+    cargo: 0.9,
+    reactor: 6,
     unlockHint: 'REACH SECTOR 10',
   },
   {
@@ -74,7 +87,8 @@ export const SHIPS: Ship[] = [
     className: 'SALVAGE CRAFT',
     tagline: 'Takes what it needs from whatever it finds.',
     accent: '#E8637F',
-    stats: { hull: 0.7, speed: 0.8, cargo: 0.3 },
+    cargo: 0.3,
+    reactor: 7,
     unlockHint: 'SURVIVE A HULL BREACH',
   },
   {
@@ -83,7 +97,8 @@ export const SHIPS: Ship[] = [
     className: 'SAIL CLIPPER',
     tagline: 'Rides the solar wind. Nothing else to give.',
     accent: '#6E8FE8',
-    stats: { hull: 0.2, speed: 1.0, cargo: 0.5 },
+    cargo: 0.5,
+    reactor: 4,
     unlockHint: 'FINISH A RUN UNDER 10:00',
   },
 ];

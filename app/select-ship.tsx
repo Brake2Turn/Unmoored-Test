@@ -18,11 +18,15 @@ import { ShipArt } from '@/components/ships/ShipArt';
 import { useHaptics } from '@/lib/settings';
 import { fonts, palette, tracking, useMenuWidth } from '@/lib/theme';
 import { SHIPS, STARTER_SHIP_IDS, type Ship } from '@/lib/ships';
+import { TOTAL_CAPACITY } from '@/lib/energy';
 import { loadUnlocked } from '@/lib/unlocks';
 import { startNewRun } from '@/lib/runStore';
 import Svg, { Path, Rect as SvgRect } from 'react-native-svg';
 
 const CARD_GAP = 16;
+
+/** Cargo has no natural unit, so it reads as a five-segment impression. */
+const CARGO_SEGMENTS = 5;
 
 export default function SelectShipScreen() {
   const router = useRouter();
@@ -162,9 +166,22 @@ export default function SelectShipScreen() {
         )}
 
         <View style={styles.stats}>
-          <StatBar label="HULL" value={selected.stats.hull} accent={selected.accent} locked={isLocked} />
-          <StatBar label="SPEED" value={selected.stats.speed} accent={selected.accent} locked={isLocked} />
-          <StatBar label="CARGO" value={selected.stats.cargo} accent={selected.accent} locked={isLocked} />
+          <StatBar
+            label="CARGO"
+            filled={Math.round(selected.cargo * CARGO_SEGMENTS)}
+            total={CARGO_SEGMENTS}
+            accent={selected.accent}
+            locked={isLocked}
+          />
+          {/* Out of what all three subsystems could hold, so the shortfall is
+              part of the ship's description rather than a surprise at the helm. */}
+          <StatBar
+            label="REACTOR"
+            filled={selected.reactor}
+            total={TOTAL_CAPACITY}
+            accent={selected.accent}
+            locked={isLocked}
+          />
         </View>
 
         <View style={styles.dots}>
@@ -258,24 +275,34 @@ const ShipCard = React.memo(function ShipCard({
   );
 });
 
+/**
+ * One labelled bar.
+ *
+ * `total` varies by row: cargo is a rough five-segment impression, while the
+ * reactor is counted in the same whole bars the helm panel spends, so the two
+ * rows are honestly different units rather than a shared fiction.
+ */
 function StatBar({
   label,
-  value,
+  filled,
+  total,
   accent,
   locked,
 }: {
   label: string;
-  value: number;
+  filled: number;
+  total: number;
   accent: string;
   locked: boolean;
 }) {
-  const filled = Math.round(value * 5);
   const fill = locked ? 'rgba(255,255,255,0.22)' : accent;
   return (
     <View style={styles.statRow}>
-      <Text style={styles.statLabel}>{label}</Text>
+      <Text numberOfLines={1} style={styles.statLabel}>
+        {label}
+      </Text>
       <View style={styles.segments}>
-        {Array.from({ length: 5 }, (_, i) => (
+        {Array.from({ length: total }, (_, i) => (
           <View
             key={i}
             style={[
@@ -403,9 +430,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: palette.textMuted,
     letterSpacing: tracking.caption,
-    width: 48,
+    // Wide enough for REACTOR's seven tracked capitals; at 48 it broke to
+    // "REACT OR". Tracked caps are far wider than they look.
+    width: 62,
   },
-  segments: { flexDirection: 'row', gap: 4, flex: 1 },
+  segments: { flexDirection: 'row', gap: 3, flex: 1 },
   segment: {
     flex: 1,
     height: 4,
