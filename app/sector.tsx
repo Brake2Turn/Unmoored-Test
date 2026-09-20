@@ -223,25 +223,18 @@ export default function SectorScreen() {
                   fill={star.fill === 'accent' ? ship.accent : star.fill}
                   fillOpacity={star.solid ? 1 : 0.5}
                 />
-                {isBoss ? (
-                  <Circle
-                    cx={px.x}
-                    cy={px.y}
-                    r={star.radius + 6}
-                    fill="none"
-                    stroke={palette.danger}
-                    strokeOpacity={dim ? 0.5 : 0.9}
-                    strokeWidth={1.4}
-                  />
-                ) : null}
-                {kind === 'visited' ? (
+                {/* A ring means "we have stood here". It is keyed off the
+                    visited set rather than off `kind`, so a star already
+                    walked keeps its ring even while it is in range, chosen,
+                    or under the ship — which is the point of it. */}
+                {visited.has(index) ? (
                   <Circle
                     cx={px.x}
                     cy={px.y}
                     r={star.radius + 4}
                     fill="none"
                     stroke={palette.textMuted}
-                    strokeOpacity={0.55}
+                    strokeOpacity={0.6}
                     strokeWidth={1}
                   />
                 ) : null}
@@ -279,8 +272,8 @@ export default function SectorScreen() {
         >
           {dry
             ? 'NO FUEL — THE SHIP IS ADRIFT'
-            : blocked === 'held'
-            ? 'HELD FAST — BREAK AWAY AT THE HELM'
+            : blocked === 'charging'
+            ? 'THE DRIVE IS STILL BUILDING'
             : blocked === 'engines'
             ? 'ENGINES COLD — POWER THEM AT THE HELM'
             : target === null
@@ -293,8 +286,8 @@ export default function SectorScreen() {
           label={
             blocked === 'fuel'
               ? 'OUT OF FUEL'
-              : blocked === 'held'
-                ? 'HELD'
+              : blocked === 'charging'
+                ? 'DRIVE CHARGING'
                 : blocked
                   ? 'ENGINES OFFLINE'
                   : target === null
@@ -315,7 +308,7 @@ type StarKind = 'boss' | 'here' | 'chosen' | 'reachable' | 'visited' | 'far';
 
 /** How each kind of star is drawn. 'accent' means the player ship's colour. */
 const STAR: Record<StarKind, { radius: number; fill: string; solid: boolean; halo: boolean }> = {
-  boss: { radius: 8, fill: palette.danger, solid: true, halo: true },
+  boss: { radius: 8, fill: palette.danger, solid: true, halo: false },
   here: { radius: 7, fill: 'accent', solid: true, halo: true },
   chosen: { radius: 5.5, fill: 'accent', solid: true, halo: true },
   reachable: { radius: 5.5, fill: palette.textPrimary, solid: true, halo: false },

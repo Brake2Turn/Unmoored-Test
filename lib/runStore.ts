@@ -1,11 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
-  DETAIN_UNITS,
+  HOSTILE_JUMP_UNITS,
+  JUMP_UNITS,
+  WEAPON_UNITS,
+  chargeRate,
   clampEnergy,
   damagedShield,
   defaultEnergy,
-  escapeRate,
   regenShield,
   shift,
   type EnergyState,
@@ -53,11 +55,16 @@ export type RunState = {
    */
   energy: EnergyState;
   /**
-   * Units of hold left before the ship can break away from a hostile star.
-   * Zero means free to go. Counted in units rather than seconds because the
-   * engines burn through it at their own rate — see `escapeRate`.
+   * Units of jump charge built since arriving. The drive is ready once this
+   * reaches `jumpUnitsFor(run)`. Counted in units rather than seconds because
+   * the engines build it at their own rate — see `chargeRate`.
    */
-  detain: number;
+  jumpCharge: number;
+  /**
+   * Units of weapon charge built since arriving. Nothing reads it yet; the
+   * slider under the weapons row is the whole of it so far.
+   */
+  weaponCharge: number;
   /**
    * The shield's actual strength, which chases `energy.shields` rather than
    * matching it. A float: the envelope fades up as it charges.
@@ -96,7 +103,7 @@ export function sectorOf(run: RunState): number {
 export const MIN_JUMP_ENGINES = 1;
 
 /** Why a jump cannot happen, or null when it can. */
-export type JumpBlock = 'fuel' | 'engines' | 'held' | null;
+export type JumpBlock = 'fuel' | 'engines' | 'charging' | null;
 
 /**
  * What is stopping this run from jumping.
@@ -108,34 +115,60 @@ export type JumpBlock = 'fuel' | 'engines' | 'held' | null;
  */
 export function jumpBlocker(run: RunState): JumpBlock {
   if (run.fuel <= 0) return 'fuel';
-  // Being held outranks cold engines: both are true while the timer is paused,
-  // and the hold is the thing the player is actually looking at.
-  if (run.detain > 0) return 'held';
+  // Cold engines outrank a part-built charge: with nothing in the engines the
+  // charge is not building at all, so that is the thing to say.
   if (run.energy.engines < MIN_JUMP_ENGINES) return 'engines';
+  if (run.jumpCharge < jumpUnitsFor(run)) return 'charging';
   return null;
 }
 
-/** Seconds of hold left at the current engine power, or null when free. */
-export function detainRemaining(run: RunState): number | null {
-  if (run.detain <= 0) return null;
-  const rate = escapeRate(run.energy.engines);
-  // Paused: the hold is not counting down at all, so there is no number.
-  if (rate <= 0) return Infinity;
-  return Math.ceil(run.detain / rate);
+/**
+ * What the drive has to build before this star will let the ship go.
+ *
+ * Derived from where the ship is standing rather than stored, so it cannot
+ * drift: a hostile star simply costs more, which is what being pinned down by
+ * a Shrike now amounts to. The `hostile` flag already lives in
+ * `ENCOUNTER_STYLE`, so this is not a second list of which stars mean trouble.
+ */
+export function jumpUnitsFor(run: RunState): number {
+  const here = encounterAt(run.map, run.position);
+  return ENCOUNTER_STYLE[here].hostile ? HOSTILE_JUMP_UNITS : JUMP_UNITS;
+}
+
+/** How far each charge has come, 0 to 1, for the sliders on the helm. */
+export function chargeFractions(run: RunState): { jump: number; weapon: number } {
+  return {
+    jump: Math.min(1, run.jumpCharge / jumpUnitsFor(run)),
+    weapon: Math.min(1, run.weaponCharge / WEAPON_UNITS),
+  };
 }
 
 /**
- * Advances the clocks on a run: the hold burns down, the shield charges up.
+ * Advances everything on a clock: the drive and the weapons build, the shield
+ * regenerates.
  *
  * Driven by the helm, which is the only screen that sits still. Returns the
- * same run when neither has anything to do, so a caller can stop ticking.
+ * same run when nothing has anything left to do, so a caller can stop ticking.
  */
 export function tickRun(run: RunState, seconds: number): RunState {
-  const detain = Math.max(0, run.detain - seconds * escapeRate(run.energy.engines));
+  const jumpCharge = Math.min(
+    jumpUnitsFor(run),
+    run.jumpCharge + seconds * chargeRate(run.energy.engines),
+  );
+  const weaponCharge = Math.min(
+    WEAPON_UNITS,
+    run.weaponCharge + seconds * chargeRate(run.energy.weapons),
+  );
   const shieldCharge = regenShield(run.shieldCharge, run.energy.shields, seconds);
 
-  if (detain === run.detain && shieldCharge === run.shieldCharge) return run;
-  return { ...run, detain, shieldCharge };
+  if (
+    jumpCharge === run.jumpCharge &&
+    weaponCharge === run.weaponCharge &&
+    shieldCharge === run.shieldCharge
+  ) {
+    return run;
+  }
+  return { ...run, jumpCharge, weaponCharge, shieldCharge };
 }
 
 /**
@@ -171,7 +204,9 @@ function createRun(shipId: string): RunState {
     jumps: 0,
     fuel: FUEL_PER_RUN,
     energy: energyAtStart,
-    detain: 0,
+    // A run opens with the drive still to build, the same as any arrival.
+    jumpCharge: 0,
+    weaponCharge: 0,
     shieldHits: 0,
     // A run opens with its shields already up; the charge time is for changes
     // made in flight, not a penalty for launching.
@@ -251,19 +286,16 @@ export function applyJump(run: RunState, target: number): RunState {
   // unchanged so a caller can tell nothing happened.
   if (jumpBlocker(run)) return run;
 
-  // Arriving on something hostile pins the ship there until the engines have
-  // burned through the hold. The `hostile` flag already lives in
-  // `ENCOUNTER_STYLE`, so this does not become a second list of which stars
-  // mean trouble.
-  const arriving = encounterAt(run.map, target);
-
   return {
     ...run,
     position: target,
     visited: run.visited.includes(target) ? run.visited : [...run.visited, target],
     jumps: run.jumps + 1,
     fuel: Math.max(run.fuel - 1, 0),
-    detain: ENCOUNTER_STYLE[arriving].hostile ? DETAIN_UNITS : 0,
+    // Arriving spends both charges: the drive has to build again before the
+    // ship can leave, and a hostile star makes that build far longer.
+    jumpCharge: 0,
+    weaponCharge: 0,
   };
 }
 
@@ -348,12 +380,30 @@ function hydrate(stored: StoredRun): RunState {
     // Saves predate both clocks. A hold longer than the rules allow is capped;
     // a shield with no stored charge comes back at the level it is powered
     // for, so a reload does not strip a run of its shields.
-    detain: clampNumber(stored.detain, 0, DETAIN_UNITS, 0),
+    // The drive charge used to be stored the other way up, as `detain`: units
+    // of hold *left* at a hostile star. A save holding one is turned round
+    // into the charge already built, so a run mid-hold keeps its progress.
+    jumpCharge: legacyJumpCharge(stored, map, position),
+    weaponCharge: clampNumber(stored.weaponCharge, 0, WEAPON_UNITS, 0),
     shieldCharge: clampNumber(stored.shieldCharge, 0, energy.shields, energy.shields),
     // Only ever compared against itself to spot a change, so any finite
     // number will do; a save from before the counter starts at nothing.
     shieldHits: clampNumber(stored.shieldHits, 0, Number.MAX_SAFE_INTEGER, 0),
   };
+}
+
+/** Reads either shape of drive charge off a save, new or old. */
+function legacyJumpCharge(stored: StoredRun, map: SectorMap, position: number): number {
+  const units = ENCOUNTER_STYLE[encounterAt(map, position)].hostile
+    ? HOSTILE_JUMP_UNITS
+    : JUMP_UNITS;
+
+  if (typeof stored.jumpCharge === 'number' && Number.isFinite(stored.jumpCharge)) {
+    return clampNumber(stored.jumpCharge, 0, units, 0);
+  }
+  // `detain` counted downward from the full hold, so what is built is the rest.
+  const held = clampNumber((stored as { detain?: unknown }).detain, 0, units, 0);
+  return units - held;
 }
 
 /** A stored number forced into range, or `fallback` when it is not one. */

@@ -88,7 +88,12 @@ Constants were fitted by measurement, not taste. Changing `JUMP_RANGE`,
 Encounters split the 18 stars that are neither the start nor the boss into three
 exact sixes. **The map does not reveal them**: every star is a plain dot, and
 what is waiting is only learned by jumping there, where the ship appears at the
-helm. The boss is the single exception, red from the start.
+helm. The boss is the single exception, red from the start — red and nothing
+else, with no ring or halo around it.
+
+A ring means **the ship has stood there**. It is drawn off the visited set
+rather than off the star's `kind`, so a star already walked keeps its ring while
+it is in range, chosen, or under the ship — which is the whole point of it.
 
 ### The reactor is a set of trade-offs, not a set of sliders
 
@@ -106,15 +111,35 @@ can never disagree. `applyJump` refuses a blocked jump and hands the run
 straight back, the same way `shiftEnergy` refuses an illegal move. Weapons
 still does nothing — there is nothing to shoot.
 
-**Arriving on a hostile star pins the ship there.** The hold is stored as
-`detain`, in *units of work* rather than seconds, and the engines burn through
-it at `escapeRate(engines) = engines ** 0.35`. One bar clears the 40 units in
-40 seconds; four clears it in about 25, and each extra bar buys less than the
-one before it, so power helps without making escape cheap. **No bars means no
-rate**, which pauses the hold rather than ending it — and because the rate is
-read continuously, changing the allocation mid-hold changes the countdown.
-`verify:energy` holds the shape of that curve: monotonic, diminishing, and
-never below half the base time at full power.
+**Systems charge, and one curve drives all of them.** Charge is counted in
+*units of work* rather than seconds, and a subsystem builds it at
+`chargeRate(bars) = bars ** 0.35`. One bar does a unit a second; four bars is a
+little over one and a half times that, and each extra bar buys less than the
+one before, so power helps without making anything cheap. **No bars means no
+rate at all** — a system with nothing in it sits still rather than creeping.
+Because the rate is read continuously, moving energy mid-charge changes the
+fill under the player's hands.
+
+Two charges run today, both shown as sliders in the panel under the row that
+drives them, and neither carries a number — the bar is the readout.
+
+- **The drive** (`jumpCharge`) has to build before the ship can leave a star,
+  and `applyJump` empties it on arrival. `jumpUnitsFor(run)` is derived from
+  where the ship is standing rather than stored: an ordinary star costs
+  `JUMP_UNITS` (14, about 11s at two bars), a hostile one `HOSTILE_JUMP_UNITS`
+  (40, about 31s). That is what being pinned down by a Shrike now amounts to —
+  a far longer build, not a separate timer with its own rules.
+- **The weapons** (`weaponCharge`) build the same way and reset the same way.
+  Nothing reads the result; there is still nothing to shoot.
+
+The jump button says nothing about any of this. While the drive builds it is
+simply closed, because the slider is the readout — a countdown printed over the
+button was the thing that replaced. Cold engines keep their own words, since
+that is a different problem and an unexplained still slider would be worse.
+
+`verify:energy` holds the shape of the curve (monotonic, diminishing, never
+below half the base time at full power), that a hostile star costs at least
+twice an ordinary one, and that an ordinary hop is never a long wait.
 
 **The shields row is a ceiling, not a switch.** Three bars means the shield can
 reach level three and no further. `shieldCharge` is where it actually is — a
@@ -150,9 +175,13 @@ silent. Each effect is keyed on the hit that caused it, so a second hit
 restarts it cleanly. Neither is load-bearing: if they never play, the bar and
 the bubble still tell the truth.
 
+The wash is four broad translucent sheens, each wider, dimmer and later than
+the one in front, with five-stop gradients so none of them has a visible edge.
+It was one bright blade first and read as a hard line rather than a shimmer.
+
 The one piece of real maths is **the sweep needs no clipping**. A vertical
 chord of an ellipse at horizontal position `x` (in units of `SHIELD_RX`) has
-half-height `SHIELD_RY * sqrt(1 - x²)`, so scaling the blade by exactly that
+half-height `SHIELD_RY * sqrt(1 - x²)`, so scaling a sheen by exactly that
 factor traces the inside of the envelope precisely, edge to edge, while a plain
 `translateX` carries it across. Both come off one progress value, and both are
 plain view transforms — as is everything in these effects. **Animated SVG

@@ -34,6 +34,9 @@ type Props = {
    * sets the ceiling — this is how much of it is actually standing.
    */
   shieldCharge: number;
+  /** How far the drive and the weapons have built since arriving, 0 to 1. */
+  engineCharge: number;
+  weaponCharge: number;
   onShift: (subsystem: Subsystem, delta: number) => void;
   /** False fills and empties the cells instantly, with no surge. */
   animate?: boolean;
@@ -47,7 +50,7 @@ type Props = {
  * front. So the panel is given an explicit height and its rows divide it,
  * rather than the height being whatever the content happens to add up to.
  */
-export const ENERGY_PANEL_HEIGHT = 150;
+export const ENERGY_PANEL_HEIGHT = 180;
 
 const ROW_HEIGHT = 26;
 const PIP_HEIGHT = 9;
@@ -97,6 +100,8 @@ export function EnergyPanel({
   reactor,
   width,
   shieldCharge,
+  engineCharge,
+  weaponCharge,
   onShift,
   animate = true,
 }: Props) {
@@ -141,9 +146,25 @@ export function EnergyPanel({
               onShift={onShift}
               animate={animate}
             />
-            {/* What is actually standing, under the power that caps it. */}
+            {/* What each row has actually got, under the power driving it. */}
             {subsystem === 'shields' ? (
               <ShieldStrength charge={shieldCharge} cap={energy.shields} />
+            ) : null}
+            {subsystem === 'weapons' ? (
+              <ChargeSlider
+                label="CHARGE"
+                fraction={weaponCharge}
+                accent={SUBSYSTEM_STYLE.weapons.accent}
+                stalled={energy.weapons <= 0}
+              />
+            ) : null}
+            {subsystem === 'engines' ? (
+              <ChargeSlider
+                label="DRIVE"
+                fraction={engineCharge}
+                accent={SUBSYSTEM_STYLE.engines.accent}
+                stalled={energy.engines <= 0}
+              />
             ) : null}
           </React.Fragment>
         ))}
@@ -254,6 +275,60 @@ function ShieldStrength({ charge, cap }: { charge: number; cap: number }) {
             </View>
           );
         })}
+      </View>
+
+      <View style={{ width: STEP_W }} />
+    </View>
+  );
+}
+
+/**
+ * A charge building up: one continuous track, no number.
+ *
+ * Deliberately not the shield's four squares. The shield holds whole levels
+ * and loses them one at a time, so it counts; these simply fill, and how fast
+ * they fill is the whole of what the row's power is doing. With nothing in the
+ * row they do not creep — they sit still, and the track says so by going dim.
+ */
+function ChargeSlider({
+  label,
+  fraction,
+  accent,
+  stalled,
+}: {
+  label: string;
+  fraction: number;
+  accent: string;
+  stalled: boolean;
+}) {
+  const filled = Math.max(0, Math.min(1, fraction));
+  const full = filled >= 1;
+
+  return (
+    <View
+      accessibilityRole="text"
+      accessibilityLabel={`${label} ${Math.round(filled * 100)} percent`}
+      style={styles.strengthRow}
+    >
+      <View style={{ width: GLYPH_W }} />
+      <Text numberOfLines={1} style={styles.strengthLabel}>
+        {label}
+      </Text>
+      <View style={{ width: STEP_W }} />
+
+      <View style={[styles.track, stalled && styles.trackStalled]}>
+        <View
+          style={[
+            styles.trackFill,
+            {
+              width: `${filled * 100}%`,
+              backgroundColor: accent,
+              // Full reads as ready; part-built is quieter so the difference
+              // is visible at a glance rather than by measuring the bar.
+              opacity: full ? 1 : 0.62,
+            },
+          ]}
+        />
       </View>
 
       <View style={{ width: STEP_W }} />
@@ -466,6 +541,17 @@ const styles = StyleSheet.create({
     width: 70,
     textAlign: 'right',
   },
+  track: {
+    flex: 1,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: EMPTY_CELL,
+    overflow: 'hidden',
+  },
+  /** Nothing in the row, so nothing is building. */
+  trackStalled: { backgroundColor: 'rgba(255,255,255,0.05)' },
+  trackFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 3 },
+
   squares: { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 },
   square: {
     flex: 1,

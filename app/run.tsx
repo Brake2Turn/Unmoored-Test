@@ -14,8 +14,8 @@ import { SYSTEMS_SPAN, ShipSystems } from '@/components/ships/ShipSystems';
 import { useHaptics, useSettings } from '@/lib/settings';
 import { fonts, layout, palette, tracking, useMenuWidth } from '@/lib/theme';
 import {
+  chargeFractions,
   damageShield,
-  detainRemaining,
   jumpBlocker,
   loadRun,
   reactorOf,
@@ -27,7 +27,7 @@ import {
 import { shipById } from '@/lib/ships';
 import { encounterAt } from '@/lib/sectorMap';
 import { ENCOUNTER_STYLE } from '@/lib/encounters';
-import { escapeRate, shieldLevel, type Subsystem } from '@/lib/energy';
+import { chargeRate, shieldLevel, type Subsystem } from '@/lib/energy';
 
 /** The player's ship at full size, before the screen decides it has no room. */
 const SHIP_WIDTH = 132;
@@ -106,11 +106,12 @@ export default function RunScreen() {
   const buttonWidth = useMenuWidth();
 
   const canHitShield = !!run && shieldLevel(run.shieldCharge) > 0;
-  const held = !!run && run.detain > 0;
-  const charging = !!run && run.shieldCharge < run.energy.shields;
-  // A hold with cold engines is not counting down, so there is nothing to
-  // tick for it — that is what "paused" means.
-  const burning = held && escapeRate(run.energy.engines) > 0;
+  const charge = run ? chargeFractions(run) : { jump: 0, weapon: 0 };
+  // Each clock is worth ticking only while it has somewhere to go and the
+  // power to get there — a row with nothing in it does not creep along.
+  const driveBuilding = !!run && charge.jump < 1 && chargeRate(run.energy.engines) > 0;
+  const weaponBuilding = !!run && charge.weapon < 1 && chargeRate(run.energy.weapons) > 0;
+  const shieldBuilding = !!run && run.shieldCharge < run.energy.shields;
 
   /**
    * The helm's clocks.
@@ -120,7 +121,7 @@ export default function RunScreen() {
    * to count, not on every tick.
    */
   useEffect(() => {
-    if (!burning && !charging) return;
+    if (!driveBuilding && !weaponBuilding && !shieldBuilding) return;
 
     let ticks = 0;
     const timer = setInterval(() => {
@@ -134,11 +135,16 @@ export default function RunScreen() {
       ticks += 1;
       // Persist when a clock finishes, and occasionally along the way, rather
       // than writing to storage four times a second.
-      if (next.detain === 0 || ticks % SAVE_EVERY_TICKS === 0) void saveRun(next);
+      if (ticks % SAVE_EVERY_TICKS === 0) void saveRun(next);
     }, TICK_MS);
 
-    return () => clearInterval(timer);
-  }, [burning, charging]);
+    // The last tick of a clock is the one worth keeping, so write on the way
+    // out as well as periodically.
+    return () => {
+      clearInterval(timer);
+      if (runRef.current) void saveRun(runRef.current);
+    };
+  }, [driveBuilding, shieldBuilding, weaponBuilding]);
 
   /**
    * The two pieces of ship art share whatever the controls leave over.
@@ -170,27 +176,17 @@ export default function RunScreen() {
     router.back();
   }, [haptics, router]);
 
-  // What the one button says. The hold is the loud case: it counts down in the
-  // label, and says plainly when it is not counting at all.
-  const secondsHeld = run ? detainRemaining(run) : null;
+  /**
+   * The button says what it does and nothing more.
+   *
+   * While the drive is still building it is simply closed — the slider under
+   * the engines row is the readout now, rather than a countdown printed over
+   * the button. Cold engines still get their own words, because that is a
+   * different problem and the slider would just sit there unexplained.
+   */
   const jumpLabel =
-    blocked === 'fuel'
-      ? 'OUT OF FUEL'
-      : blocked === 'held'
-        ? secondsHeld === Infinity
-          ? 'HELD'
-          : `HELD · ${secondsHeld}S`
-        : blocked === 'engines'
-          ? 'ENGINES OFFLINE'
-          : 'JUMP';
-  const jumpCaption =
-    blocked === 'held'
-      ? secondsHeld === Infinity
-        ? 'ENGINES COLD — THE TIMER IS PAUSED'
-        : 'MORE ENGINE POWER BREAKS AWAY SOONER'
-      : blocked === 'engines'
-        ? 'PUT A BAR INTO ENGINES'
-        : undefined;
+    blocked === 'fuel' ? 'OUT OF FUEL' : blocked === 'engines' ? 'ENGINES OFFLINE' : 'JUMP';
+  const jumpCaption = blocked === 'engines' ? 'PUT A BAR INTO ENGINES' : undefined;
 
   /**
    * Dev only: knock a level off the shield so the bar and the regen can be
@@ -298,6 +294,8 @@ export default function RunScreen() {
             reactor={reactorOf(run)}
             width={buttonWidth}
             shieldCharge={run.shieldCharge}
+            engineCharge={charge.jump}
+            weaponCharge={charge.weapon}
             onShift={onShift}
             animate={!settings.reduceMotion}
           />

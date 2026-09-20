@@ -33,32 +33,47 @@ export const TOTAL_CAPACITY = SUBSYSTEMS.length * SUBSYSTEM_CAPACITY;
 export type EnergyState = Record<Subsystem, number>;
 
 /**
- * Breaking away from a hostile star.
+ * Systems that have to charge before they are good for anything.
  *
- * The hold is measured in *units of work*, not seconds, and the engines burn
- * through it at `escapeRate`. One bar clears 40 units in 40 seconds; more bars
- * burn faster, but on a curve with diminishing returns, so a full tank is a
- * meaningful head start rather than a free pass. No bars means no rate at all,
- * which is what pauses the timer rather than ending it.
+ * Charge is measured in *units of work*, not seconds, and a subsystem builds
+ * it at `chargeRate` — so the same curve drives the jump drive and the
+ * weapons, and anything added later. One bar does a unit a second; more bars
+ * are faster, but on a curve with diminishing returns, so a full allocation is
+ * a real advantage rather than a free pass.
  *
  * The exponent is the whole design: at 1 it would be a straight divide and
- * four bars would escape in ten seconds. At 0.35 four bars still costs about
- * twenty-five, and each extra bar buys less than the one before it.
+ * four bars would be four times as fast. At 0.35 four bars is a little over
+ * one and a half times, and each extra bar buys less than the one before it.
+ *
+ * No bars means no rate at all — a system with nothing in it does not creep
+ * along slowly, it sits still.
  */
-export const DETAIN_UNITS = 40;
-export const ESCAPE_EXPONENT = 0.35;
+export const CHARGE_EXPONENT = 0.35;
 
-/** Units of hold burned per second at this engine power. Zero bars, zero rate. */
-export function escapeRate(engines: number): number {
-  if (!Number.isFinite(engines) || engines <= 0) return 0;
-  return Math.pow(engines, ESCAPE_EXPONENT);
+/** Units built per second at this power. Zero bars, zero rate. */
+export function chargeRate(bars: number): number {
+  if (!Number.isFinite(bars) || bars <= 0) return 0;
+  return Math.pow(bars, CHARGE_EXPONENT);
 }
 
-/** How long a full hold takes at this engine power, or Infinity while paused. */
-export function detainSeconds(engines: number, units: number = DETAIN_UNITS): number {
-  const rate = escapeRate(engines);
+/** How long a charge of `units` takes at this power, or Infinity while stalled. */
+export function chargeSeconds(bars: number, units: number): number {
+  const rate = chargeRate(bars);
   return rate <= 0 ? Infinity : units / rate;
 }
+
+/**
+ * What the drive has to build before the ship can leave a star.
+ *
+ * Every arrival costs a charge, which is what the slider under the engines
+ * row is showing. A hostile star costs far more: that is what "pinned down by
+ * a Shrike" now means, rather than a separate timer with its own rules.
+ */
+export const JUMP_UNITS = 14;
+export const HOSTILE_JUMP_UNITS = 40;
+
+/** What the weapons have to build. Nothing reads it yet — there is no combat. */
+export const WEAPON_UNITS = 12;
 
 /**
  * Shields come up a level at a time, and they do not snap on.

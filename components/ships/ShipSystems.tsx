@@ -9,6 +9,7 @@ import Animated, {
   useSharedValue,
   withRepeat,
   withTiming,
+  type SharedValue,
 } from 'react-native-reanimated';
 import Svg, { Defs, Ellipse, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg';
 
@@ -179,15 +180,12 @@ const FLICKER_MS = 420;
  * traces the inside of the ellipse precisely, edge to edge, while a plain
  * `translateX` carries it across. Both come off one progress value.
  */
-const SWEEP_BANDS = [
-  { rx: 42, opacity: 0.24, id: 'sweepGlow' },
-  { rx: 11, opacity: 0.6, id: 'sweepCore' },
-  { rx: 3.4, opacity: 0.95, id: 'sweepEdge' },
+const SWEEP_LAYERS = [
+  { id: 'sheenA', lag: 0, rx: 26, opacity: 0.26 },
+  { id: 'sheenB', lag: 0.05, rx: 46, opacity: 0.17 },
+  { id: 'sheenC', lag: 0.11, rx: 70, opacity: 0.11 },
+  { id: 'sheenD', lag: 0.19, rx: 94, opacity: 0.06 },
 ];
-
-/** A broad, dim wake dragged a little behind the blade. */
-const SWEEP_WAKE_RX = 62;
-const SWEEP_WAKE_LAG = 0.1;
 
 /**
  * The debris: fine slivers scattered across the whole field, not wedges cut
@@ -238,7 +236,7 @@ const DEBRIS = (() => {
 })();
 
 /** Quick enough to feel like a hit rather than a transition. */
-const SHIMMER_MS = 680;
+const SHIMMER_MS = 900;
 const DISSIPATE_MS = 460;
 
 function round(n: number): number {
@@ -435,55 +433,33 @@ function ShieldBreak({
 }
 
 /**
- * A layer breaks: the field rings, and light runs across it.
+ * A layer breaks: the field rings, and light washes across it.
  *
- * Two things at once — a rim that flares and springs outward on impact, and a
- * blade of light travelling the full width of the envelope behind it.
+ * Four broad, translucent sheens rather than one bright line — each a little
+ * wider, a little dimmer and a little later than the one in front, so what
+ * crosses the face is a soft wash with depth to it instead of a blade. None
+ * of them is opaque and none has a hard edge; the gradient inside each falls
+ * away gently on both sides.
  */
 function ShieldSweep({ width, height }: { width: number; height: number }) {
   const tint = SUBSYSTEM_STYLE.shields.accent;
   const progress = useSharedValue(0);
   const ring = useSharedValue(0);
 
-  // Ship units to pixels, so the blade can be moved in the units it was drawn
+  // Ship units to pixels, so a sheen can be moved in the units it was drawn
   // in. Matches how the overlay letterboxes its viewBox.
   const unit = Math.min(width / VIEW_W, height / VIEW_H);
 
   useEffect(() => {
-    progress.value = withTiming(1, { duration: SHIMMER_MS, easing: Easing.inOut(Easing.cubic) });
-    ring.value = withTiming(1, { duration: 320, easing: Easing.out(Easing.quad) });
+    progress.value = withTiming(1, { duration: SHIMMER_MS, easing: Easing.inOut(Easing.sin) });
+    ring.value = withTiming(1, { duration: 420, easing: Easing.out(Easing.quad) });
   }, [progress, ring]);
 
-  /** The blade: across on `translateX`, squashed to the ellipse on `scaleY`. */
-  const bladeStyle = useAnimatedStyle(() => {
-    const t = progress.value;
-    // -1 at the left edge of the envelope, +1 at the right.
-    const x = t * 2 - 1;
-    const chord = Math.sqrt(Math.max(0, 1 - x * x));
-
-    return {
-      opacity: interpolate(t, [0, 0.1, 0.76, 1], [0, 1, 1, 0], Extrapolation.CLAMP),
-      transform: [{ translateX: x * SHIELD_RX * unit }, { scaleY: chord }],
-    };
-  });
-
-  /** The impact: the whole rim flares and springs out a little. */
+  /** The impact: the rim lifts and settles, softly. */
   const ringStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(ring.value, [0, 0.25, 1], [1, 0.7, 0], Extrapolation.CLAMP),
-    transform: [{ scale: interpolate(ring.value, [0, 1], [1, 1.12], Extrapolation.CLAMP) }],
+    opacity: interpolate(ring.value, [0, 0.3, 1], [0.55, 0.34, 0], Extrapolation.CLAMP),
+    transform: [{ scale: interpolate(ring.value, [0, 1], [1, 1.09], Extrapolation.CLAMP) }],
   }));
-
-  /** The wake: the same path, a fraction of a beat behind and much dimmer. */
-  const wakeStyle = useAnimatedStyle(() => {
-    const t = Math.max(0, progress.value - SWEEP_WAKE_LAG);
-    const x = t * 2 - 1;
-    const chord = Math.sqrt(Math.max(0, 1 - x * x));
-
-    return {
-      opacity: interpolate(progress.value, [0, 0.22, 0.8, 1], [0, 0.55, 0.45, 0], Extrapolation.CLAMP),
-      transform: [{ translateX: x * SHIELD_RX * unit }, { scaleY: chord }],
-    };
-  });
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -496,69 +472,85 @@ function ShieldSweep({ width, height }: { width: number; height: number }) {
             ry={SHIELD_RY}
             fill="none"
             stroke={tint}
-            strokeOpacity={0.9}
-            strokeWidth={2.6}
+            strokeOpacity={0.85}
+            strokeWidth={1.8}
           />
         </Svg>
       </Animated.View>
 
-      <Animated.View style={[StyleSheet.absoluteFill, wakeStyle]}>
-        <Svg width={width} height={height} viewBox={VIEW_BOX}>
-          <Defs>
-            <LinearGradient id="sweepWake" x1="0" y1="0" x2="1" y2="0">
-              <Stop offset="0" stopColor={tint} stopOpacity={0} />
-              <Stop offset="0.5" stopColor={tint} stopOpacity={0.16} />
-              <Stop offset="1" stopColor={tint} stopOpacity={0} />
-            </LinearGradient>
-          </Defs>
-          <Ellipse
-            cx={SHIELD_CX}
-            cy={SHIELD_CY}
-            rx={SWEEP_WAKE_RX}
-            ry={SHIELD_RY}
-            fill="url(#sweepWake)"
-          />
-        </Svg>
-      </Animated.View>
-
-      <Animated.View style={[StyleSheet.absoluteFill, bladeStyle]}>
-        <Svg width={width} height={height} viewBox={VIEW_BOX}>
-          <Defs>
-            {SWEEP_BANDS.map((band) => (
-              <LinearGradient key={band.id} id={band.id} x1="0" y1="0" x2="1" y2="0">
-                <Stop offset="0" stopColor={tint} stopOpacity={0} />
-                <Stop offset="0.5" stopColor={tint} stopOpacity={band.opacity} />
-                <Stop offset="1" stopColor={tint} stopOpacity={0} />
-              </LinearGradient>
-            ))}
-            <LinearGradient id="sweepHot" x1="0" y1="0" x2="1" y2="0">
-              <Stop offset="0" stopColor="#FFFFFF" stopOpacity={0} />
-              <Stop offset="0.5" stopColor="#FFFFFF" stopOpacity={0.85} />
-              <Stop offset="1" stopColor="#FFFFFF" stopOpacity={0} />
-            </LinearGradient>
-          </Defs>
-
-          {SWEEP_BANDS.map((band) => (
-            <Ellipse
-              key={band.id}
-              cx={SHIELD_CX}
-              cy={SHIELD_CY}
-              rx={band.rx}
-              ry={SHIELD_RY}
-              fill={`url(#${band.id})`}
-            />
-          ))}
-          {/* A white filament down the middle of the blade. */}
-          <Ellipse
-            cx={SHIELD_CX}
-            cy={SHIELD_CY}
-            rx={1.6}
-            ry={SHIELD_RY}
-            fill="url(#sweepHot)"
-          />
-        </Svg>
-      </Animated.View>
+      {SWEEP_LAYERS.map((layer) => (
+        <SweepSheen
+          key={layer.id}
+          layer={layer}
+          progress={progress}
+          unit={unit}
+          tint={tint}
+          width={width}
+          height={height}
+        />
+      ))}
     </View>
+  );
+}
+
+/**
+ * One sheen of the wash.
+ *
+ * The squash is what keeps it inside the envelope with no clipping: a vertical
+ * chord of an ellipse at horizontal position `x` (in units of `SHIELD_RX`) has
+ * half-height `SHIELD_RY * sqrt(1 - x²)`, so scaling by exactly that traces
+ * the inside of the shield edge to edge while `translateX` carries it across.
+ */
+function SweepSheen({
+  layer,
+  progress,
+  unit,
+  tint,
+  width,
+  height,
+}: {
+  layer: (typeof SWEEP_LAYERS)[number];
+  progress: SharedValue<number>;
+  unit: number;
+  tint: string;
+  width: number;
+  height: number;
+}) {
+  const style = useAnimatedStyle(() => {
+    // Trailing layers start later and so sit behind the ones in front.
+    const t = Math.max(0, (progress.value - layer.lag) / (1 - layer.lag));
+    const x = t * 2 - 1;
+    const chord = Math.sqrt(Math.max(0, 1 - x * x));
+
+    return {
+      opacity: interpolate(progress.value, [0, 0.14, 0.72, 1], [0, 1, 0.85, 0], Extrapolation.CLAMP),
+      transform: [{ translateX: x * SHIELD_RX * unit }, { scaleY: chord }],
+    };
+  });
+
+  return (
+    <Animated.View style={[StyleSheet.absoluteFill, style]}>
+      <Svg width={width} height={height} viewBox={VIEW_BOX}>
+        <Defs>
+          {/* Five stops rather than three: the extra pair round the shoulders
+              off, so the band has no visible edge anywhere. */}
+          <LinearGradient id={layer.id} x1="0" y1="0" x2="1" y2="0">
+            <Stop offset="0" stopColor={tint} stopOpacity={0} />
+            <Stop offset="0.28" stopColor={tint} stopOpacity={layer.opacity * 0.22} />
+            <Stop offset="0.5" stopColor={tint} stopOpacity={layer.opacity} />
+            <Stop offset="0.72" stopColor={tint} stopOpacity={layer.opacity * 0.22} />
+            <Stop offset="1" stopColor={tint} stopOpacity={0} />
+          </LinearGradient>
+        </Defs>
+        <Ellipse
+          cx={SHIELD_CX}
+          cy={SHIELD_CY}
+          rx={layer.rx}
+          ry={SHIELD_RY}
+          fill={`url(#${layer.id})`}
+        />
+      </Svg>
+    </Animated.View>
   );
 }
 

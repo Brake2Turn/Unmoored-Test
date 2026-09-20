@@ -11,7 +11,8 @@
 import { readFileSync } from 'node:fs';
 
 import {
-  DETAIN_UNITS,
+  HOSTILE_JUMP_UNITS,
+  JUMP_UNITS,
   SHIELD_REGEN_PER_SECOND,
   SHIELD_SECONDS_PER_LEVEL,
   damagedShield,
@@ -20,8 +21,8 @@ import {
   SUBSYSTEMS,
   SUBSYSTEM_CAPACITY,
   TOTAL_CAPACITY,
-  detainSeconds,
-  escapeRate,
+  chargeRate,
+  chargeSeconds,
   regenShield,
   canAdd,
   canRemove,
@@ -180,20 +181,20 @@ for (const reactor of declared) {
 }
 
 // ---------------------------------------------------------------------------
-// Breaking away from a hostile star. The curve has to reward engine power
-// without making it cheap, and stop dead at no power.
+// Charging a system. The curve has to reward power without making it cheap,
+// and stop dead at no power.
 // ---------------------------------------------------------------------------
-check('no engines, no escape', escapeRate(0) === 0);
-check('no engines pauses rather than ends the hold', detainSeconds(0) === Infinity);
-check('one bar clears the hold in the full time', Math.round(detainSeconds(1)) === DETAIN_UNITS);
+check('no power, no rate', chargeRate(0) === 0);
+check('no power stalls rather than finishes', chargeSeconds(0, JUMP_UNITS) === Infinity);
+check('one bar does a unit a second', Math.abs(chargeRate(1) - 1) < 1e-9);
 
-const holdTimes = [1, 2, 3, 4].map((bars) => detainSeconds(bars));
+const holdTimes = [1, 2, 3, 4].map((bars) => chargeSeconds(bars, HOSTILE_JUMP_UNITS));
 for (let i = 1; i < holdTimes.length; i++) {
   check(`${i + 1} bars is faster than ${i}`, holdTimes[i] < holdTimes[i - 1]);
 }
 
 // Diminishing returns: each extra bar must buy less than the one before it,
-// or the fourth would trivialise the hold.
+// or the fourth would trivialise every charge.
 for (let i = 2; i < holdTimes.length; i++) {
   const thisGain = holdTimes[i - 1] - holdTimes[i];
   const lastGain = holdTimes[i - 2] - holdTimes[i - 1];
@@ -201,11 +202,19 @@ for (let i = 2; i < holdTimes.length; i++) {
 }
 
 // Full engines must still cost real time, or there is no decision to make.
-check('full engines still take over half the hold', holdTimes[3] > DETAIN_UNITS * 0.5);
-check('full engines are faster than a third off', holdTimes[3] < DETAIN_UNITS * 0.8);
+check('full engines still take over half the hold', holdTimes[3] > HOSTILE_JUMP_UNITS * 0.5);
+check('full engines are faster than a third off', holdTimes[3] < HOSTILE_JUMP_UNITS * 0.8);
+
+// A hostile star has to be worth dreading next to an ordinary one.
+check('a hostile star holds far longer', HOSTILE_JUMP_UNITS >= JUMP_UNITS * 2);
+
+// An ordinary hop should not feel like a wait at any sensible power.
+const ordinary = [1, 2, 3, 4].map((bars) => chargeSeconds(bars, JUMP_UNITS));
+check('an ordinary jump is under 15s even on one bar', ordinary[0] <= 15);
+check('an ordinary jump still costs something on four', ordinary[3] >= 5);
 
 // Negative or nonsense power is no power.
-check('nonsense engine power gives no rate', escapeRate(-3) === 0 && escapeRate(NaN) === 0);
+check('nonsense power gives no rate', chargeRate(-3) === 0 && chargeRate(NaN) === 0);
 
 // ---------------------------------------------------------------------------
 // Shields charge toward the level they are powered for, and never past it.
@@ -275,7 +284,8 @@ check('junk charge has no level', shieldLevel(NaN) === 0 && shieldProgress(NaN) 
 check('junk charge starts from nothing', regenShield(NaN, 2, 1) > 0);
 check('negative time does not drain a shield', regenShield(1, 3, -5) === 1);
 
-console.log(`hold at 1-4 bars  ${holdTimes.map((t) => t.toFixed(1)).join('s, ')}s`);
+console.log(`hostile hold      ${holdTimes.map((t) => t.toFixed(1)).join('s, ')}s`);
+console.log(`ordinary jump     ${ordinary.map((t) => t.toFixed(1)).join('s, ')}s`);
 console.log(`shield per bar    ${secondsPerBar.toFixed(1)}s`);
 console.log(`sequences checked  ${RUNS}`);
 console.log(`ships in the table ${shipCount} (reactors ${declared.join(', ')} of ${TOTAL_CAPACITY})`);
