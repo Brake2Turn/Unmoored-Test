@@ -141,29 +141,35 @@ eye. Squares past the ceiling are drawn as bare outlines; the one currently
 charging fills across, so the five-second wait is visible instead of a number
 that jumps.
 
-**A break is felt as well as counted.** `ShieldBreak` plays a shimmer round the
-rim when a layer goes and sends the shell out in wedges when the last one does.
-Which plays is decided by the level *before* the hit against the level after,
-and it fires on a change in `run.shieldHits` rather than on the level dropping
-— pulling the power lowers the level too, and that must stay silent. Both
-effects unmount when they finish, and neither is load-bearing: if they never
-play, the bar and the bubble still tell the truth.
+**A break is felt as well as counted.** `ShieldBreak` runs a blade of light
+across the whole face when a layer goes, and tears the field apart when the
+last one does. Which plays is decided by the level *before* the hit against the
+level after, and it fires on a change in `run.shieldHits` rather than on the
+level dropping — pulling the power lowers the level too, and that must stay
+silent. Each effect is keyed on the hit that caused it, so a second hit
+restarts it cleanly. Neither is load-bearing: if they never play, the bar and
+the bubble still tell the truth.
 
-Two things there:
+The one piece of real maths is **the sweep needs no clipping**. A vertical
+chord of an ellipse at horizontal position `x` (in units of `SHIELD_RX`) has
+half-height `SHIELD_RY * sqrt(1 - x²)`, so scaling the blade by exactly that
+factor traces the inside of the envelope precisely, edge to edge, while a plain
+`translateX` carries it across. Both come off one progress value, and both are
+plain view transforms — as is everything in these effects. **Animated SVG
+attributes are avoided on purpose:** view transforms behave identically on both
+platforms, and since motion cannot be checked here at all (below), the parts
+that cannot be verified are kept to the ones least able to surprise.
 
-- **Rotate a circle, then squash it.** The shimmer travels the rim by rotating,
-  but rotating an *ellipse* swings its long axis round and the highlight leaves
-  the rim. So the comet is drawn on a circle of radius `SHIELD_RX`, rotated,
-  and the parent view scales it by `SHIELD_RY / SHIELD_RX` — which traces the
-  ellipse exactly. Both are plain view transforms, which behave the same
-  everywhere; animated SVG attributes were avoided on purpose.
-- **The shatter is one animated view, not ten.** Scaling the whole group about
-  the shield's centre carries every wedge outward along its own radius, which
-  is what a shell coming apart does anyway.
+The failure is three layers on one clock: a white-out that is gone almost
+before it registers, two shock fronts at different speeds, and three dozen
+slivers thrown out of the whole face. The debris implodes for four hundredths
+of a second before it flies — that snap is what makes it read as violent rather
+than as an expansion. Scaling the group about the centre throws each sliver out
+along its own radius, so the whole spray costs one animated view.
 
-Both flashes start at full brightness and fade, rather than easing in. A hit
-should land; it also means the effect is visible where frames are scarce
-instead of being stuck at the transparent end of a fade-in.
+Every effect's first frame is already visible — full brightness, fading from
+there, rather than easing in. A hit should land, and it also means something
+shows even where frames are scarce.
 
 Both clocks are advanced by `tickRun`, and **only the helm ticks** — it is the
 only screen that sits still. It writes back when a clock finishes, every two
@@ -293,11 +299,20 @@ These cost real debugging time. Do not rediscover them.
   and only one bar moves — React has not re-rendered in between. A test that
   needs two presses has to space them out, or it will quietly assert the wrong
   state. This hid the paused-timer case on the first run.
-- **A pulsing flame cannot be checked from a screenshot here.** The thruster
-  animates with `withRepeat`, which needs `requestAnimationFrame`; headless
-  throttles it, so a capture shows the flame at rest. That is the resting
-  state, not a stalled one — layout and size grading are checkable, the pulse
-  is not.
+- **Reanimated animations do not advance here at all — and waiting does not
+  help.** Measured rather than assumed: `requestAnimationFrame` *does* fire in
+  headless, about four times a second, yet a `withTiming` stays pinned at its
+  starting value however long the capture runs. A screenshot therefore shows
+  frame zero of any animation, never a middle. Give every effect a first frame
+  that is already worth looking at, and never conclude anything about motion
+  from a capture.
+- **To actually see an animation, render its maths statically.** The frames in
+  this session's shield work were checked by generating a scratch HTML page
+  that draws the same geometry at a handful of progress values with plain CSS
+  transforms — no Reanimated — and screenshotting that. It verifies the part
+  that was designed (the geometry) without depending on the part that cannot
+  run here. Keep the page beside the component's constants so the two can be
+  compared.
 - **Tracked capitals are much wider than they look.** The wordmark's advance
   ratio is ~0.83 for the web fallback, not the ~0.62 a mixed-case guess suggests;
   guessing clipped UNMOORED to "NMOORE". Measure in a browser before sizing

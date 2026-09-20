@@ -2,13 +2,15 @@ import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
+  Extrapolation,
   cancelAnimation,
+  interpolate,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
-import Svg, { Defs, Ellipse, Path, RadialGradient, Stop } from 'react-native-svg';
+import Svg, { Defs, Ellipse, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg';
 
 import { SHIP_BOX_H, SHIP_BOX_W, ShipArt, enginesFor, type Engine } from '@/components/ships/ShipArt';
 import { SUBSYSTEM_STYLE } from '@/lib/subsystems';
@@ -157,38 +159,57 @@ const FLICKER_SCALE = (level: number) => 1.1 + 0.025 * level;
 const FLICKER_MS = 420;
 
 /**
- * A shimmer runs right round the rim when a layer breaks.
+ * Geometry for the two things a shield does when it is hit.
  *
- * Drawn as a comet — a bright head with a fading tail — on a **circle** of
- * radius `SHIELD_RX`, not on the ellipse. Rotating an ellipse would swing its
- * long axis around and the highlight would leave the rim; rotating a circle
- * and squashing the result by `SHIELD_RY / SHIELD_RX` traces the ellipse
- * exactly. That is also why this uses plain view transforms: a rotate and a
- * scale, which behave the same on every platform, rather than animated SVG
- * attributes.
+ * Both are animated with **plain view transforms only** — translate, scale,
+ * rotate and opacity — never animated SVG attributes. That is a deliberate
+ * limit: view transforms behave identically on both platforms, and motion
+ * cannot be checked from a headless capture, so the parts that cannot be
+ * verified here are kept to the ones least able to surprise.
  */
-const SHIMMER_SQUASH = SHIELD_RY / SHIELD_RX;
-const SHIMMER_TAIL = [
-  { from: 0, to: 26, opacity: 0.95, width: 3.2 },
-  { from: 26, to: 58, opacity: 0.5, width: 2.4 },
-  { from: 58, to: 94, opacity: 0.26, width: 1.8 },
-  { from: 94, to: 134, opacity: 0.1, width: 1.2 },
-].map((seg) => ({ ...seg, d: circleArc(SHIELD_RX, seg.from, seg.to) }));
 
 /**
- * The shell breaks into wedges when the last layer goes.
+ * The sweep: a vertical blade of light that crosses the whole face of the
+ * shield, not just its edge.
  *
- * Straight-edged pieces with gaps between them, sitting in the same rim band
- * as the plating. The burst is one scale-and-fade of the whole group: scaling
- * about the centre carries every shard outward along its own radius, which is
- * what a shell coming apart does, for the cost of a single animated view.
+ * The trick that makes it stay inside the envelope without any clipping is
+ * that the blade is squashed as it travels. A vertical chord of an ellipse at
+ * horizontal position `x` (in units of `SHIELD_RX`) has half-height
+ * `SHIELD_RY * sqrt(1 - x²)` — so scaling the blade by exactly that factor
+ * traces the inside of the ellipse precisely, edge to edge, while a plain
+ * `translateX` carries it across. Both come off one progress value.
  */
-const SHARD_COUNT = 10;
-const SHARD_INNER = 0.84;
-const SHARD_OUTER = 1.03;
-const SHARD_GAP_DEG = 9;
-const SHARDS = (() => {
-  const step = 360 / SHARD_COUNT;
+const SWEEP_BANDS = [
+  { rx: 42, opacity: 0.24, id: 'sweepGlow' },
+  { rx: 11, opacity: 0.6, id: 'sweepCore' },
+  { rx: 3.4, opacity: 0.95, id: 'sweepEdge' },
+];
+
+/** A broad, dim wake dragged a little behind the blade. */
+const SWEEP_WAKE_RX = 62;
+const SWEEP_WAKE_LAG = 0.1;
+
+/**
+ * The debris: fine slivers scattered across the whole field, not wedges cut
+ * from the rim.
+ *
+ * Positions come from a fixed seed so the scatter is irregular but identical
+ * every time, and computed once. They sit at radii from a third of the way out
+ * to just past the rim, so the field comes apart everywhere at once rather
+ * than peeling off the edge. Scaling the group about the centre throws each
+ * sliver out along its own radius, and the ones that start furthest out travel
+ * furthest — which is what gives the spray its shape for the cost of a single
+ * animated view.
+ */
+const DEBRIS = (() => {
+  // A tiny deterministic generator: the scatter should look random but never
+  // change between runs, and never cost anything at render time.
+  let seed = 20260920;
+  const rnd = () => {
+    seed = (seed * 1664525 + 1013904223) % 4294967296;
+    return seed / 4294967296;
+  };
+
   const point = (t: number, deg: number) => {
     const a = (deg * Math.PI) / 180;
     return `${round(SHIELD_CX + SHIELD_RX * t * Math.cos(a))} ${round(
@@ -196,32 +217,29 @@ const SHARDS = (() => {
     )}`;
   };
 
-  return Array.from({ length: SHARD_COUNT }, (_, i) => {
-    const from = i * step + SHARD_GAP_DEG / 2;
-    const to = (i + 1) * step - SHARD_GAP_DEG / 2;
-    return [
-      `M ${point(SHARD_INNER, from)}`,
-      `L ${point(SHARD_OUTER, from)}`,
-      `L ${point(SHARD_OUTER, to)}`,
-      `L ${point(SHARD_INNER, to)}`,
-      'Z',
-    ].join(' ');
+  return Array.from({ length: 34 }, () => {
+    const angle = rnd() * 360;
+    const at = 0.32 + rnd() * 0.72;
+    const length = 0.05 + rnd() * 0.14;
+    const spread = 0.8 + rnd() * 2.4;
+    const half = spread / 2;
+
+    return {
+      opacity: 0.45 + rnd() * 0.55,
+      d: [
+        `M ${point(at, angle - half)}`,
+        `L ${point(at + length, angle - half * 0.45)}`,
+        `L ${point(at + length, angle + half * 0.45)}`,
+        `L ${point(at, angle + half)}`,
+        'Z',
+      ].join(' '),
+    };
   });
 })();
 
-/** How long each effect runs before it is taken off the screen entirely. */
-const SHIMMER_MS = 620;
-const SHATTER_MS = 560;
-
-/** An arc of a circle centred on the shield, in degrees. */
-function circleArc(radius: number, fromDeg: number, toDeg: number): string {
-  const at = (deg: number) => {
-    const a = (deg * Math.PI) / 180;
-    return `${round(SHIELD_CX + radius * Math.cos(a))} ${round(SHIELD_CY + radius * Math.sin(a))}`;
-  };
-  const large = Math.abs(toDeg - fromDeg) > 180 ? 1 : 0;
-  return `M ${at(fromDeg)} A ${radius} ${radius} 0 ${large} 1 ${at(toDeg)}`;
-}
+/** Quick enough to feel like a hit rather than a transition. */
+const SHIMMER_MS = 680;
+const DISSIPATE_MS = 460;
 
 function round(n: number): number {
   return Math.round(n * 100) / 100;
@@ -356,14 +374,16 @@ function Shield({ level, width, height }: { level: number; width: number; height
 /**
  * What the shield does when it is hit.
  *
- * A layer breaking sends a shimmer round the rim; the last layer going sends
- * the shell out in pieces. Which one plays is decided by the level *before*
- * the hit against the level after, so pulling the power — which also lowers
- * the level — never sets anything off.
+ * A layer breaking sends a blade of light across the whole face; the last
+ * layer going makes the field tear itself apart. Which one plays is decided by
+ * the level *before* the hit against the level after, and it fires on a change
+ * in the run's hit count rather than on the level dropping — pulling the power
+ * lowers the level too, and that must stay silent.
  *
- * The effect unmounts once it has run. Nothing here is load-bearing: if these
- * animations never play, the shield still reads correctly from its own bar
- * and bubble.
+ * Each effect is mounted fresh, keyed on the hit that caused it, so a second
+ * hit restarts it cleanly rather than joining one already in flight. Nothing
+ * here is load-bearing: if none of it ever plays, the shield still reads
+ * correctly from its own bar and bubble.
  */
 function ShieldBreak({
   level,
@@ -378,7 +398,7 @@ function ShieldBreak({
   height: number;
   animate: boolean;
 }) {
-  const [effect, setEffect] = useState<{ id: number; kind: 'shimmer' | 'shatter' } | null>(null);
+  const [effect, setEffect] = useState<{ id: number; kind: 'shimmer' | 'dissipate' } | null>(null);
   const lastHits = useRef(hits);
   const lastLevel = useRef(level);
 
@@ -391,105 +411,269 @@ function ShieldBreak({
     if (!struck || !animate) return;
     // Nothing was standing, so nothing broke.
     if (before <= 0) return;
-    setEffect({ id: hits, kind: level <= 0 ? 'shatter' : 'shimmer' });
+    setEffect({ id: hits, kind: level <= 0 ? 'dissipate' : 'shimmer' });
   }, [animate, hits, level]);
 
-  // Take it off the screen once it has played, rather than leaving a spent
-  // overlay mounted over the ship.
+  // Off the screen once it has played, rather than leaving a spent overlay
+  // mounted over the ship.
   useEffect(() => {
     if (!effect) return;
     const timer = setTimeout(
       () => setEffect(null),
-      effect.kind === 'shimmer' ? SHIMMER_MS + 80 : SHATTER_MS + 80,
+      (effect.kind === 'shimmer' ? SHIMMER_MS : DISSIPATE_MS) + 90,
     );
     return () => clearTimeout(timer);
   }, [effect]);
 
-  const sweep = useSharedValue(0);
-  const burst = useSharedValue(0);
-  const glow = useSharedValue(0);
-
-  useEffect(() => {
-    if (!effect) return;
-
-    sweep.value = 0;
-    burst.value = 0;
-    glow.value = 0;
-
-    // Full brightness on the first frame, then fade. A hit should land, not
-    // ease in — and it means the effect is visible even where frames are
-    // scarce, instead of being stuck at the transparent end of a fade-in.
-    glow.value = 1;
-
-    if (effect.kind === 'shimmer') {
-      sweep.value = withTiming(1, { duration: SHIMMER_MS, easing: Easing.inOut(Easing.quad) });
-      glow.value = withTiming(0, { duration: SHIMMER_MS, easing: Easing.in(Easing.quad) });
-      return;
-    }
-
-    burst.value = withTiming(1, { duration: SHATTER_MS, easing: Easing.out(Easing.quad) });
-    glow.value = withTiming(0, { duration: SHATTER_MS, easing: Easing.in(Easing.quad) });
-  }, [burst, effect, glow, sweep]);
-
-  // The comet starts just behind the top of the rim and runs all the way
-  // round, a little past where it began.
-  const shimmerStyle = useAnimatedStyle(() => ({
-    opacity: glow.value,
-    transform: [{ rotate: `${-40 + sweep.value * 400}deg` }],
-  }));
-
-  const shatterStyle = useAnimatedStyle(() => ({
-    opacity: glow.value,
-    transform: [{ scale: 1 + burst.value * 0.34 }],
-  }));
-
   if (!effect) return null;
 
-  const tint = SUBSYSTEM_STYLE.shields.accent;
+  return effect.kind === 'shimmer' ? (
+    <ShieldSweep key={effect.id} width={width} height={height} />
+  ) : (
+    <ShieldDissipate key={effect.id} width={width} height={height} />
+  );
+}
 
-  if (effect.kind === 'shimmer') {
-    return (
-      // Squashing the rotating circle into the ellipse, as above.
-      <View
-        style={[StyleSheet.absoluteFill, { transform: [{ scaleY: SHIMMER_SQUASH }] }]}
-        pointerEvents="none"
-      >
-        <Animated.View style={[StyleSheet.absoluteFill, shimmerStyle]}>
-          <Svg width={width} height={height} viewBox={VIEW_BOX}>
-            {SHIMMER_TAIL.map((seg) => (
-              <Path
-                key={seg.from}
-                d={seg.d}
-                fill="none"
-                stroke={tint}
-                strokeOpacity={seg.opacity}
-                strokeWidth={seg.width}
-                strokeLinecap="round"
-              />
-            ))}
-          </Svg>
-        </Animated.View>
-      </View>
-    );
-  }
+/**
+ * A layer breaks: the field rings, and light runs across it.
+ *
+ * Two things at once — a rim that flares and springs outward on impact, and a
+ * blade of light travelling the full width of the envelope behind it.
+ */
+function ShieldSweep({ width, height }: { width: number; height: number }) {
+  const tint = SUBSYSTEM_STYLE.shields.accent;
+  const progress = useSharedValue(0);
+  const ring = useSharedValue(0);
+
+  // Ship units to pixels, so the blade can be moved in the units it was drawn
+  // in. Matches how the overlay letterboxes its viewBox.
+  const unit = Math.min(width / VIEW_W, height / VIEW_H);
+
+  useEffect(() => {
+    progress.value = withTiming(1, { duration: SHIMMER_MS, easing: Easing.inOut(Easing.cubic) });
+    ring.value = withTiming(1, { duration: 320, easing: Easing.out(Easing.quad) });
+  }, [progress, ring]);
+
+  /** The blade: across on `translateX`, squashed to the ellipse on `scaleY`. */
+  const bladeStyle = useAnimatedStyle(() => {
+    const t = progress.value;
+    // -1 at the left edge of the envelope, +1 at the right.
+    const x = t * 2 - 1;
+    const chord = Math.sqrt(Math.max(0, 1 - x * x));
+
+    return {
+      opacity: interpolate(t, [0, 0.1, 0.76, 1], [0, 1, 1, 0], Extrapolation.CLAMP),
+      transform: [{ translateX: x * SHIELD_RX * unit }, { scaleY: chord }],
+    };
+  });
+
+  /** The impact: the whole rim flares and springs out a little. */
+  const ringStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(ring.value, [0, 0.25, 1], [1, 0.7, 0], Extrapolation.CLAMP),
+    transform: [{ scale: interpolate(ring.value, [0, 1], [1, 1.12], Extrapolation.CLAMP) }],
+  }));
+
+  /** The wake: the same path, a fraction of a beat behind and much dimmer. */
+  const wakeStyle = useAnimatedStyle(() => {
+    const t = Math.max(0, progress.value - SWEEP_WAKE_LAG);
+    const x = t * 2 - 1;
+    const chord = Math.sqrt(Math.max(0, 1 - x * x));
+
+    return {
+      opacity: interpolate(progress.value, [0, 0.22, 0.8, 1], [0, 0.55, 0.45, 0], Extrapolation.CLAMP),
+      transform: [{ translateX: x * SHIELD_RX * unit }, { scaleY: chord }],
+    };
+  });
 
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, shatterStyle]} pointerEvents="none">
-      <Svg width={width} height={height} viewBox={VIEW_BOX}>
-        {SHARDS.map((d, i) => (
-          <Path
-            key={i}
-            d={d}
-            fill={tint}
-            fillOpacity={0.18}
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Animated.View style={[StyleSheet.absoluteFill, ringStyle]}>
+        <Svg width={width} height={height} viewBox={VIEW_BOX}>
+          <Ellipse
+            cx={SHIELD_CX}
+            cy={SHIELD_CY}
+            rx={SHIELD_RX}
+            ry={SHIELD_RY}
+            fill="none"
             stroke={tint}
             strokeOpacity={0.9}
-            strokeWidth={1.4}
-            strokeLinejoin="round"
+            strokeWidth={2.6}
           />
-        ))}
-      </Svg>
-    </Animated.View>
+        </Svg>
+      </Animated.View>
+
+      <Animated.View style={[StyleSheet.absoluteFill, wakeStyle]}>
+        <Svg width={width} height={height} viewBox={VIEW_BOX}>
+          <Defs>
+            <LinearGradient id="sweepWake" x1="0" y1="0" x2="1" y2="0">
+              <Stop offset="0" stopColor={tint} stopOpacity={0} />
+              <Stop offset="0.5" stopColor={tint} stopOpacity={0.16} />
+              <Stop offset="1" stopColor={tint} stopOpacity={0} />
+            </LinearGradient>
+          </Defs>
+          <Ellipse
+            cx={SHIELD_CX}
+            cy={SHIELD_CY}
+            rx={SWEEP_WAKE_RX}
+            ry={SHIELD_RY}
+            fill="url(#sweepWake)"
+          />
+        </Svg>
+      </Animated.View>
+
+      <Animated.View style={[StyleSheet.absoluteFill, bladeStyle]}>
+        <Svg width={width} height={height} viewBox={VIEW_BOX}>
+          <Defs>
+            {SWEEP_BANDS.map((band) => (
+              <LinearGradient key={band.id} id={band.id} x1="0" y1="0" x2="1" y2="0">
+                <Stop offset="0" stopColor={tint} stopOpacity={0} />
+                <Stop offset="0.5" stopColor={tint} stopOpacity={band.opacity} />
+                <Stop offset="1" stopColor={tint} stopOpacity={0} />
+              </LinearGradient>
+            ))}
+            <LinearGradient id="sweepHot" x1="0" y1="0" x2="1" y2="0">
+              <Stop offset="0" stopColor="#FFFFFF" stopOpacity={0} />
+              <Stop offset="0.5" stopColor="#FFFFFF" stopOpacity={0.85} />
+              <Stop offset="1" stopColor="#FFFFFF" stopOpacity={0} />
+            </LinearGradient>
+          </Defs>
+
+          {SWEEP_BANDS.map((band) => (
+            <Ellipse
+              key={band.id}
+              cx={SHIELD_CX}
+              cy={SHIELD_CY}
+              rx={band.rx}
+              ry={SHIELD_RY}
+              fill={`url(#${band.id})`}
+            />
+          ))}
+          {/* A white filament down the middle of the blade. */}
+          <Ellipse
+            cx={SHIELD_CX}
+            cy={SHIELD_CY}
+            rx={1.6}
+            ry={SHIELD_RY}
+            fill="url(#sweepHot)"
+          />
+        </Svg>
+      </Animated.View>
+    </View>
+  );
+}
+
+/**
+ * The last layer goes: the field fails all at once.
+ *
+ * Three layers on one clock, each on its own slice of it — a white-out that is
+ * gone almost before it registers, a shockwave that overruns the envelope, and
+ * three dozen slivers thrown out of the whole face. The debris implodes for four
+ * hundredths of a second before it flies, which is the snap that makes it read
+ * as violent rather than as an expansion.
+ */
+function ShieldDissipate({ width, height }: { width: number; height: number }) {
+  const tint = SUBSYSTEM_STYLE.shields.accent;
+  const progress = useSharedValue(0);
+
+  useEffect(() => {
+    progress.value = withTiming(1, { duration: DISSIPATE_MS, easing: Easing.out(Easing.quad) });
+  }, [progress]);
+
+  const flashStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0, 0.1, 0.3], [1, 0.75, 0], Extrapolation.CLAMP),
+    transform: [
+      { scale: interpolate(progress.value, [0, 0.3], [0.97, 1.2], Extrapolation.CLAMP) },
+    ],
+  }));
+
+  const shockStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0, 0.08, 0.8], [0, 0.95, 0], Extrapolation.CLAMP),
+    transform: [{ scale: interpolate(progress.value, [0, 1], [0.98, 1.8], Extrapolation.CLAMP) }],
+  }));
+
+  /** A second front, out ahead of the first and gone sooner. */
+  const leadStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0, 0.05, 0.45], [0, 0.7, 0], Extrapolation.CLAMP),
+    transform: [{ scale: interpolate(progress.value, [0, 0.45], [1, 2.3], Extrapolation.CLAMP) }],
+  }));
+
+  const debrisStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0, 0.15, 1], [1, 0.95, 0], Extrapolation.CLAMP),
+    transform: [
+      // The dip is the wind-up: in, then hard out.
+      { scale: interpolate(progress.value, [0, 0.09, 1], [1, 0.93, 1.52], Extrapolation.CLAMP) },
+      { rotate: `${interpolate(progress.value, [0, 1], [0, 7], Extrapolation.CLAMP)}deg` },
+    ],
+  }));
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Animated.View style={[StyleSheet.absoluteFill, flashStyle]}>
+        <Svg width={width} height={height} viewBox={VIEW_BOX}>
+          <Defs>
+            <RadialGradient id="failFlash" cx="50%" cy="50%" r="50%">
+              <Stop offset="0" stopColor="#FFFFFF" stopOpacity={0.12} />
+              <Stop offset="0.66" stopColor={tint} stopOpacity={0.4} />
+              <Stop offset="1" stopColor="#FFFFFF" stopOpacity={0.95} />
+            </RadialGradient>
+          </Defs>
+          <Ellipse
+            cx={SHIELD_CX}
+            cy={SHIELD_CY}
+            rx={SHIELD_RX}
+            ry={SHIELD_RY}
+            fill="url(#failFlash)"
+          />
+        </Svg>
+      </Animated.View>
+
+      <Animated.View style={[StyleSheet.absoluteFill, leadStyle]}>
+        <Svg width={width} height={height} viewBox={VIEW_BOX}>
+          <Ellipse
+            cx={SHIELD_CX}
+            cy={SHIELD_CY}
+            rx={SHIELD_RX}
+            ry={SHIELD_RY}
+            fill="none"
+            stroke={tint}
+            strokeOpacity={0.55}
+            strokeWidth={1.4}
+          />
+        </Svg>
+      </Animated.View>
+
+      <Animated.View style={[StyleSheet.absoluteFill, shockStyle]}>
+        <Svg width={width} height={height} viewBox={VIEW_BOX}>
+          <Ellipse
+            cx={SHIELD_CX}
+            cy={SHIELD_CY}
+            rx={SHIELD_RX}
+            ry={SHIELD_RY}
+            fill="none"
+            stroke={tint}
+            strokeOpacity={0.85}
+            strokeWidth={3}
+          />
+        </Svg>
+      </Animated.View>
+
+      <Animated.View style={[StyleSheet.absoluteFill, debrisStyle]}>
+        <Svg width={width} height={height} viewBox={VIEW_BOX}>
+          {DEBRIS.map((piece, i) => (
+            <Path
+              key={i}
+              d={piece.d}
+              fill={tint}
+              fillOpacity={piece.opacity * 0.5}
+              stroke={tint}
+              strokeOpacity={piece.opacity}
+              strokeWidth={1}
+              strokeLinejoin="round"
+            />
+          ))}
+        </Svg>
+      </Animated.View>
+    </View>
   );
 }
 
