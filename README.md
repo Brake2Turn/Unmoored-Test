@@ -113,6 +113,7 @@ app/                     Screens (expo-router: one file = one route)
   settings.tsx           Settings sheet
 components/
   FuelBadge.tsx          Ⓕ badge and count, shared by the helm and the map
+  ships/EncounterGlyph.tsx  Shrike and merchant markers for the map
   ships/ShipArt.tsx      Vector art for each ship
   StarField.tsx          Looping parallax star layers
   Backdrop.tsx           Sky gradient, nebulae, planet
@@ -164,6 +165,27 @@ averages 4.9 choices per node. A range of 30 strands nodes on 1.4% of maps; 46
 inflates the average to 7.9 choices and makes the decision mushy.
 
 `allNodesReachable()` is exported so the property can be asserted in a test.
+
+### What is on each star
+
+Every star carries an encounter, rolled once with the map. There is exactly one
+enemy type — the **Shrike**, a sharp dart turned nose-down toward anything
+coming up the sector — and the boss star holds an **Elder Shrike**, the same
+ship drawn larger.
+
+The start is left empty (you begin docked, nothing has happened) and the boss
+star is spoken for, which leaves **18 stars that divide into three exact
+sixes**: six Shrikes, six merchants, six empty. The pool is shuffled, so threats
+land differently every run. Verified over 5,000 maps — the split is exact every
+time and the per-star enemy rate sits between 0.326 and 0.345 against an
+expected 0.333.
+
+Shape carries the kind and colour reinforces it: red darts fight, gold pods
+trade, plain dots are empty. Out-of-range stars still show what is on them,
+just dimmer — seeing what lies ahead is the point of showing the sector at all.
+Selecting a star names it in the footer.
+
+**None of them do anything yet.** They are markers.
 
 ### The boss star
 

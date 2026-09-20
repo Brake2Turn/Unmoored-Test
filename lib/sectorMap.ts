@@ -31,11 +31,27 @@ const EDGE_PADDING = 11;
 const TOP_MARGIN = 14;
 const BOTTOM_MARGIN = 10;
 
+/**
+ * What is waiting at a star. Exactly one enemy type exists — the Shrike — and
+ * the boss star holds a larger one of the same kind.
+ */
+export type Encounter = 'empty' | 'enemy' | 'merchant' | 'boss';
+
+/** Flavour names, shown when a star is selected. Nothing acts on these yet. */
+export const ENCOUNTER_NAMES: Record<Encounter, string> = {
+  empty: 'EMPTY',
+  enemy: 'SHRIKE',
+  merchant: 'MERCHANT',
+  boss: 'ELDER SHRIKE',
+};
+
 export type MapNode = {
   x: number;
   y: number;
   /** 0 is the starting band at the bottom; higher means further out. */
   band: number;
+  /** What is waiting here. Absent on maps saved before encounters existed. */
+  encounter?: Encounter;
 };
 
 export type SectorMap = {
@@ -138,7 +154,58 @@ export function generateMap(): SectorMap {
   const top = bandRanges[bandRanges.length - 1];
   const boss = top.start + Math.floor(Math.random() * (top.end - top.start));
 
-  return { nodes, start: 0, boss };
+  const map: SectorMap = { nodes, start: 0, boss };
+  assignEncounters(map);
+  return map;
+}
+
+/**
+ * Fills every star with what is waiting there.
+ *
+ * The start is left empty — you begin docked, nothing has happened yet — and
+ * the boss star takes the larger enemy. That leaves 18 of the 20 stars, which
+ * divides into three exact sixes: six Shrikes, six merchants, six empty.
+ * Shuffling the whole pool means a run's threats land differently every time.
+ */
+export function assignEncounters(map: SectorMap): void {
+  // Resolved rather than read straight off the map, so a map saved before the
+  // boss field existed still gets one.
+  const boss = bossIndex(map);
+
+  const free: number[] = [];
+  for (let i = 0; i < map.nodes.length; i++) {
+    if (i === map.start || i === boss) continue;
+    free.push(i);
+  }
+
+  shuffle(free);
+
+  const third = Math.floor(free.length / 3);
+  free.forEach((index, rank) => {
+    map.nodes[index].encounter =
+      rank < third ? 'enemy' : rank < third * 2 ? 'merchant' : 'empty';
+  });
+
+  map.nodes[map.start].encounter = 'empty';
+  if (map.nodes[boss]) map.nodes[boss].encounter = 'boss';
+}
+
+/** True once every star knows what is waiting on it. */
+export function hasEncounters(map: SectorMap): boolean {
+  return map.nodes.every((node) => typeof node.encounter === 'string');
+}
+
+/** What is at a star, defaulting to empty for maps that predate encounters. */
+export function encounterAt(map: SectorMap, index: number): Encounter {
+  return map.nodes[index]?.encounter ?? 'empty';
+}
+
+/** Fisher-Yates, in place. */
+function shuffle<T>(items: T[]): void {
+  for (let i = items.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [items[i], items[j]] = [items[j], items[i]];
+  }
 }
 
 /**

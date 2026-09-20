@@ -1,7 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { DEFAULT_SHIP_ID } from '@/lib/ships';
-import { FUEL_PER_RUN, generateMap, type SectorMap } from '@/lib/sectorMap';
+import {
+  FUEL_PER_RUN,
+  assignEncounters,
+  generateMap,
+  hasEncounters,
+  type SectorMap,
+} from '@/lib/sectorMap';
 
 const KEY = 'unmoored.currentRun';
 
@@ -98,10 +104,15 @@ export function hydrateRun(run: RunState): RunState {
     run.visited?.length &&
     typeof run.fuel === 'number' &&
     run.fuel <= FUEL_PER_RUN &&
-    typeof run.jumps === 'number';
+    typeof run.jumps === 'number' &&
+    hasEncounters(run.map);
   if (complete) return run;
 
   const map = run.map ?? generateMap();
+  // A map saved before encounters existed gets them rolled in place, so an
+  // in-progress run keeps its layout and its history.
+  if (!hasEncounters(map)) assignEncounters(map);
+
   const position = typeof run.position === 'number' ? run.position : map.start;
   // Older saves appended a duplicate on every backtrack; collapse them.
   const visited = run.visited?.length ? [...new Set(run.visited)] : [position];
