@@ -109,11 +109,19 @@ there are scaled from the space left over rather than sized by hand; fixed
 sizes dropped the Elder Shrike through the player's ship on a short phone.
 
 Two of the three subsystems are drawn on the ship itself
-(`components/ships/ShipSystems.tsx`): shields as a bubble that widens with each
-bar, piloting as an exhaust plume that lengthens with each bar. Both are
-invisible at zero and use their subsystem's colour from `SUBSYSTEM_STYLE`, so a
-cyan bubble is the shields row and a violet flame is the piloting row. Weapons
-has no mark yet — there is nothing to shoot.
+(`components/ships/ShipSystems.tsx`): shields as a bubble that holds one size
+and grows brighter with each bar, piloting as an exhaust plume that lengthens
+with each bar. Both are invisible at zero and use their subsystem's colour from
+`SUBSYSTEM_STYLE`, so a cyan bubble is the shields row and a violet flame is
+the piloting row. Weapons has no mark yet — there is nothing to shoot.
+
+The shield's fill is a radial gradient that is fully transparent inside
+`SHIELD_CLEAR` and piles up on the rim. That number is measured, not chosen:
+the furthest corner of any hull sits at about 0.80 of the bubble's radii, so
+0.82 means the colour only starts once the ship has ended, and more power
+brightens the edge instead of fogging the hull. Checked by sampling the
+rendered pixels — inside the clear zone they match the bare background exactly
+at every level, while the rim climbs with each bar.
 
 Two things there are worth keeping:
 

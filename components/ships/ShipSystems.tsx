@@ -8,7 +8,7 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
-import Svg, { Ellipse, Path } from 'react-native-svg';
+import Svg, { Defs, Ellipse, Path, RadialGradient, Stop } from 'react-native-svg';
 
 import { SHIP_BOX_H, SHIP_BOX_W, ShipArt, enginesFor, type Engine } from '@/components/ships/ShipArt';
 import { SUBSYSTEM_STYLE } from '@/lib/subsystems';
@@ -19,7 +19,7 @@ type Props = {
   /** The ship art's own size. The systems box around it is larger — see below. */
   width: number;
   height: number;
-  /** Bars in shields: 0 draws nothing, and each one widens the bubble. */
+  /** Bars in shields: 0 draws nothing, and each one makes the bubble stronger. */
   shields: number;
   /** Bars in piloting: 0 means cold engines, and each one lengthens the flame. */
   piloting: number;
@@ -56,12 +56,32 @@ const SHIELD_CX = 100;
 const SHIELD_CY = 130;
 
 /**
- * Bubble radii per bar. One bar already clears the widest ship (the Vesper's
- * sail spans 144 of the 200), so the smallest shield reads as a skin on the
- * hull rather than as nothing at all.
+ * The bubble is one size at every power level — a shield envelope is a fixed
+ * shape, and only how hard it is running changes. It stands well clear of the
+ * widest hull (the Vesper's sail spans 144 of the 200), so the rim never sits
+ * on top of the ship.
  */
-const SHIELD_RX = (level: number) => 64 + 10 * level;
-const SHIELD_RY = (level: number) => 108 + 10 * level;
+const SHIELD_RX = 96;
+const SHIELD_RY = 140;
+
+/**
+ * Strength per bar. Both ramps start high enough that one bar reads as a
+ * powered shield rather than a smudge, and end near solid at four.
+ */
+const SHIELD_FILL = (level: number) => 0.12 + 0.15 * level;
+const SHIELD_STROKE = (level: number) => 0.16 + 0.17 * level;
+
+/**
+ * Where the envelope starts to show, as a fraction of the way out from the
+ * centre. Everything inside it is fully transparent at every level.
+ *
+ * 0.82 is measured, not chosen: the furthest corner of any hull — the Lance's
+ * nose and wingtips, the Halo's ring — sits at about 0.80 of these radii, so
+ * the colour only begins once the ship has ended. That is what keeps the ship
+ * as readable at four bars as at one; more power brightens the rim instead of
+ * fogging the hull.
+ */
+const SHIELD_CLEAR = 0.82;
 
 /** Exhaust length per bar, in ship units. Four bars runs to 60 of the 260. */
 const FLAME_BASE = 16;
@@ -77,7 +97,8 @@ const FLICKER_MS = 420;
  * Both are read straight off the reactor allocation, and both use their
  * subsystem's colour from `SUBSYSTEM_STYLE` — a cyan bubble is the shields
  * row, a violet flame is the piloting row. Moving a bar in the panel is meant
- * to be visible on the ship without reading a number.
+ * to be visible on the ship without reading a number: the shield holds its
+ * shape and grows brighter, the exhaust grows longer.
  *
  * Only the helm uses this. The ship cards on the select screen show a bare
  * hull, because a ship you have not launched has no reactor running.
@@ -113,7 +134,17 @@ export function ShipSystems({
   );
 }
 
-/** The bubble, drawn over the hull so the ship shows through it. */
+/**
+ * The bubble, drawn over the hull.
+ *
+ * Fixed size, and the power level is carried entirely by how strongly it
+ * shows. The fill is a radial gradient that is clear through the middle and
+ * gathers at the rim, so more power makes a brighter edge rather than a
+ * cloudier ship — at four bars the hull is as legible as it is at one.
+ *
+ * The gradient runs in `objectBoundingBox` units (the default), so it takes
+ * the ellipse's own proportions and needs no separate x and y radii.
+ */
 function Shield({ level, width, height }: { level: number; width: number; height: number }) {
   if (level <= 0) return null;
 
@@ -121,30 +152,27 @@ function Shield({ level, width, height }: { level: number; width: number; height
 
   return (
     <Svg style={StyleSheet.absoluteFill} width={width} height={height} viewBox={VIEW_BOX}>
+      <Defs>
+        <RadialGradient id="shieldEnvelope" cx="50%" cy="50%" r="50%">
+          <Stop offset="0" stopColor={tint} stopOpacity={0} />
+          <Stop offset={String(SHIELD_CLEAR)} stopColor={tint} stopOpacity={0} />
+          <Stop offset="0.92" stopColor={tint} stopOpacity={0.34} />
+          <Stop offset="0.975" stopColor={tint} stopOpacity={0.8} />
+          <Stop offset="1" stopColor={tint} stopOpacity={1} />
+        </RadialGradient>
+      </Defs>
+
       <Ellipse
         cx={SHIELD_CX}
         cy={SHIELD_CY}
-        rx={SHIELD_RX(level)}
-        ry={SHIELD_RY(level)}
-        fill={tint}
-        fillOpacity={0.035 + 0.022 * level}
+        rx={SHIELD_RX}
+        ry={SHIELD_RY}
+        fill="url(#shieldEnvelope)"
+        fillOpacity={SHIELD_FILL(level)}
         stroke={tint}
-        strokeOpacity={0.26 + 0.15 * level}
-        strokeWidth={1.3 + 0.5 * level}
+        strokeOpacity={SHIELD_STROKE(level)}
+        strokeWidth={2}
       />
-      {/* A second, tighter arc once there is real charge in it. */}
-      {level >= 2 ? (
-        <Ellipse
-          cx={SHIELD_CX}
-          cy={SHIELD_CY}
-          rx={SHIELD_RX(level) - 7}
-          ry={SHIELD_RY(level) - 7}
-          fill="none"
-          stroke={tint}
-          strokeOpacity={0.06 * level}
-          strokeWidth={1}
-        />
-      ) : null}
     </Svg>
   );
 }
