@@ -17,6 +17,38 @@ const LOCKED_TINT = '#3E4763';
 export const HULL = '#141A2E';
 export const HULL_DEEP = '#0B0F1E';
 
+/** The box every ship is drawn in. Anything layered over a ship shares it. */
+export const SHIP_BOX_W = 200;
+export const SHIP_BOX_H = 260;
+
+/** Where a ship's exhaust leaves it, in the same 200×260 box as the art. */
+export type Engine = { x: number; y: number; width: number };
+
+/**
+ * The engine bar on each hull, transcribed from the art above.
+ *
+ * It lives here rather than with the thruster that draws the flame, because
+ * these numbers are read off the very paths in this file — move a ship's
+ * tail and the nozzle is right there to move with it. Every ship's engines
+ * share one `y`, which is what lets a thruster pulse from a single anchor.
+ */
+export const ENGINES: Record<string, Engine[]> = {
+  drifter: [{ x: 100, y: 232, width: 28 }],
+  lance: [{ x: 100, y: 210, width: 16 }],
+  bulwark: [
+    { x: 84, y: 216, width: 20 },
+    { x: 116, y: 216, width: 20 },
+  ],
+  halo: [{ x: 100, y: 220, width: 16 }],
+  mantis: [{ x: 100, y: 214, width: 20 }],
+  vesper: [{ x: 100, y: 228, width: 14 }],
+};
+
+/** Same fallback as the art: an unknown ship gets the Drifter's. */
+export function enginesFor(shipId: string): Engine[] {
+  return ENGINES[shipId] ?? ENGINES.drifter;
+}
+
 /**
  * Vector art for each ship, drawn in a shared 200×260 box so every silhouette
  * sits on the same baseline and swipes between cleanly.
@@ -31,7 +63,7 @@ export const ShipArt = React.memo(function ShipArt({
   const tint = locked ? LOCKED_TINT : accent;
   const Art = ART[shipId] ?? Drifter;
   return (
-    <Svg width={width} height={height} viewBox="0 0 200 260">
+    <Svg width={width} height={height} viewBox={`0 0 ${SHIP_BOX_W} ${SHIP_BOX_H}`}>
       <Defs>
         <LinearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
           <Stop offset="0" stopColor={tint} stopOpacity={locked ? 0.4 : 0.85} />

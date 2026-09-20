@@ -10,7 +10,7 @@ import { FuelBadge } from '@/components/FuelBadge';
 import { MenuButton } from '@/components/MenuButton';
 import { StarField } from '@/components/StarField';
 import { EncounterShip } from '@/components/ships/EncounterShip';
-import { ShipArt } from '@/components/ships/ShipArt';
+import { SYSTEMS_SPAN, ShipSystems } from '@/components/ships/ShipSystems';
 import { useHaptics, useSettings } from '@/lib/settings';
 import { fonts, layout, palette, tracking, useMenuWidth } from '@/lib/theme';
 import { loadRun, reactorOf, saveRun, shiftEnergy, type RunState } from '@/lib/runStore';
@@ -22,6 +22,14 @@ import type { Subsystem } from '@/lib/energy';
 /** The player's ship at full size, before the screen decides it has no room. */
 const SHIP_WIDTH = 132;
 const SHIP_HEIGHT = 172;
+
+/**
+ * What the ship actually occupies once its shield and exhaust are drawn.
+ *
+ * The budget below has to reserve the whole systems box, not just the hull,
+ * or a wide shield would run into whatever is waiting above.
+ */
+const SHIP_SLOT_HEIGHT = SHIP_HEIGHT * SYSTEMS_SPAN;
 
 /** Space between the stacked pieces of the helm. */
 const STACK_GAP = 16;
@@ -87,7 +95,7 @@ export default function RunScreen() {
     layout.buttonHeight +
     STACK_GAP * 4;
   const artBudget = height - chromeHeight;
-  const artScale = Math.max(0.55, Math.min(1, artBudget / (waiting.height + SHIP_HEIGHT)));
+  const artScale = Math.max(0.55, Math.min(1, artBudget / (waiting.height + SHIP_SLOT_HEIGHT)));
 
   const onJump = useCallback(() => {
     if (dry) return;
@@ -154,12 +162,17 @@ export default function RunScreen() {
           )}
         </View>
 
+        {/* The reactor allocation, drawn on the ship: a bubble for shields, a
+            longer exhaust for piloting. */}
         <FadeInView enabled={!settings.reduceMotion} duration={700}>
-          <ShipArt
+          <ShipSystems
             shipId={ship.id}
             accent={ship.accent}
             width={SHIP_WIDTH * artScale}
             height={SHIP_HEIGHT * artScale}
+            shields={run?.energy.shields ?? 0}
+            piloting={run?.energy.piloting ?? 0}
+            animate={!settings.reduceMotion}
           />
         </FadeInView>
 

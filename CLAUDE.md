@@ -108,6 +108,26 @@ the panel takes a fixed, known slice of the helm, the two pieces of ship art
 there are scaled from the space left over rather than sized by hand; fixed
 sizes dropped the Elder Shrike through the player's ship on a short phone.
 
+Two of the three subsystems are drawn on the ship itself
+(`components/ships/ShipSystems.tsx`): shields as a bubble that widens with each
+bar, piloting as an exhaust plume that lengthens with each bar. Both are
+invisible at zero and use their subsystem's colour from `SUBSYSTEM_STYLE`, so a
+cyan bubble is the shields row and a violet flame is the piloting row. Weapons
+has no mark yet — there is nothing to shoot.
+
+Two things there are worth keeping:
+
+- **The overlay boxes share the ship box's aspect ratio.** `ShipSystems` draws
+  the shield and the exhaust in `viewBox`es that are the art's 200×260 grown
+  about its centre by `SYSTEMS_SPAN`. Because the ratio is unchanged, both
+  overlays letterbox exactly as `ShipArt` does, and a nozzle written as y=232
+  lands on the engine bar with no arithmetic. Change the span and the ratio
+  must hold, or every overlay slides out of register.
+- **Nozzle positions are a table in `ShipArt.tsx`** (`ENGINES`), beside the
+  paths they were read off, so moving a ship's tail moves the flame with it.
+  Every hull's engines share one `y`, which is what lets the flame pulse from
+  a single `transformOrigin` — including the Bulwark's pair.
+
 Hull and speed used to sit beside cargo on the ship cards. They are gone —
 cargo is the one stat that still varies without being energy.
 
@@ -148,6 +168,11 @@ These cost real debugging time. Do not rediscover them.
   animation finishing.**
 - **`adjustsFontSizeToFit` is native-only.** On web it ellipsises instead, so web
   relies on `titleSizeFor()` sizing correctly.
+- **A pulsing flame cannot be checked from a screenshot here.** The thruster
+  animates with `withRepeat`, which needs `requestAnimationFrame`; headless
+  throttles it, so a capture shows the flame at rest. That is the resting
+  state, not a stalled one — layout and size grading are checkable, the pulse
+  is not.
 - **Tracked capitals are much wider than they look.** The wordmark's advance
   ratio is ~0.83 for the web fallback, not the ~0.62 a mixed-case guess suggests;
   guessing clipped UNMOORED to "NMOORE". Measure in a browser before sizing

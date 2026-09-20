@@ -115,6 +115,16 @@ function SubsystemRow({
         {style.label}
       </Text>
 
+      {/* Take on the left, add on the right, with the bar between them: the
+          two controls were side by side, which invited the wrong one. */}
+      <StepButton
+        symbol="−"
+        enabled={canTakeAway}
+        accent={style.accent}
+        label={`Take one bar of energy out of ${style.label.toLowerCase()}, now ${level} of ${SUBSYSTEM_CAPACITY}`}
+        onPress={() => onShift(subsystem, -1)}
+      />
+
       <View style={styles.pips}>
         {Array.from({ length: SUBSYSTEM_CAPACITY }, (_, i) => (
           <View
@@ -124,13 +134,6 @@ function SubsystemRow({
         ))}
       </View>
 
-      <StepButton
-        symbol="−"
-        enabled={canTakeAway}
-        accent={style.accent}
-        label={`Take one bar of energy out of ${style.label.toLowerCase()}, now ${level} of ${SUBSYSTEM_CAPACITY}`}
-        onPress={() => onShift(subsystem, -1)}
-      />
       <StepButton
         symbol="+"
         enabled={canAddMore}
@@ -256,7 +259,7 @@ const styles = StyleSheet.create({
   },
 
   rows: { flex: 1, justifyContent: 'flex-end' },
-  row: { flexDirection: 'row', alignItems: 'center', height: ROW_HEIGHT, gap: 7 },
+  row: { flexDirection: 'row', alignItems: 'center', height: ROW_HEIGHT, gap: 8 },
   rowLabel: {
     fontFamily: fonts.body,
     fontSize: 9,
