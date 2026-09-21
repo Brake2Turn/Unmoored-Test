@@ -329,7 +329,12 @@ and deliberately carries none of it — and it has two states
 (`components/ReactorPanel.tsx`).
 
 **Collapsed** it is a thumb-sized tab, the left of three across the bottom of
-the helm. Each subsystem row is
+the helm. Every tab opens with its own mark and its name on one line
+(`components/TabHeader.tsx`, shared by all three, along with the `CARD` they
+are drawn on). The reactor's mark is a power station, *not* the bolt: the bolt
+means unclaimed power and sits inside the same tab beside a number, so the
+section and one reading within it would otherwise be the same glyph. Below the
+header each subsystem row is
 two things stacked — its icon and pips for what is *in* it, and a hairline
 track for how far what it is building has got — then a bolt and the power
 nothing has claimed. The charge is the half that changes second to second, so
@@ -363,17 +368,28 @@ filled slot is already white, so the thing to change when cargo or crew arrives
 is what the helm passes, not what the panels do. `verify:energy` holds that
 every ship's hold has room in it and that none overflows the panel.
 
-**No words.** Not SHIELDS, WEAPONS, ENGINES, LEVEL, CHARGE or DRIVE, in either
-state. The icons carry it, and they are shared between the two states
-(`components/SubsystemGlyph.tsx`) precisely so that what the player learns from
-the controls reads the tab afterwards. Free power is a bolt and a number, not
-`0 FREE`.
+**No words inside the reactor.** Not SHIELDS, WEAPONS, ENGINES, LEVEL, CHARGE
+or DRIVE, in either state. The icons carry it, and they are shared between the
+two states (`components/SubsystemGlyph.tsx`) precisely so that what the player
+learns from the controls reads the tab afterwards. Free power is a bolt and a
+number, not `0 FREE`.
+
+**The three sections do carry their names**, on the tab header line: REACTOR,
+CARGO, CREW. That is not the same rule bending. A subsystem is met in the
+controls, where there is room to learn what its mark means; a tab is the first
+thing tapped and nothing teaches it beforehand. Every mark in the set is an
+outline, including the bolt — it was the one filled glyph, which gave a
+footnote about spare power more weight than the rows above it.
 
 The hull is one white line above the controls (`components/StatusBar.tsx`),
 the full width of the chrome. **Fuel rides on the jump button** — `MenuButton`
-takes a `trailingLabel` and pins it inside the right edge in the button's own
-text colour — because the only question fuel answers is whether to jump, and a
-strip of its own was a row spent on a number consulted at one moment. It is
+takes a `gauge` of `{ label, value }` and pins it inside the right edge in the
+button's own ink, boxed off from the label by its own outline — because the
+only question fuel answers is whether to jump, and a strip of its own was a row
+spent on a number consulted at one moment. The name and the reading are two
+fields rather than one string so the word can be set small and tracked against
+a full-size figure; it read `F 10` first, which fitted the corner but had to be
+learned before it said anything. It is
 left off when the label already says the tank is empty. The jump is a compact
 control under the tabs rather than a menu-sized panel; `MenuButton` takes a
 `height` for it and drops its label a size to match.
@@ -470,6 +486,18 @@ These cost real debugging time. Do not rediscover them.
   `components/FadeInView.tsx`, which fades but also switches to plain opacity 1
   once the fade should have ended. **Content must never be hostage to an
   animation finishing.**
+- **`ScrollView`'s snapping props are native-only.** `snapToInterval`,
+  `decelerationRate` and `disableIntervalMomentum` do nothing on
+  react-native-web, which wires CSS scroll snapping up for `pagingEnabled`
+  alone. The ship carousel therefore free-scrolled on web and rested wherever
+  momentum ran out. `scroll-snap-type: x mandatory` on the strip and
+  `scroll-snap-align: center` on each card give the browser the same job; both
+  are applied on web only and cast, since `ViewStyle` has no names for them.
+  **`onMomentumScrollEnd` is a separate hole in the same component** —
+  react-native-web's `ScrollView` only ever calls `onScroll`, so anything
+  hung off momentum ending never runs there at all. Derive it from the scroll
+  offset instead. The two look like one bug and are not: one is where the
+  strip stops, the other is what gets read out of where it stopped.
 - **`adjustsFontSizeToFit` is native-only.** On web it ellipsises instead, so web
   relies on `titleSizeFor()` sizing correctly.
 - **`Alert.alert` is an empty function on react-native-web.** Not a stub that
