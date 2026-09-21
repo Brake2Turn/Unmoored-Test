@@ -11,6 +11,34 @@ The author develops on **Windows and has no Mac**, which is why the project is E
 rather than native Swift — Expo builds the iOS binary on hosted machines
 (`eas build`), so nothing in the workflow requires Apple hardware.
 
+## Where the work goes
+
+**Develop and push on `claude/claude-md-unmoored-info-aliq46`.** Not on the
+default branch, and not on a new branch per feature — the author follows this
+one.
+
+**The live build is one artifact, updated in place:**
+<https://claude.ai/artifact/DUdeLS4PCiguJTRHJw2YuZ>. That link is what the
+author opens to play, so it has to keep working — publishing a *new* artifact
+strands them on an old build. Read the artifact first, then republish to the
+same URL.
+
+It is not `dist/` verbatim. The page is a small hand-written wrapper around
+Expo's output, and the two things it does are both load-bearing:
+
+- **The bundle is published as `bundle/entry.js`**, because published paths are
+  relative and Expo's `index.html` points at an absolute `/_expo/...` that does
+  not exist on the artifact host.
+- **The page rewrites `location.pathname` to `/` before injecting the script.**
+  `expo-router` picks its route from the path, and the artifact is not served at
+  a site root, so without the rewrite it boots on a path matching no route and
+  renders "Unmatched Route" — but the rewrite also moves what relative paths
+  resolve against, which is why the bundle URL is resolved and a `<base>` pinned
+  *first*. Get that order wrong and the page sits on LOADING forever, silently.
+
+Rebuild, swap in the new `bundle/entry.js`, republish. The page itself rarely
+changes.
+
 ## Commands
 
 ```bash
@@ -43,6 +71,24 @@ cd dist && python3 -m http.server 8099 --bind 127.0.0.1
   --virtual-time-budget=9000 --window-size=390,844 \
   --screenshot=out.png "http://127.0.0.1:8099/"
 ```
+
+**To land on a screen other than the title, seed a save and drive the UI.**
+Write a scratch page into `dist/` that sets the run in `localStorage` before the
+bundle loads, then clicks its way in by `aria-label`. Two details make it work:
+
+```js
+// Read the query string BEFORE the rewrite, which wipes it.
+var Q = new URLSearchParams(location.search);
+history.replaceState(null, '', '/');          // or expo-router 404s the page
+localStorage.setItem('unmoored.currentRun', JSON.stringify({ id: 'probe', shipId: 'bulwark' }));
+```
+
+`hydrate()` fills in everything else, so an `id` and a `shipId` are a whole
+run — no need to hand-roll a map. Then click `Continue`, space the later steps
+out on `setTimeout` (see the two-taps trap below), and read the result back
+either by collecting `aria-label`s into `document.title` with `--dump-dom`, or
+by screenshotting. Every control on the helm carries a label that states its
+numbers, so the DOM dump is usually enough and costs no image.
 
 **Headless throttles requestAnimationFrame to about 1fps.** Reanimated
 animations therefore do not advance, and a screenshot can show a pre-animation
@@ -104,8 +150,10 @@ somewhere it is not somewhere else. `npm run verify:energy` fails if a ship's
 reactor ever creeps up to `TOTAL_CAPACITY`.
 
 **Two levels are read so far, both on the engines and the shields.**
-`jumpBlocker(run)` (`lib/runStore.ts`) returns `'fuel'`, `'held'`, `'engines'`
-or null, and both the helm and the sector map ask it rather than each deciding
+`jumpBlocker(run)` (`lib/runStore.ts`) returns `'fuel'`, `'engines'`,
+`'charging'` or null — in that order, because an empty tank is the harder stop
+and cold engines are not building a charge at all — and both the helm and the
+sector map ask it rather than each deciding
 for itself, so the button that offers a jump and the button that performs it
 can never disagree. `applyJump` refuses a blocked jump and hands the run
 straight back, the same way `shiftEnergy` refuses an illegal move. Weapons
