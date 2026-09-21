@@ -46,7 +46,33 @@ Expo's output, and the two things it does are both load-bearing:
   *first*. Get that order wrong and the page sits on LOADING forever, silently.
 
 Rebuild, swap in the new `bundle/entry.js`, republish. The page itself rarely
-changes.
+changes — and note that the artifact service wraps whatever is published in its
+own `<html><head>…<body>`, so publish the page's *contents* (starting at
+`<title>`) rather than a full document, or the result is one page nested inside
+another.
+
+**The artifact is shared between sessions, and the last publish wins.** More
+than one chat can be open on this project at once, and they all push to that one
+URL. A session that publishes a build made from a stale checkout silently
+replaces the author's working game with a partial one — this happened: a session
+working from an old `main` published a pre-reactor build over the top, and the
+reactor, hull, shields, cargo and crew all disappeared from the link while still
+being perfectly present in the repo.
+
+So, before publishing, every time:
+
+1. `git fetch origin main` and confirm the checkout is not behind it. If it is,
+   the build would be a regression — bring `main` in first.
+2. `npm run build:web`, and publish *that* bundle.
+3. **Verify what is actually being served afterwards.** The publish call
+   reporting success only means the call succeeded; it says nothing about
+   whether another session has since overwritten it. Read the artifact's
+   `bundle/entry.js` back and check its checksum against the local build, or
+   grep it for a string from the newest feature (`Open the hold`, and so on).
+   A size that is *smaller* than the previous version is the tell — the bundle
+   only grows.
+
+Never tell the author the live game is up to date without having done step 3.
 
 ## Commands
 
