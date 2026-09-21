@@ -330,8 +330,10 @@ and deliberately carries none of it — and it has two states
 
 **Collapsed** it is a thumb-sized tab, the left of three across the bottom of
 the helm. Every tab opens with its own mark and its name on one line
-(`components/TabHeader.tsx`, shared by all three, along with the `CARD` they
-are drawn on). The reactor's mark is a power station, *not* the bolt: the bolt
+(`components/PanelChrome.tsx`, shared by all three, along with the header the
+opened panel carries and the `CARD` both are drawn on — a tab and its panel
+have to look like one section, which is easier to keep true with the two
+headers side by side). The reactor's mark is a power station, *not* the bolt: the bolt
 means unclaimed power and sits inside the same tab beside a number, so the
 section and one reading within it would otherwise be the same glyph. Below the
 header each subsystem row is
@@ -374,6 +376,18 @@ two states (`components/SubsystemGlyph.tsx`) precisely so that what the player
 learns from the controls reads the tab afterwards. Free power is a bolt and a
 number, not `0 FREE`.
 
+**Unclaimed power is yellow** (`palette.power`), not the accent. It was cyan,
+which is the shields row directly above it and every other live reading in the
+app, so the one figure meaning "not in anything yet" looked like a fourth
+system reporting in. In the opened controls it sits at the *foot* of the three
+rows rather than above them: at the top it read as a heading, as though it were
+the reactor's size rather than its remainder, and at the bottom the bolt falls
+in the same column as the subsystem marks, so spare and spent line up.
+
+**An opened panel repeats its tab's name.** The panel covers the helm on a
+scrim, so the tab that was tapped is dimmed behind it and cannot be what says
+which section this is.
+
 **The three sections do carry their names**, on the tab header line: REACTOR,
 CARGO, CREW. That is not the same rule bending. A subsystem is met in the
 controls, where there is room to learn what its mark means; a tab is the first
@@ -383,13 +397,21 @@ footnote about spare power more weight than the rows above it.
 
 The hull is one white line above the controls (`components/StatusBar.tsx`),
 the full width of the chrome. **Fuel rides on the jump button** — `MenuButton`
-takes a `gauge` of `{ label, value }` and pins it inside the right edge in the
-button's own ink, boxed off from the label by its own outline — because the
-only question fuel answers is whether to jump, and a strip of its own was a row
-spent on a number consulted at one moment. The name and the reading are two
+takes a `gauge` of `{ label, value }` and gives it a section of its own at the
+right end, the full height of the button and divided off by a rule — because
+the only question fuel answers is whether to jump, and a strip of its own was a
+row spent on a number consulted at one moment. The name and the reading are two
 fields rather than one string so the word can be set small and tracked against
 a full-size figure; it read `F 10` first, which fitted the corner but had to be
-learned before it said anything. It is
+learned before it said anything.
+
+**The section is cut out of the button, not laid on it.** `scheme.fill` is a
+layer inset by `GAUGE_W` rather than the button's own `backgroundColor`, so
+nothing paints behind the gauge and the sky shows through. That is what lets
+the reading be the accent — on a filled button, anything drawn *on* the fill
+has to be the near-black the label uses, and a cyan figure on cyan is not a
+figure. The label centres in what is left rather than in the whole button. It
+is
 left off when the label already says the tank is empty. The jump is a compact
 control under the tabs rather than a menu-sized panel; `MenuButton` takes a
 `height` for it and drops its label a size to match.
