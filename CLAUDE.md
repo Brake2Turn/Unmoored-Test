@@ -45,7 +45,19 @@ Expo's output, and the two things it does are both load-bearing:
   resolve against, which is why the bundle URL is resolved and a `<base>` pinned
   *first*. Get that order wrong and the page sits on LOADING forever, silently.
 
-Rebuild, swap in the new `bundle/entry.js`, republish. The page itself rarely
+**Run `node scripts/pack-artifact.mjs` after `build:web`.** It does both
+things the export needs and prints the `files` map to publish. The second is
+newer and cost a round trip: Metro writes image sources as absolute
+`/assets/...`, which resolve against the *host* root. The artifact is not
+served at a host root, so every bundled image 404s — the dialogue portraits
+went out live and invisible because of exactly this. A `<base>` tag cannot
+save them; `<base>` only affects relative URLs, which is precisely what those
+are not. The script rewrites them to `assets/...` so the wrapper's `<base>`
+can do its job, and lists every asset file, since bundled images are separate
+hashed files that must be published alongside the bundle or they are simply
+absent.
+
+Rebuild, pack, republish. The page itself rarely
 changes — and note that the artifact service wraps whatever is published in its
 own `<html><head>…<body>`, so publish the page's *contents* (starting at
 `<title>`) rather than a full document, or the result is one page nested inside
@@ -64,15 +76,23 @@ So, before publishing, every time:
 1. `git fetch origin main` and confirm the checkout is not behind it. If it is,
    the build would be a regression — bring `main` in first.
 2. `npm run build:web`, and publish *that* bundle.
-3. **Verify what is actually being served afterwards.** The publish call
+3. **Test from a nested path, never the server root.** Serving `dist/` at
+   `http://127.0.0.1:8099/` makes `/assets/...` resolve, because there *is*
+   something at that root — so a root-served screenshot proves nothing about
+   the artifact. Copy the packed `dist/` into `webroot/app/`, serve `webroot`,
+   and load `/app/`. This has now caught two different absolute-path bugs, the
+   second one after a screenshot from the root had already "confirmed" the
+   feature worked.
+4. **Verify what is actually being served afterwards.** The publish call
    reporting success only means the call succeeded; it says nothing about
    whether another session has since overwritten it. Read the artifact's
    `bundle/entry.js` back and check its checksum against the local build, or
    grep it for a string from the newest feature (`Open the hold`, and so on).
    A size that is *smaller* than the previous version is the tell — the bundle
-   only grows.
+   only grows. Read a bundled *image* back too when one has changed; the
+   bundle being right says nothing about whether its assets came with it.
 
-Never tell the author the live game is up to date without having done step 3.
+Never tell the author the live game is up to date without having done step 4.
 
 ## Commands
 
