@@ -9,7 +9,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { ReactorGlyph, SubsystemGlyph } from '@/components/SubsystemGlyph';
+import { ReactorGlyph, SubstationGlyph, SubsystemGlyph } from '@/components/SubsystemGlyph';
+import { CARD, TabHeader } from '@/components/TabHeader';
 import {
   SUBSYSTEMS,
   SUBSYSTEM_CAPACITY,
@@ -68,6 +69,14 @@ const PIP_HEIGHT = 9;
 
 const EMPTY_CELL = 'rgba(255,255,255,0.13)';
 
+/**
+ * What the tab calls itself.
+ *
+ * One constant because it is the section's name rather than a subsystem's —
+ * the rows inside stay wordless, which is the rule that matters.
+ */
+const SECTION_NAME = 'REACTOR';
+
 const CHARGE_MS = 240;
 const SURGE_UP_MS = 110;
 const SURGE_DOWN_MS = 300;
@@ -123,6 +132,12 @@ export function ReactorTab({
       hitSlop={10}
       style={({ pressed }) => [styles.tab, { width }, pressed && styles.tabPressed]}
     >
+      <TabHeader
+        icon={<SubstationGlyph color={palette.textMuted} size={11} />}
+        name={SECTION_NAME}
+      />
+
+      <View style={styles.tabBody}>
       {SUBSYSTEMS.map((subsystem) => {
         const accent = SUBSYSTEM_STYLE[subsystem].accent;
         const lit = energy[subsystem] > 0;
@@ -172,6 +187,7 @@ export function ReactorTab({
         >
           {free}
         </Text>
+      </View>
       </View>
     </Pressable>
   );
@@ -462,26 +478,17 @@ function StepButton({
   );
 }
 
-const CARD: ViewStyle = {
-  borderRadius: 12,
-  borderWidth: 1,
-  borderCurve: 'continuous',
-  borderColor: 'rgba(255,255,255,0.09)',
-  // Near-opaque on purpose. These sit over the ship rather than in a strip of
-  // their own, and a translucent card let the hull and the starfield read
-  // through the controls, which made both harder to parse.
-  backgroundColor: 'rgba(11,15,30,0.97)',
-};
-
 const styles = StyleSheet.create({
   tab: {
     ...CARD,
     height: layout.tabHeight,
     paddingHorizontal: 8,
     paddingVertical: 7,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
   },
   tabPressed: { backgroundColor: 'rgba(255,255,255,0.06)' },
+  /** Whatever the header leaves: the three rows, then the spare power. */
+  tabBody: { flex: 1, justifyContent: 'space-between', paddingTop: 2 },
   tabRow: { flexDirection: 'row', alignItems: 'center', height: TAB_ROW_HEIGHT, gap: 6 },
   tabFreeRow: { flexDirection: 'row', alignItems: 'center', height: 13, gap: 6 },
   tabStack: { flex: 1, gap: 3 },

@@ -94,14 +94,46 @@ export function CrewGlyph({ color, size = 13 }: { color: string; size?: number }
   );
 }
 
-/** The reactor itself: a bolt, for the power nothing has claimed. */
+/**
+ * A bolt, for the power nothing has claimed.
+ *
+ * Drawn as an outline like every other mark here. It was a solid shape, which
+ * made it the one filled glyph in the set and gave it a weight the others do
+ * not have — it read as the loudest thing in the tab rather than as a quiet
+ * footnote about spare power.
+ */
 export function ReactorGlyph({ color, size = 13 }: { color: string; size?: number }) {
   return (
     <Svg width={size} height={size * 1.08} viewBox="0 0 16 17">
       <Path
         d="M9.4 0.8 L3.2 9.6 H7.2 L6.6 16.2 L12.8 7.2 H8.8 Z"
-        fill={color}
-        fillOpacity={0.9}
+        fill="none"
+        stroke={color}
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+/**
+ * The reactor tab's own mark: a power station, waisted like a cooling tower.
+ *
+ * Deliberately not the bolt. The bolt means *unclaimed* power and already
+ * appears inside this tab next to the number, so it cannot also stand for the
+ * tab as a whole — the section and one reading inside it would look like the
+ * same thing. Straight edges rather than curves because this is drawn at
+ * eleven pixels, where a curve turns to mush.
+ */
+export function SubstationGlyph({ color, size = 13 }: { color: string; size?: number }) {
+  return (
+    <Svg width={size} height={size * 1.08} viewBox="0 0 16 17">
+      <Path
+        d="M4.8 2.2 H11.2 L10.1 8.2 L13.4 15 H2.6 L5.9 8.2 Z"
+        fill="none"
+        stroke={color}
+        strokeWidth={1.5}
+        strokeLinejoin="round"
       />
     </Svg>
   );

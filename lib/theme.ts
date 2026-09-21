@@ -89,7 +89,7 @@ export const layout = {
    * reactor's three rows and its spare power already filled the old 100, so
    * anything above them had to come out of the helm's art budget instead.
    */
-  tabHeight: 100,
+  tabHeight: 116,
   /** And every panel one opens is this wide, so they swap without shifting. */
   panelWidth: 252,
   /** Gap between the lowest button and the bottom safe area. */

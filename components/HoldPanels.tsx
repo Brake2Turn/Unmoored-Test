@@ -1,7 +1,8 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { CargoGlyph, CrewGlyph } from '@/components/SubsystemGlyph';
+import { CARD, TabHeader } from '@/components/TabHeader';
 import { CREW_SLOTS, cargoSlots } from '@/lib/hold';
 import { fonts, layout, palette } from '@/lib/theme';
 
@@ -43,8 +44,10 @@ export function CargoTab({
       hitSlop={10}
       style={({ pressed }) => [styles.tab, { width }, pressed && styles.tabPressed]}
     >
-      <CargoGlyph color={palette.textMuted} size={13} />
-      <SlotGrid count={slots} filled={filled} perRow={4} size={11} gap={4} />
+      <TabHeader icon={<CargoGlyph color={palette.textMuted} size={11} />} name="CARGO" />
+      <View style={styles.tabBody}>
+        <SlotGrid count={slots} filled={filled} perRow={4} size={11} gap={4} />
+      </View>
     </Pressable>
   );
 }
@@ -88,8 +91,10 @@ export function CrewTab({
       hitSlop={10}
       style={({ pressed }) => [styles.tab, { width }, pressed && styles.tabPressed]}
     >
-      <CrewGlyph color={palette.textMuted} size={13} />
-      <SlotGrid count={CREW_SLOTS} filled={filled} perRow={3} size={13} gap={5} />
+      <TabHeader icon={<CrewGlyph color={palette.textMuted} size={11} />} name="CREW" />
+      <View style={styles.tabBody}>
+        <SlotGrid count={CREW_SLOTS} filled={filled} perRow={3} size={13} gap={5} />
+      </View>
     </Pressable>
   );
 }
@@ -165,24 +170,17 @@ function SlotGrid({
   );
 }
 
-const CARD: ViewStyle = {
-  borderRadius: 12,
-  borderWidth: 1,
-  borderCurve: 'continuous',
-  borderColor: 'rgba(255,255,255,0.09)',
-  backgroundColor: 'rgba(11,15,30,0.97)',
-};
-
 const styles = StyleSheet.create({
   tab: {
     ...CARD,
     height: layout.tabHeight,
     paddingHorizontal: 8,
     paddingVertical: 9,
-    alignItems: 'center',
-    justifyContent: 'space-evenly',
+    justifyContent: 'flex-start',
   },
   tabPressed: { backgroundColor: 'rgba(255,255,255,0.06)' },
+  /** Whatever the header leaves, with the slots centred in it. */
+  tabBody: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   detail: {
     ...CARD,
