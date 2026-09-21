@@ -42,6 +42,8 @@ export const palette = {
 
   planetLight: '#3E3460',
   planetDark: '#100E21',
+  /** Sunlit highlands on the planet, and the bloom on its lit limb. */
+  planetHighlight: '#6E5EA6',
 } as const;
 
 /**
@@ -80,7 +82,13 @@ export const layout = {
   buttonSpacing: 16,
   buttonRadius: 14,
   screenMargin: 24,
-  /** Every collapsed HUD tab is this tall, so the three sit as one row. */
+  /**
+   * Every collapsed HUD tab is this tall, so the three sit as one row.
+   *
+   * It grew by the height of a header line when the tabs took names: the
+   * reactor's three rows and its spare power already filled the old 100, so
+   * anything above them had to come out of the helm's art budget instead.
+   */
   tabHeight: 100,
   /** And every panel one opens is this wide, so they swap without shifting. */
   panelWidth: 252,
