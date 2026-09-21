@@ -15,14 +15,15 @@ import {
   type Subsystem,
 } from '@/lib/energy';
 import { ENCOUNTER_STYLE } from '@/lib/encounters';
+import type { Meeting } from '@/lib/dialogue';
 import { HULL_MAX, damagedHull } from '@/lib/hull';
 import { DEFAULT_SHIP_ID, shipById } from '@/lib/ships';
 import {
   FUEL_PER_RUN,
-  assignEncounters,
   encounterAt,
+  meetingAt,
   generateMap,
-  hasEncounters,
+  migrateMap,
   type SectorMap,
 } from '@/lib/sectorMap';
 
@@ -86,6 +87,15 @@ export type RunState = {
    * A counter says "that was a hit" without the drawing having to guess.
    */
   shieldHits: number;
+  /**
+   * Stars whose dialogue has already played, by node index.
+   *
+   * An encounter speaks once per run, on arrival. Backing out to the map and
+   * returning, or hopping away and coming back, finds the ship already there
+   * and says nothing — which is why this records *where* rather than merely
+   * counting how many have spoken.
+   */
+  spoken: number[];
 };
 
 /**
@@ -140,6 +150,27 @@ export function jumpBlocker(run: RunState): JumpBlock {
 export function jumpUnitsFor(run: RunState): number {
   const here = encounterAt(run.map, run.position);
   return ENCOUNTER_STYLE[here].hostile ? HOSTILE_JUMP_UNITS : JUMP_UNITS;
+}
+
+/**
+ * Whether the star the ship is on still has something to say.
+ *
+ * Both halves of the question in one place: there has to *be* an encounter
+ * here, and it must not have spoken yet this run.
+ */
+export function pendingMeeting(run: RunState): Meeting | null {
+  if (run.spoken.includes(run.position)) return null;
+  const meeting = meetingAt(run.map, run.position);
+  // An encounter with no lines has nothing to say. Caught here rather than in
+  // the overlay so the box never opens empty — the table is still being
+  // written, and a row may well arrive before its dialogue does.
+  return meeting && meeting.lines.length > 0 ? meeting : null;
+}
+
+/** Records that this star has spoken, so it does not speak again. */
+export function markSpoken(run: RunState): RunState {
+  if (run.spoken.includes(run.position)) return run;
+  return { ...run, spoken: [...run.spoken, run.position] };
 }
 
 /** How far each charge has come, 0 to 1, for the sliders on the helm. */
@@ -216,6 +247,7 @@ function createRun(shipId: string): RunState {
     weaponCharge: 0,
     hull: HULL_MAX,
     shieldHits: 0,
+    spoken: [],
     // A run opens with its shields already up; the charge time is for changes
     // made in flight, not a penalty for launching.
     shieldCharge: energyAtStart.shields,
@@ -370,7 +402,7 @@ function hydrate(stored: StoredRun): RunState {
   const map = stored.map ?? generateMap();
   // A map saved before encounters existed gets them rolled in place, so an
   // in-progress run keeps its layout and its history.
-  if (!hasEncounters(map)) assignEncounters(map);
+  migrateMap(map);
 
   const position = typeof stored.position === 'number' ? stored.position : map.start;
   // Older saves appended a duplicate on every backtrack; collapse them.
@@ -414,6 +446,13 @@ function hydrate(stored: StoredRun): RunState {
     // Only ever compared against itself to spot a change, so any finite
     // number will do; a save from before the counter starts at nothing.
     shieldHits: clampNumber(stored.shieldHits, 0, Number.MAX_SAFE_INTEGER, 0),
+    // A save from before dialogue existed has heard nothing — but it has
+    // already *been* to its visited stars, and replaying their encounters on
+    // load would be a conversation with a merchant long since passed. So the
+    // stars already stood on count as spoken, and only new ones talk.
+    spoken: Array.isArray(stored.spoken)
+      ? [...new Set(stored.spoken.filter((index) => typeof index === 'number'))]
+      : [...visited],
   };
 }
 

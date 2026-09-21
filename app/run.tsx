@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Backdrop } from '@/components/Backdrop';
 import { ReactorControls, ReactorTab } from '@/components/ReactorPanel';
 import { CargoDetail, CargoTab, CrewDetail, CrewTab } from '@/components/HoldPanels';
+import { DialogueOverlay } from '@/components/DialogueOverlay';
 import { FadeInView } from '@/components/FadeInView';
 import { STATUS_BAR_HEIGHT, StatusBar } from '@/components/StatusBar';
 import { MenuButton } from '@/components/MenuButton';
@@ -18,6 +19,8 @@ import {
   chargeFractions,
   jumpBlocker,
   loadRun,
+  markSpoken,
+  pendingMeeting,
   reactorOf,
   saveRun,
   shiftEnergy,
@@ -147,6 +150,23 @@ export default function RunScreen() {
   const buttonWidth = useMenuWidth();
   /** The three tabs are identical, and together they are the chrome's width. */
   const tabWidth = Math.floor((buttonWidth - TAB_GAP * 2) / 3);
+
+  /**
+   * What this star still has to say, if anything.
+   *
+   * Derived rather than held in state: the run already records which stars
+   * have spoken, so there is nothing here that could disagree with it. The
+   * overlay simply stops rendering once the arrival is marked.
+   */
+  const talking = run ? pendingMeeting(run) : null;
+
+  const onDialogueDone = useCallback(() => {
+    const current = runRef.current;
+    if (!current) return;
+    const next = markSpoken(current);
+    setRun(next);
+    void saveRun(next);
+  }, []);
 
   const canTakeHit = !!run && (shieldLevel(run.shieldCharge) > 0 || run.hull > 0);
   const charge = run ? chargeFractions(run) : { jump: 0, weapon: 0 };
@@ -435,6 +455,16 @@ export default function RunScreen() {
             )}
           </View>
         </>
+      ) : null}
+
+      {/* Whatever is out here speaks first. Over everything, including an
+          open panel, because nothing else can be done until it has. */}
+      {talking ? (
+        <DialogueOverlay
+          meeting={talking}
+          bottom={insets.bottom + HUD_BOTTOM + CONTROL_ROW_HEIGHT + STACK_GAP}
+          onDone={onDialogueDone}
+        />
       ) : null}
     </View>
   );

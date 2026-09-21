@@ -172,6 +172,60 @@ what is waiting is only learned by jumping there, where the ship appears at the
 helm. The boss is the single exception, red from the start — red and nothing
 else, with no ring or halo around it.
 
+### Every encounter speaks, and the table is the author's
+
+`lib/dialogue.ts` holds `MEETINGS`: who is out at a star, which of the two
+hulls they arrive in, and what is said. **It is provisional** — transcribed
+from the author's spreadsheet to get dialogue working end to end, and expected
+to be rewritten, added to and cut down. So nothing anywhere counts the rows,
+names an id, or hard-codes how many of each kind there are. Editing that list
+is the whole job.
+
+Three things follow from treating it that way:
+
+- **The sector deals whatever it finds.** `assignMeetings` empties a third of
+  the free stars and deals the rest from the table, using every encounter
+  before repeating any of it. Written against `MEETINGS.length`: fewer
+  encounters than slots and each is dealt more than once; more, and each
+  sector shows a different subset. A player crosses six or seven stars, and
+  drawing each independently would sometimes hand them the same pirate three
+  times while the merchant never appeared.
+- **`verify:map` checks the deal against the table's own length**, not against
+  a number — "a third empty", "every encounter dealt before any repeats", "no
+  meeting the table does not carry". Add an eleventh encounter and they still
+  hold with nobody remembering to come back here.
+- **A star holds an id, not a copy.** Rewrite a line and a run already in
+  progress says the new one. Delete an entry and `meetingAt` returns null for
+  the stars holding it, which quietly empties them rather than crashing — that
+  case is the point, not an edge.
+
+`Encounter` (empty / enemy / merchant / boss) is now **derived** from the
+meeting rather than stored beside it: a red hull means combat, a yellow one a
+trader or a conversation. That is what keeps the ship on screen and the words
+in the box from ever disagreeing, and it means `hostile` — the long jump
+charge — still comes off `ENCOUNTER_STYLE` exactly as before. Combat is the
+only kind that pins you down.
+
+**An encounter speaks once per run**, on arrival. `run.spoken` records *which*
+stars have spoken, by node index, so backing out to the map and returning
+finds the ship already there and says nothing. A save from before dialogue
+counts its visited stars as already spoken — otherwise loading an old run
+would open with a conversation from a merchant long since passed.
+
+The overlay (`components/DialogueOverlay.tsx`) is the whole screen: a pale
+wash, a box above the helm's controls, and a tap anywhere to advance. **Which
+side the face sits on says who is speaking** before a word is read — the other
+party left, the player's pilot right — and that is decided by `faceFor`, which
+recognises the player by speaker name rather than by position, so an encounter
+that opens with the pilot (number 9 does) still lands the right face on the
+right side.
+
+The faces (`components/PortraitArt.tsx`) are **placeholders**: a head and one
+distinguishing mark each, drawn from the same few parts, square for a machine
+and round for a person. They exist so two speakers can be told apart, not as
+art. Adding an entity to the table adds it to `EntityId`, and the compiler
+points at the face table until it has one.
+
 **The map is an instrument, not a window.** The title screen and the helm look
 *out* — gradient sky, nebulae, a drifting `StarField`. The sector map does not:
 it is a chart on a piloting console (`components/StarChart.tsx`), with a lit
@@ -519,8 +573,10 @@ tints live in `lib/subsystems.ts`, which is to it what `encounters.ts` is to
 
 ### Layer boundaries
 
-`lib/theme.ts`, `lib/sectorMap.ts`, `lib/energy.ts`, `lib/hull.ts` and
-`lib/hold.ts` import nothing from the project and are the leaves. `lib/ships.ts`, `lib/encounters.ts` and
+`lib/theme.ts`, `lib/dialogue.ts`, `lib/energy.ts`, `lib/hull.ts` and
+`lib/hold.ts` import nothing from the project and are the leaves.
+`lib/sectorMap.ts` is nearly one: it imports `dialogue.ts` alone, to deal
+encounters across the stars, and both still run under bare node. `lib/ships.ts`, `lib/encounters.ts` and
 `lib/subsystems.ts` depend on the theme; `lib/runStore.ts` depends on ships,
 the map, the energy and hull rules, and `encounters.ts` — it reads the
 `hostile` flag out
@@ -562,6 +618,13 @@ These cost real debugging time. Do not rediscover them.
   hung off momentum ending never runs there at all. Derive it from the scroll
   offset instead. The two look like one bug and are not: one is where the
   strip stops, the other is what gets read out of where it stopped.
+- **The `@/` alias does not resolve under bare node.** The verify scripts run
+  the rule files directly, with no bundler, so anything they reach has to
+  import with a relative path *and* the `.ts` extension — `./dialogue.ts`, not
+  `@/lib/dialogue`. That is the real reason the leaf files import nothing;
+  purity alone was never the whole of it. Metro is happy with the relative
+  form either way, so when a rule file does need another, write it that way
+  and `npm run verify` keeps working.
 - **`adjustsFontSizeToFit` is native-only.** On web it ellipsises instead, so web
   relies on `titleSizeFor()` sizing correctly.
 - **`Alert.alert` is an empty function on react-native-web.** Not a stub that
