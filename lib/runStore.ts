@@ -48,6 +48,17 @@ export function sectorOf(run: RunState): number {
   return run.jumps + 1;
 }
 
+/** Below this share of a tank the fuel gauge turns red. */
+const LOW_FUEL_SHARE = 0.25;
+
+/**
+ * Whether the tank is low enough to warn about. A rule rather than a style, so
+ * it lives here instead of in each screen that draws the gauge.
+ */
+export function fuelIsLow(fuel: number): boolean {
+  return fuel / FUEL_PER_RUN <= LOW_FUEL_SHARE;
+}
+
 /**
  * Cached so the sector screen and the helm do not each pay a round trip to
  * AsyncStorage for a value one of them just wrote. `undefined` means "not read

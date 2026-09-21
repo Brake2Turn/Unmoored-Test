@@ -4,12 +4,11 @@ import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-na
 import Svg, { Circle, Line } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { FuelBadge } from '@/components/FuelBadge';
 import { MenuButton } from '@/components/MenuButton';
 import { useHaptics, useSettings } from '@/lib/settings';
 import { StarField } from '@/components/StarField';
 import { fonts, palette, tracking, useMenuWidth } from '@/lib/theme';
-import { applyJump, loadRun, saveRun, sectorOf, type RunState } from '@/lib/runStore';
+import { applyJump, fuelIsLow, loadRun, saveRun, sectorOf, type RunState } from '@/lib/runStore';
 import { shipById } from '@/lib/ships';
 import {
   JUMP_RANGE,
@@ -126,9 +125,9 @@ export default function SectorScreen() {
           <Text style={styles.backLabel}>BACK</Text>
         </Pressable>
         <Text style={styles.heading}>SECTOR {run ? sectorOf(run) : 1}</Text>
-        <View style={[styles.back, styles.fuelSlot]}>
-          <FuelBadge remaining={fuel} accent={ship.accent} size="compact" />
-        </View>
+        {/* Balances the back control so the heading stays centred. The fuel
+            gauge that used to sit here now rides in the jump button. */}
+        <View style={styles.back} />
       </View>
 
       <View style={[styles.board, { top: boardTop, height: boardH }]}>
@@ -270,6 +269,7 @@ export default function SectorScreen() {
         </Text>
         <MenuButton
           label={dry ? 'OUT OF FUEL' : target === null ? 'SELECT A STAR' : 'JUMP'}
+          readout={dry ? undefined : { label: 'FUEL', value: String(fuel), alert: fuelIsLow(fuel) }}
           onPress={onConfirmJump}
           primary={!dry && target !== null}
           disabled={dry || target === null}
@@ -307,7 +307,6 @@ const styles = StyleSheet.create({
     zIndex: 5,
   },
   back: { width: 52 },
-  fuelSlot: { alignItems: 'flex-end' },
   backLabel: {
     fontFamily: fonts.body,
     fontSize: 11,

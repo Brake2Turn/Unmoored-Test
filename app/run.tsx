@@ -5,14 +5,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Backdrop } from '@/components/Backdrop';
 import { FadeInView } from '@/components/FadeInView';
-import { FuelBadge } from '@/components/FuelBadge';
 import { MenuButton } from '@/components/MenuButton';
 import { StarField } from '@/components/StarField';
 import { EncounterShip } from '@/components/ships/EncounterShip';
 import { ShipArt } from '@/components/ships/ShipArt';
 import { useHaptics, useSettings } from '@/lib/settings';
 import { fonts, palette, tracking, useMenuWidth } from '@/lib/theme';
-import { loadRun, type RunState } from '@/lib/runStore';
+import { fuelIsLow, loadRun, type RunState } from '@/lib/runStore';
 import { shipById } from '@/lib/ships';
 import { encounterAt } from '@/lib/sectorMap';
 import { ENCOUNTER_STYLE } from '@/lib/encounters';
@@ -100,15 +99,19 @@ export default function RunScreen() {
       <FadeInView
         enabled={!settings.reduceMotion}
         duration={700}
-        style={[styles.shipHolder, { paddingBottom: insets.bottom + 188 }]}
+        // Clears the footer button. The gauge moved inside it, so the ship
+        // sits lower than it did when a separate badge stood above it.
+        style={[styles.shipHolder, { paddingBottom: insets.bottom + 150 }]}
       >
         <ShipArt shipId={ship.id} accent={ship.accent} width={132} height={172} />
       </FadeInView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + 44 }]}>
-        <FuelBadge remaining={fuel} accent={ship.accent} />
         <MenuButton
           label={dry ? 'OUT OF FUEL' : 'JUMP'}
+          // An empty tank is already the whole label; a FUEL 0 gauge beside it
+          // would only say it twice.
+          readout={dry ? undefined : { label: 'FUEL', value: String(fuel), alert: fuelIsLow(fuel) }}
           onPress={onJump}
           primary={!dry}
           disabled={dry}
