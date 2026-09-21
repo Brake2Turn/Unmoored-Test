@@ -3,23 +3,26 @@ import { Image, StyleSheet, View, type ImageSourcePropType } from 'react-native'
 import Svg, { Circle, G, Line, Path, Rect } from 'react-native-svg';
 
 import type { EntityId } from '@/lib/dialogue';
+import { PORTRAIT_URIS } from '@/lib/portraits';
 import { palette } from '@/lib/theme';
 
 /**
- * Supplied art, where there is any.
+ * Supplied art, where there is any, as an inlined data URI.
  *
- * `require` has to be a literal path — Metro resolves these at build time, so
- * the table cannot be built from a directory listing or a template string.
- * Adding a portrait is therefore two steps and no more: run
- * `scripts/make-portrait.py` over the source, then add its line here. An
- * entity with no line falls through to the drawn placeholder below, so the
- * set can be filled in one speaker at a time without anything breaking in
- * between.
+ * `PORTRAIT_URIS` is generated from `assets/portraits/` and keyed by filename,
+ * so adding a speaker is two steps and no more: run `make-portrait.py` over
+ * the source, then `inline-portraits.mjs`. An entity with no portrait falls
+ * through to the drawn placeholder below, so the set fills in one speaker at a
+ * time without anything breaking in between.
+ *
+ * Inlined rather than required, because a required image is fetched by URL at
+ * runtime and that URL did not survive the artifact host — see the generator
+ * for the whole story. There is no request here to fail.
  */
-const PHOTOS: Partial<Record<EntityId, ImageSourcePropType>> = {
-  pilot: require('@/assets/portraits/pilot.png'),
-  spaceTrucker: require('@/assets/portraits/spaceTrucker.png'),
-};
+function photoFor(entity: EntityId): ImageSourcePropType | undefined {
+  const uri = PORTRAIT_URIS[entity];
+  return uri ? { uri } : undefined;
+}
 
 /**
  * Placeholder faces for whoever is speaking.
@@ -292,7 +295,7 @@ export function PortraitArt({
   size: number;
   stroke?: string;
 }) {
-  const photo = PHOTOS[entity];
+  const photo = photoFor(entity);
   const Face = FACES[entity] ?? FACES.unmoored;
 
   return (

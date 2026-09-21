@@ -41,6 +41,8 @@ OUT_DIR = ROOT / "assets" / "portraits"
 WHITE = 236
 # Tall enough to stay sharp on a 3x screen at the size the box draws it.
 TARGET_HEIGHT = 256
+# Pixel art needs nothing like a full truecolour range.
+PALETTE = 256
 
 
 def clear_background(im: Image.Image) -> Image.Image:
@@ -98,6 +100,11 @@ def main() -> None:
     if im.height > TARGET_HEIGHT:
         scale = TARGET_HEIGHT / im.height
         im = im.resize((round(im.width * scale), TARGET_HEIGHT), Image.LANCZOS)
+
+    # Quantised to a palette before saving. Pixel art has few colours by
+    # nature, so this is visually free and takes a portrait from about 67KB to
+    # about 12 — which is what makes inlining the whole set affordable.
+    im = im.quantize(colors=PALETTE, method=Image.FASTOCTREE)
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out = OUT_DIR / f"{entity}.png"

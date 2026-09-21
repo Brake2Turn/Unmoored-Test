@@ -248,10 +248,23 @@ kinds sit in the *same frame*, deliberately: while the set is half done the two
 appear one line after another, and a framed portrait beside a bare floating
 glyph would read as a bug rather than as work in progress.
 
-Adding one is two steps. Run `scripts/make-portrait.py <source> <entityId>`,
-then add the `require` line to `PHOTOS`. The `require` has to be a literal
-path — Metro resolves them at build time, so that table cannot be built from a
-directory listing.
+Adding one is two steps: `python3 scripts/make-portrait.py <source> <entityId>`,
+then `node scripts/inline-portraits.mjs`. The second bakes every PNG in
+`assets/portraits/` into `lib/portraits.ts` as a data URI, keyed by filename,
+so nothing else has to be edited.
+
+**They are inlined rather than required, and that was hard won.** A required
+image becomes a separate hashed asset the bundle fetches by URL at runtime,
+and that URL has to survive the artifact host. It did not — Metro writes
+absolute `/assets/...`, the artifact is not served at a host root, and the
+portraits went out live and invisible. Rewriting those URLs to relative was
+the obvious repair, it passed a nested-path test, and it *still* did not work
+on the author's screen. The right move at that point was to stop repairing the
+path and delete it: a data URI is part of the bundle, so there is no second
+request, nothing to publish alongside, nothing cached separately and no host
+path scheme to be wrong about. Quantising the PNGs to a palette first is what
+makes it affordable — pixel art has few colours, 67KB becomes 12, and a
+speaker costs about 17KB of base64.
 
 The script exists because the art arrives as 1920px busts on flat white, and
 all three things it does are easy to get subtly wrong by hand: it clears the
