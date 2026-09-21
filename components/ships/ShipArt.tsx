@@ -60,7 +60,7 @@ export const ShipArt = React.memo(function ShipArt({
   height,
   locked = false,
 }: Props) {
-  const tint = locked ? LOCKED_TINT : palette.shipLine;
+  const tint = locked ? LOCKED_TINT : palette.player;
   const Art = ART[shipId] ?? Drifter;
   return (
     <Svg width={width} height={height} viewBox={`0 0 ${SHIP_BOX_W} ${SHIP_BOX_H}`}>

@@ -465,19 +465,27 @@ Two things there are worth keeping:
   Every hull's engines share one `y`, which is what lets the flame pulse from
   a single `transformOrigin` — including the Bulwark's pair.
 
-**No ship has a colour of its own.** Every hull is drawn in `palette.shipLine`
-— plain white — and `ShipArt` takes no colour at all, only a `locked` flag that
-swaps in the cold grey. Each ship used to carry an `accent` on its table entry
-that tinted its art, its stat bars, its card border and the whole sector map,
-so the map changed colour depending on what you had launched in. Nothing about
-a ship actually varies by colour: they differ in silhouette, cargo and reactor.
-The field is gone from `Ship` rather than set to one shared value, so the six
-cannot quietly drift apart again. Everything that used to borrow a ship's tint
-now uses `palette.accent`, which is the app's own.
+**No ship has a colour of its own, and neither does the player.**
+`palette.player` — plain white — draws every hull, the card it sits in, its
+class label, its stat bars and carousel dot, and on the sector map the range
+ring, the routes out of here and the star the ship is standing on. `ShipArt`
+takes no colour at all, only a `locked` flag that swaps in the cold grey.
 
-The subsystem colours are untouched and are a different thing — a cyan shield
-bubble and an orange exhaust say which *row* is powering them, not which ship
-it is.
+Each ship used to carry an `accent` on its table entry that tinted all of
+that, so the *map* changed colour depending on what you had launched in.
+Nothing about a ship actually varies by colour: they differ in silhouette,
+cargo and reactor. The field is gone from `Ship` rather than set to one shared
+value, so the six cannot quietly drift apart again.
+
+**White is doing work, not just being neutral.** It is what leaves the two
+colour-coded things on screen free to mean something: a **red** boss star, and
+whatever is waiting at a star (`ENCOUNTER_STYLE`). Those stay. So do the
+subsystem tints, which are a different question again — a cyan shield bubble
+and an orange exhaust say which *row* is powering them, not which ship it is.
+
+The accent survives only as app chrome that was never ship-specific: the menu
+buttons, the fuel gauge on the jump button and the fuel badge on the map, the
+wordmark's rule, the settings controls and the planet's atmosphere.
 
 Hull and speed used to sit beside cargo on the ship cards. They are gone —
 cargo is the one stat that still varies without being energy. The cards also

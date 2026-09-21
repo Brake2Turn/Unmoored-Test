@@ -15,14 +15,19 @@ export const palette = {
   nebulaTeal: '#1E768C',
 
   /**
-   * Every edge, light and canopy on a player ship.
+   * Everything that is the player's own: every edge and light on the hull, the
+   * card it sits in, the range it can reach, the routes out of here and the
+   * star it is standing on.
    *
-   * One colour for all of them on purpose. The six hulls used to carry a tint
+   * One colour for all of it on purpose. The six hulls used to carry a tint
    * each, which read as a property of the ship — as though the orange one were
    * the fast one — when nothing about a ship varies by colour. They differ in
    * silhouette, cargo and reactor, and those are the things worth looking at.
+   * White also keeps the player distinct from the two things on screen that
+   * *are* colour-coded and mean something by it: a red boss star and whatever
+   * is waiting at a star.
    */
-  shipLine: '#FFFFFF',
+  player: '#FFFFFF',
 
   star: '#E8EEFF',
   starWarm: '#FFE2C8',

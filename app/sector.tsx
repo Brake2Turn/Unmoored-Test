@@ -153,9 +153,9 @@ export default function SectorScreen() {
             cx={currentPx.x}
             cy={currentPx.y}
             r={JUMP_RANGE * scale}
-            fill={palette.accent}
+            fill={palette.player}
             fillOpacity={dry ? 0 : 0.035}
-            stroke={palette.accent}
+            stroke={palette.player}
             strokeOpacity={dry ? 0.07 : 0.22}
             strokeWidth={1}
             strokeDasharray="3 5"
@@ -172,7 +172,7 @@ export default function SectorScreen() {
                 y1={currentPx.y}
                 x2={to.x}
                 y2={to.y}
-                stroke={index === boss ? palette.danger : palette.accent}
+                stroke={index === boss ? palette.danger : palette.player}
                 strokeOpacity={chosen ? 0.85 : 0.2}
                 strokeWidth={chosen ? 1.8 : 1}
                 strokeDasharray={chosen ? undefined : '2 6'}
@@ -210,7 +210,7 @@ export default function SectorScreen() {
                     cx={px.x}
                     cy={px.y}
                     r={star.radius + (isBoss ? 11 : 7)}
-                    fill={isBoss ? palette.danger : palette.accent}
+                    fill={isBoss ? palette.danger : palette.player}
                     fillOpacity={dim ? 0.1 : 0.16}
                   />
                 ) : null}
@@ -218,7 +218,7 @@ export default function SectorScreen() {
                   cx={px.x}
                   cy={px.y}
                   r={star.radius}
-                  fill={star.fill === 'accent' ? palette.accent : star.fill}
+                  fill={star.fill === 'player' ? palette.player : star.fill}
                   fillOpacity={star.solid ? 1 : 0.5}
                 />
                 {/* A ring means "we have stood here". It is keyed off the
@@ -304,11 +304,11 @@ export default function SectorScreen() {
 
 type StarKind = 'boss' | 'here' | 'chosen' | 'reachable' | 'visited' | 'far';
 
-/** How each kind of star is drawn. 'accent' means the app's own accent. */
+/** How each kind of star is drawn. 'player' means the player's white. */
 const STAR: Record<StarKind, { radius: number; fill: string; solid: boolean; halo: boolean }> = {
   boss: { radius: 8, fill: palette.danger, solid: true, halo: false },
-  here: { radius: 7, fill: 'accent', solid: true, halo: true },
-  chosen: { radius: 5.5, fill: 'accent', solid: true, halo: true },
+  here: { radius: 7, fill: 'player', solid: true, halo: true },
+  chosen: { radius: 5.5, fill: 'player', solid: true, halo: true },
   reachable: { radius: 5.5, fill: palette.textPrimary, solid: true, halo: false },
   visited: { radius: 3.5, fill: palette.textMuted, solid: true, halo: false },
   far: { radius: 3.5, fill: palette.textDisabled, solid: false, halo: false },

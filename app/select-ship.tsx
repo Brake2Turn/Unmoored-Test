@@ -187,7 +187,7 @@ export default function SelectShipScreen() {
       </View>
 
       <View style={styles.info}>
-        <Text style={[styles.className, { color: isLocked ? palette.textDisabled : palette.accent }]}>
+        <Text style={[styles.className, { color: isLocked ? palette.textDisabled : palette.player }]}>
           {selected.className}
         </Text>
         <Text style={[styles.name, isLocked && { color: palette.textDisabled }]}>{selected.name}</Text>
@@ -217,7 +217,7 @@ export default function SelectShipScreen() {
             label="CARGO"
             filled={Math.round(selected.cargo * CARGO_SEGMENTS)}
             total={CARGO_SEGMENTS}
-            accent={palette.accent}
+            accent={palette.player}
             locked={isLocked}
           />
           {/* Out of what all three subsystems could hold, so the shortfall is
@@ -226,7 +226,7 @@ export default function SelectShipScreen() {
             label="REACTOR"
             filled={selected.reactor}
             total={TOTAL_CAPACITY}
-            accent={palette.accent}
+            accent={palette.player}
             locked={isLocked}
           />
         </View>
@@ -238,7 +238,7 @@ export default function SelectShipScreen() {
               style={[
                 styles.dot,
                 i === index && {
-                  backgroundColor: isLocked ? palette.textDisabled : palette.accent,
+                  backgroundColor: isLocked ? palette.textDisabled : palette.player,
                   width: 18,
                 },
               ]}
@@ -300,7 +300,7 @@ const ShipCard = React.memo(function ShipCard({
       <View
         style={[
           styles.cardInner,
-          { borderColor: locked ? 'rgba(255,255,255,0.10)' : palette.accent },
+          { borderColor: locked ? 'rgba(255,255,255,0.10)' : palette.player },
           locked && styles.cardLocked,
         ]}
       >
