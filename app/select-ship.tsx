@@ -1,6 +1,14 @@
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import {
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+  type ViewStyle,
+} from 'react-native';
 import Animated, {
   runOnJS,
   useAnimatedReaction,
@@ -27,6 +35,33 @@ const CARD_GAP = 16;
 
 /** Cargo has no natural unit, so it reads as a five-segment impression. */
 const CARGO_SEGMENTS = 5;
+
+/**
+ * Snapping, on web.
+ *
+ * `snapToInterval` is native-only. react-native-web wires CSS scroll snapping
+ * up for `pagingEnabled` and nothing else, so on web the interval props below
+ * are simply ignored and the strip free-scrolls: a swipe that ran out of
+ * momentum between two ships stopped there and stayed there, off centre.
+ *
+ * That is a different hole from the one the index reaction closes further
+ * down. This is where the strip *comes to rest*; that is which ship is read
+ * out of wherever it rested. Both were broken on web, and fixing the second
+ * left the carousel still settling in the wrong place.
+ *
+ * `scroll-snap-align: center` lines each card's centre up with the middle of
+ * the strip, which is where `sidePadding` already puts the first one, so the
+ * browser settles on exactly the offsets `snapInterval` describes and the two
+ * platforms agree. The browser keeps its own deceleration.
+ *
+ * Cast because these are CSS properties React Native's `ViewStyle` has no
+ * names for. On native both constants are null and nothing is added.
+ */
+const webOnly = (rule: Record<string, string>): ViewStyle | null =>
+  Platform.OS === 'web' ? (rule as unknown as ViewStyle) : null;
+
+const SNAP_STRIP = webOnly({ scrollSnapType: 'x mandatory' });
+const SNAP_CARD = webOnly({ scrollSnapAlign: 'center' });
 
 export default function SelectShipScreen() {
   const router = useRouter();
@@ -132,6 +167,7 @@ export default function SelectShipScreen() {
           snapToInterval={snapInterval}
           decelerationRate="fast"
           disableIntervalMomentum
+          style={SNAP_STRIP}
           onScroll={onScroll}
           scrollEventThrottle={16}
           contentContainerStyle={{ paddingHorizontal: sidePadding, gap: CARD_GAP }}
@@ -260,7 +296,7 @@ const ShipCard = React.memo(function ShipCard({
   });
 
   return (
-    <Animated.View style={[styles.card, { width: cardWidth }, animatedStyle]}>
+    <Animated.View style={[styles.card, { width: cardWidth }, SNAP_CARD, animatedStyle]}>
       <View
         style={[
           styles.cardInner,
