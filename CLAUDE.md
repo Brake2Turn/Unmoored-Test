@@ -17,6 +17,15 @@ rather than native Swift — Expo builds the iOS binary on hosted machines
 default branch, and not on a new branch per feature — the author follows this
 one.
 
+**Then fast-forward `main` to it and push that too.** A new session clones the
+repo and checks out `main`, so anything left only on the branch is invisible to
+the next chat — including this file. That is not hypothetical: sixteen commits
+and the whole of `CLAUDE.md` once sat on the branch alone, and a fresh session
+opened on a build from before the reactor existed with no notes to tell it
+otherwise. The branch never diverges from `main` in practice, so this is a
+`git merge --ff-only` with nothing to resolve. Do it at the end of a piece of
+work, the same way the artifact gets republished.
+
 **The live build is one artifact, updated in place:**
 <https://claude.ai/artifact/DUdeLS4PCiguJTRHJw2YuZ>. That link is what the
 author opens to play, so it has to keep working — publishing a *new* artifact
