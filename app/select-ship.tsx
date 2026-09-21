@@ -1,18 +1,20 @@
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
   useWindowDimensions,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
+  type ViewStyle,
 } from 'react-native';
 import Animated, {
+  runOnJS,
+  useAnimatedReaction,
   useAnimatedScrollHandler,
   useAnimatedStyle,
+  useDerivedValue,
   useSharedValue,
   interpolate,
   Extrapolation,
@@ -30,6 +32,29 @@ import { startNewRun } from '@/lib/runStore';
 import Svg, { Path, Rect as SvgRect } from 'react-native-svg';
 
 const CARD_GAP = 16;
+
+/**
+ * Snapping on web.
+ *
+ * `snapToInterval` is a native-only prop: react-native-web only wires CSS
+ * scroll snapping up for `pagingEnabled`, and ignores the interval props
+ * entirely. Left to itself the strip free-scrolls, so a flick that ran out of
+ * momentum between two cards simply stopped there, off centre.
+ *
+ * These two rules hand the browser the same job the native props do — keep the
+ * momentum, but only come to rest with a card centred. `scroll-snap-align:
+ * center` lines each card's centre up with the middle of the strip, which is
+ * exactly where `sidePadding` already puts the first one, so both platforms
+ * settle on the same offsets.
+ *
+ * Cast because these are CSS properties that React Native's `ViewStyle` has no
+ * names for; on native the constants are null and nothing is added.
+ */
+const webSnap = (rule: Record<string, string>): ViewStyle | null =>
+  Platform.OS === 'web' ? (rule as unknown as ViewStyle) : null;
+
+const SNAP_STRIP = webSnap({ scrollSnapType: 'x mandatory' });
+const SNAP_CARD = webSnap({ scrollSnapAlign: 'center' });
 
 export default function SelectShipScreen() {
   const router = useRouter();
@@ -51,9 +76,6 @@ export default function SelectShipScreen() {
     };
   }, []);
   const scrollX = useSharedValue(0);
-  // Tracked in a ref so the scroll handler can tell a real change from a
-  // settle on the same card without re-rendering.
-  const indexRef = useRef(0);
 
   // The card leaves a margin on both sides, so the neighbouring ships stay
   // visible at the screen edges — that peek is what invites the swipe.
@@ -65,17 +87,30 @@ export default function SelectShipScreen() {
     scrollX.value = event.contentOffset.x;
   });
 
-  const onMomentumEnd = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const next = Math.round(event.nativeEvent.contentOffset.x / snapInterval);
-      const clamped = Math.max(0, Math.min(SHIPS.length - 1, next));
-      if (clamped !== indexRef.current) {
-        indexRef.current = clamped;
-        setIndex(clamped);
-        haptics.tap();
-      }
+  const selectIndex = useCallback(
+    (next: number) => {
+      setIndex(next);
+      haptics.tap();
     },
-    [haptics, snapInterval],
+    [haptics],
+  );
+
+  // Which card the strip is nearest, live. Reading it from the scroll position
+  // rather than from `onMomentumScrollEnd` matters twice over: the name and
+  // stats below turn over as a card passes the middle, which is what gives the
+  // swipe its detent, and react-native-web never fires the momentum event at
+  // all — on web the panel used to stay stuck on the first ship however far
+  // you scrolled.
+  const nearestCard = useDerivedValue(() =>
+    Math.max(0, Math.min(SHIPS.length - 1, Math.round(scrollX.value / snapInterval))),
+  );
+
+  useAnimatedReaction(
+    () => nearestCard.value,
+    (current, previous) => {
+      if (previous !== null && current !== previous) runOnJS(selectIndex)(current);
+    },
+    [selectIndex],
   );
 
   const selected = SHIPS[index];
@@ -116,8 +151,8 @@ export default function SelectShipScreen() {
           snapToInterval={snapInterval}
           decelerationRate="fast"
           disableIntervalMomentum
+          style={SNAP_STRIP}
           onScroll={onScroll}
-          onMomentumScrollEnd={onMomentumEnd}
           scrollEventThrottle={16}
           contentContainerStyle={{ paddingHorizontal: sidePadding, gap: CARD_GAP }}
         >
@@ -221,7 +256,7 @@ const ShipCard = React.memo(function ShipCard({
   });
 
   return (
-    <Animated.View style={[styles.card, { width: cardWidth }, animatedStyle]}>
+    <Animated.View style={[styles.card, { width: cardWidth }, SNAP_CARD, animatedStyle]}>
       <View
         style={[
           styles.cardInner,
