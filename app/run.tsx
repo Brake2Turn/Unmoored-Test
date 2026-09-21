@@ -55,6 +55,23 @@ const JUMP_HEIGHT = 46;
 /** Between the three tabs, and between the row of them and the jump. */
 const TAB_GAP = 10;
 
+/**
+ * What the helm holds back above the topmost art and below the jump button.
+ *
+ * Both used to be larger, and the slack came out of the middle — the one part
+ * of this screen worth giving room to, since the ship and whatever is waiting
+ * for it are the only things on it. The top only has to clear LEAVE and the
+ * dev control, which are a single line of ten-point type; the bottom only has
+ * to keep the jump button off the edge of the phone, on top of whatever safe
+ * area the hardware already asks for.
+ *
+ * They are named because two places need to agree on them: the padding that
+ * positions the stack, and the budget that sizes the art inside it. When they
+ * were written out twice, changing one silently mis-scaled the ships.
+ */
+const HUD_TOP = 44;
+const HUD_BOTTOM = 20;
+
 /** The bottom of the helm: a row of tabs with the jump beneath it. */
 const CONTROL_ROW_HEIGHT = layout.tabHeight + TAB_GAP + JUMP_HEIGHT;
 
@@ -181,9 +198,9 @@ export default function RunScreen() {
    */
   const chromeHeight =
     insets.top +
-    58 +
+    HUD_TOP +
     insets.bottom +
-    40 +
+    HUD_BOTTOM +
     STATUS_BAR_HEIGHT +
     CONTROL_ROW_HEIGHT +
     STACK_GAP * 3;
@@ -275,7 +292,7 @@ export default function RunScreen() {
       <Backdrop width={width} height={height} variant="deep" />
       <StarField width={width} height={height} reduceMotion={settings.reduceMotion} />
 
-      <View style={[styles.leaveRow, { top: insets.top + 6 }]}>
+      <View style={[styles.leaveRow, { top: insets.top + 2 }]}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Leave the run and return to the title screen"
@@ -288,7 +305,7 @@ export default function RunScreen() {
       </View>
 
       {/* Dev only, opposite LEAVE: there is nothing to shoot the shield yet. */}
-      <View style={[styles.devRow, { top: insets.top + 6 }]}>
+      <View style={[styles.devRow, { top: insets.top + 2 }]}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Developer: put a hit on the ship"
@@ -307,7 +324,7 @@ export default function RunScreen() {
       <View
         style={[
           styles.stack,
-          { paddingTop: insets.top + 58, paddingBottom: insets.bottom + 40 },
+          { paddingTop: insets.top + HUD_TOP, paddingBottom: insets.bottom + HUD_BOTTOM },
         ]}
       >
         {/* Whatever is waiting here holds the upper half, facing down. */}
@@ -395,7 +412,7 @@ export default function RunScreen() {
             style={[
               styles.panelHolder,
               {
-                bottom: insets.bottom + 40 + CONTROL_ROW_HEIGHT + 12,
+                bottom: insets.bottom + HUD_BOTTOM + CONTROL_ROW_HEIGHT + 12,
                 left: Math.max(16, (width - layout.panelWidth) / 2),
               },
             ]}
