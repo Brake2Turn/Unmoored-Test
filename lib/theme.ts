@@ -33,6 +33,8 @@ export const palette = {
 
   planetLight: '#3E3460',
   planetDark: '#100E21',
+  /** Sunlit highlands on the planet, and the bloom on its lit limb. */
+  planetHighlight: '#6E5EA6',
 } as const;
 
 /**
