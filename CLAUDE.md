@@ -245,10 +245,13 @@ The reactor is on the helm only — the sector map is for choosing where to go
 and deliberately carries none of it — and it has two states
 (`components/ReactorPanel.tsx`).
 
-**Collapsed** it is a thumb-sized tab in the bottom-left: one row per subsystem
-with its icon and what is in it, then a bolt and the power nothing has claimed.
-That is enough to *read* the reactor at a glance, and it is all that is on
-screen while the player is flying.
+**Collapsed** it is a thumb-sized tab in the bottom-left. Each subsystem row is
+two things stacked — its icon and pips for what is *in* it, and a hairline
+track for how far what it is building has got — then a bolt and the power
+nothing has claimed. The charge is the half that changes second to second, so
+leaving it out meant opening the controls just to see whether the drive was
+nearly there. The shield's track is measured against the ceiling it is powered
+for, not against four: the pips beside it already say how high that cap is.
 
 **Expanded** — tap the tab — the controls open *over* the helm, on a scrim that
 dims it and catches the tap that closes them. They are an overlay rather than a
@@ -263,11 +266,14 @@ state. The icons carry it, and they are shared between the two states
 the controls reads the tab afterwards. Free power is a bolt and a number, not
 `0 FREE`.
 
-Hull and fuel are one line above the controls (`components/StatusBar.tsx`) —
-they are both "what this ship has left", and they were costing two rows for two
-numbers that never change in the same breath. The jump is a compact control
-beside the tab rather than a menu-sized panel; `MenuButton` takes a `height`
-for it and drops its label a size to match.
+The hull is one white line above the controls (`components/StatusBar.tsx`),
+the full width of the chrome. **Fuel rides on the jump button** — `MenuButton`
+takes a `trailingLabel` and pins it inside the right edge in the button's own
+text colour — because the only question fuel answers is whether to jump, and a
+strip of its own was a row spent on a number consulted at one moment. It is
+left off when the label already says the tank is empty. The jump is a compact
+control beside the tab rather than a menu-sized panel; `MenuButton` takes a
+`height` for it and drops its label a size to match.
 
 Because the chrome is now a known, small slice of the helm, the two pieces of
 ship art are scaled from the space left over rather than sized by hand; fixed

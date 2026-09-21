@@ -21,6 +21,12 @@ type Props = {
    * the reactor tab rather than a full menu row, so it asks for less.
    */
   height?: number;
+  /**
+   * A small reading pinned to the right inside the button, in the button's own
+   * text colour. The helm's fuel lives here rather than in a strip of its own:
+   * it is only ever consulted when deciding whether to jump.
+   */
+  trailingLabel?: string;
 };
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -40,6 +46,7 @@ export function MenuButton({
   disabled = false,
   width,
   height = layout.buttonHeight,
+  trailingLabel,
 }: Props) {
   const pressed = useSharedValue(0);
 
@@ -108,6 +115,12 @@ export function MenuButton({
           bloomStyle,
         ]}
       />
+      {trailingLabel ? (
+        <View pointerEvents="none" style={styles.trailing}>
+          <Text style={[styles.trailingLabel, { color: scheme.label }]}>{trailingLabel}</Text>
+        </View>
+      ) : null}
+
       <View pointerEvents="none" style={styles.stack}>
         <Text
           style={[
@@ -145,6 +158,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   labelCompact: { fontSize: 14, letterSpacing: tracking.caption },
+  trailing: { position: 'absolute', right: 13, top: 0, bottom: 0, justifyContent: 'center' },
+  trailingLabel: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1,
+    fontVariant: ['tabular-nums'],
+    opacity: 0.85,
+  },
   caption: {
     fontFamily: fonts.body,
     fontSize: 10,

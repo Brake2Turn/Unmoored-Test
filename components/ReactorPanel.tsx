@@ -42,12 +42,19 @@ import { fonts, palette, tracking } from '@/lib/theme';
  */
 
 /** Both are fixed, so the helm can lay itself out around them. */
-export const REACTOR_TAB_WIDTH = 66;
-export const REACTOR_TAB_HEIGHT = 76;
+export const REACTOR_TAB_WIDTH = 78;
+export const REACTOR_TAB_HEIGHT = 100;
 export const REACTOR_CONTROLS_WIDTH = 252;
 
-const TAB_ROW_HEIGHT = 13;
+/**
+ * A subsystem row in the tab is two things stacked: what is *in* it, and how
+ * far what it is building has got. The charge is the half that changes second
+ * to second, so leaving it out of the collapsed state meant opening the
+ * controls just to see whether the drive was nearly there.
+ */
+const TAB_ROW_HEIGHT = 20;
 const TAB_PIP = 5;
+const TAB_TRACK_HEIGHT = 2.5;
 
 /** Columns in the expanded controls, so the bars line up under the cells. */
 const GLYPH_W = 13;
@@ -64,6 +71,20 @@ const SURGE_UP_MS = 110;
 const SURGE_DOWN_MS = 300;
 const SETTLE_MS = SURGE_UP_MS + SURGE_DOWN_MS + 120;
 
+/**
+ * How full a subsystem's own business is, 0 to 1.
+ *
+ * The shield is measured against the ceiling it is powered for rather than
+ * against four, so a shield at its cap reads full — the pips beside it already
+ * say how high that cap is.
+ */
+function tabCharge(subsystem: Subsystem, energy: EnergyState, charges: Charges): number {
+  if (subsystem === 'shields') {
+    return energy.shields > 0 ? Math.min(1, charges.shield / energy.shields) : 0;
+  }
+  return Math.max(0, Math.min(1, subsystem === 'weapons' ? charges.weapon : charges.engine));
+}
+
 type Charges = {
   /** The shield's live strength, a float — see `shieldLevel`. */
   shield: number;
@@ -77,10 +98,12 @@ type Charges = {
 export function ReactorTab({
   energy,
   reactor,
+  charges,
   onPress,
 }: {
   energy: EnergyState;
   reactor: number;
+  charges: Charges;
   onPress: () => void;
 }) {
   const free = freeEnergy(energy, reactor);
@@ -96,31 +119,49 @@ export function ReactorTab({
       hitSlop={10}
       style={({ pressed }) => [styles.tab, pressed && styles.tabPressed]}
     >
-      {SUBSYSTEMS.map((subsystem) => (
-        <View key={subsystem} style={styles.tabRow}>
-          <SubsystemGlyph
-            subsystem={subsystem}
-            color={energy[subsystem] > 0 ? SUBSYSTEM_STYLE[subsystem].accent : palette.textDisabled}
-            size={11}
-          />
-          <View style={styles.tabPips}>
-            {Array.from({ length: SUBSYSTEM_CAPACITY }, (_, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.tabPip,
-                  i < energy[subsystem]
-                    ? { backgroundColor: SUBSYSTEM_STYLE[subsystem].accent }
-                    : null,
-                ]}
-              />
-            ))}
+      {SUBSYSTEMS.map((subsystem) => {
+        const accent = SUBSYSTEM_STYLE[subsystem].accent;
+        const lit = energy[subsystem] > 0;
+        const filled = tabCharge(subsystem, energy, charges);
+
+        return (
+          <View key={subsystem} style={styles.tabRow}>
+            <SubsystemGlyph
+              subsystem={subsystem}
+              color={lit ? accent : palette.textDisabled}
+              size={11}
+            />
+
+            <View style={styles.tabStack}>
+              <View style={styles.tabPips}>
+                {Array.from({ length: SUBSYSTEM_CAPACITY }, (_, i) => (
+                  <View
+                    key={i}
+                    style={[styles.tabPip, i < energy[subsystem] ? { backgroundColor: accent } : null]}
+                  />
+                ))}
+              </View>
+
+              {/* How far this system has got, without opening anything. */}
+              <View style={[styles.tabTrack, !lit && styles.tabTrackStalled]}>
+                <View
+                  style={[
+                    styles.tabTrackFill,
+                    {
+                      width: `${filled * 100}%`,
+                      backgroundColor: accent,
+                      opacity: filled >= 1 ? 1 : 0.6,
+                    },
+                  ]}
+                />
+              </View>
+            </View>
           </View>
-        </View>
-      ))}
+        );
+      })}
 
       {/* What the reactor is making that nothing has claimed. */}
-      <View style={styles.tabRow}>
+      <View style={styles.tabFreeRow}>
         <ReactorGlyph color={free > 0 ? palette.accent : palette.textDisabled} size={11} />
         <Text
           style={[styles.tabFree, { color: free > 0 ? palette.accent : palette.textDisabled }]}
@@ -439,10 +480,25 @@ const styles = StyleSheet.create({
   },
   tabPressed: { backgroundColor: 'rgba(255,255,255,0.06)' },
   tabRow: { flexDirection: 'row', alignItems: 'center', height: TAB_ROW_HEIGHT, gap: 6 },
-  tabPips: { flexDirection: 'row', alignItems: 'center', gap: 3, flex: 1 },
+  tabFreeRow: { flexDirection: 'row', alignItems: 'center', height: 13, gap: 6 },
+  tabStack: { flex: 1, gap: 3 },
+  tabPips: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  tabTrack: {
+    height: TAB_TRACK_HEIGHT,
+    borderRadius: TAB_TRACK_HEIGHT / 2,
+    backgroundColor: EMPTY_CELL,
+    overflow: 'hidden',
+  },
+  tabTrackStalled: { backgroundColor: 'rgba(255,255,255,0.05)' },
+  tabTrackFill: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: TAB_TRACK_HEIGHT / 2,
+  },
   tabPip: {
     flex: 1,
-    maxWidth: TAB_PIP,
     height: TAB_PIP,
     borderRadius: 1,
     backgroundColor: EMPTY_CELL,

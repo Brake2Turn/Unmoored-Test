@@ -1,16 +1,12 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { FuelBadge } from '@/components/FuelBadge';
 import { HULL_MAX } from '@/lib/hull';
 import { fonts, palette, tracking } from '@/lib/theme';
 
 type Props = {
   /** Plates left, 0 to `HULL_MAX`. */
   hull: number;
-  /** Jumps left in the tank. */
-  fuel: number;
-  accent: string;
   width: number;
 };
 
@@ -18,15 +14,13 @@ type Props = {
 export const STATUS_BAR_HEIGHT = 20;
 
 /**
- * Hull and fuel on one line.
+ * The ship's condition: one white line, the full width of the helm's chrome.
  *
- * They were two blocks stacked on top of each other, which is two lines of
- * the helm spent on two numbers that never change in the same breath. They
- * are both "what this ship has left", so they read as one strip: the hull
- * takes the room it needs to be a line worth reading, and the fuel sits at
- * the end of it.
+ * Fuel used to sit at the end of it and has moved into the jump button, which
+ * is the only place it is ever consulted — leaving this line to be a line,
+ * long enough that losing a plate is visible rather than a rounding error.
  */
-export function StatusBar({ hull, fuel, accent, width }: Props) {
+export function StatusBar({ hull, width }: Props) {
   const left = Math.max(0, Math.min(HULL_MAX, hull));
   const fraction = HULL_MAX > 0 ? left / HULL_MAX : 0;
 
@@ -44,8 +38,6 @@ export function StatusBar({ hull, fuel, accent, width }: Props) {
       <View style={styles.track}>
         <View style={[styles.fill, { width: `${fraction * 100}%` }]} />
       </View>
-
-      <FuelBadge remaining={fuel} accent={accent} size="compact" />
     </View>
   );
 }

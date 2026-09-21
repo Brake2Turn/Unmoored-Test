@@ -209,8 +209,14 @@ export default function RunScreen() {
    * different problem and the slider would just sit there unexplained.
    */
   const jumpLabel =
-    blocked === 'fuel' ? 'OUT OF FUEL' : blocked === 'engines' ? 'ENGINES OFFLINE' : 'JUMP';
-  const jumpCaption = blocked === 'engines' ? 'PUT A BAR INTO ENGINES' : undefined;
+    blocked === 'fuel' ? 'OUT OF FUEL' : blocked === 'engines' ? 'NO ENGINES' : 'JUMP';
+  const jumpCaption = blocked === 'engines' ? 'POWER THE ENGINES' : undefined;
+  /**
+   * Fuel rides on the button rather than in a strip of its own, since the only
+   * question it answers is whether to jump. It is left off when the label is
+   * already saying the tank is empty.
+   */
+  const jumpFuel = blocked === 'fuel' ? undefined : `F ${fuel}`;
 
   /**
    * Dev only: put a hit on the ship so the shield, its effects and the hull
@@ -312,12 +318,7 @@ export default function RunScreen() {
         </FadeInView>
 
         {/* What this ship has left, on one line. */}
-        <StatusBar
-          hull={run?.hull ?? 0}
-          fuel={fuel}
-          accent={ship.accent}
-          width={buttonWidth}
-        />
+        <StatusBar hull={run?.hull ?? 0} width={buttonWidth} />
 
         {/* The reactor at a glance, and the one place to go. */}
         <View style={[styles.controlRow, { width: buttonWidth }]}>
@@ -325,6 +326,7 @@ export default function RunScreen() {
             <ReactorTab
               energy={run.energy}
               reactor={reactorOf(run)}
+              charges={{ shield: run.shieldCharge, weapon: charge.weapon, engine: charge.jump }}
               onPress={onManage}
             />
           ) : (
@@ -338,6 +340,7 @@ export default function RunScreen() {
               onPress={onJump}
               primary={!blocked}
               disabled={!!blocked}
+              trailingLabel={jumpFuel}
               width={buttonWidth - REACTOR_TAB_WIDTH - STACK_GAP}
               height={JUMP_HEIGHT}
             />
