@@ -345,7 +345,6 @@ export default function RunScreen() {
         <FadeInView enabled={!settings.reduceMotion} duration={700}>
           <ShipSystems
             shipId={ship.id}
-            accent={ship.accent}
             width={SHIP_WIDTH * artScale}
             height={SHIP_HEIGHT * artScale}
             shields={shieldLevel(run?.shieldCharge ?? 0)}

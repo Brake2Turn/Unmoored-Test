@@ -14,6 +14,16 @@ export const palette = {
   nebulaViolet: '#6145A9',
   nebulaTeal: '#1E768C',
 
+  /**
+   * Every edge, light and canopy on a player ship.
+   *
+   * One colour for all of them on purpose. The six hulls used to carry a tint
+   * each, which read as a property of the ship — as though the orange one were
+   * the fast one — when nothing about a ship varies by colour. They differ in
+   * silhouette, cargo and reactor, and those are the things worth looking at.
+   */
+  shipLine: '#FFFFFF',
+
   star: '#E8EEFF',
   starWarm: '#FFE2C8',
   starCool: '#BADBFF',

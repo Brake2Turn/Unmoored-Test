@@ -1,5 +1,3 @@
-import { palette } from '@/lib/theme';
-
 /**
  * The ships a player can launch a run in.
  *
@@ -16,8 +14,6 @@ export type Ship = {
   /** Short role label shown above the name. */
   className: string;
   tagline: string;
-  /** Tints this ship's glow, its stat bars and the launch button. */
-  accent: string;
   /**
    * Hold space, 0–1, drawn as a five-segment bar.
    *
@@ -48,7 +44,6 @@ export const SHIPS: Ship[] = [
     name: 'DRIFTER',
     className: 'SURVEY CUTTER',
     tagline: 'Slow, stubborn, and built to come home.',
-    accent: palette.accent,
     cargo: 0.6,
     reactor: 6,
   },
@@ -57,7 +52,6 @@ export const SHIPS: Ship[] = [
     name: 'LANCE',
     className: 'INTERCEPTOR',
     tagline: 'Outrun the dark. Nothing spare aboard.',
-    accent: '#E8A85F',
     cargo: 0.2,
     reactor: 5,
   },
@@ -66,7 +60,6 @@ export const SHIPS: Ship[] = [
     name: 'BULWARK',
     className: 'HEAVY HAULER',
     tagline: 'Carries everything. Hurries for nothing.',
-    accent: '#9B7FE8',
     cargo: 1.0,
     reactor: 7,
     unlockHint: 'REACH SECTOR 5',
@@ -76,7 +69,6 @@ export const SHIPS: Ship[] = [
     name: 'HALO',
     className: 'RING TENDER',
     tagline: 'Built around a hole. Holds what others cannot.',
-    accent: '#7FE8C4',
     cargo: 0.9,
     reactor: 6,
     unlockHint: 'REACH SECTOR 10',
@@ -86,7 +78,6 @@ export const SHIPS: Ship[] = [
     name: 'MANTIS',
     className: 'SALVAGE CRAFT',
     tagline: 'Takes what it needs from whatever it finds.',
-    accent: '#E8637F',
     cargo: 0.3,
     reactor: 7,
     unlockHint: 'SURVIVE A HULL BREACH',
@@ -96,7 +87,6 @@ export const SHIPS: Ship[] = [
     name: 'VESPER',
     className: 'SAIL CLIPPER',
     tagline: 'Rides the solar wind. Nothing else to give.',
-    accent: '#6E8FE8',
     cargo: 0.5,
     reactor: 4,
     unlockHint: 'FINISH A RUN UNDER 10:00',

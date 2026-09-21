@@ -465,6 +465,20 @@ Two things there are worth keeping:
   Every hull's engines share one `y`, which is what lets the flame pulse from
   a single `transformOrigin` — including the Bulwark's pair.
 
+**No ship has a colour of its own.** Every hull is drawn in `palette.shipLine`
+— plain white — and `ShipArt` takes no colour at all, only a `locked` flag that
+swaps in the cold grey. Each ship used to carry an `accent` on its table entry
+that tinted its art, its stat bars, its card border and the whole sector map,
+so the map changed colour depending on what you had launched in. Nothing about
+a ship actually varies by colour: they differ in silhouette, cargo and reactor.
+The field is gone from `Ship` rather than set to one shared value, so the six
+cannot quietly drift apart again. Everything that used to borrow a ship's tint
+now uses `palette.accent`, which is the app's own.
+
+The subsystem colours are untouched and are a different thing — a cyan shield
+bubble and an orange exhaust say which *row* is powering them, not which ship
+it is.
+
 Hull and speed used to sit beside cargo on the ship cards. They are gone —
 cargo is the one stat that still varies without being energy. The cards also
 carry an empty **WEAPON** hardpoint above cargo and the reactor; there is no

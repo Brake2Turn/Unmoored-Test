@@ -17,7 +17,6 @@ import {
   sectorOf,
   type RunState,
 } from '@/lib/runStore';
-import { shipById } from '@/lib/ships';
 import {
   JUMP_RANGE,
   MAP_H,
@@ -63,7 +62,6 @@ export default function SectorScreen() {
   const map: SectorMap | undefined = run?.map;
   const position = run?.position ?? 0;
   const visited = useMemo(() => new Set(run?.visited ?? []), [run?.visited]);
-  const ship = shipById(run?.shipId);
   const fuel = run?.fuel ?? 0;
   const dry = fuel <= 0;
   // The helm will not open this screen with the engines cold, but a run
@@ -144,7 +142,7 @@ export default function SectorScreen() {
         </Pressable>
         <Text style={styles.heading}>SECTOR {run ? sectorOf(run) : 1}</Text>
         <View style={[styles.back, styles.fuelSlot]}>
-          <FuelBadge remaining={fuel} accent={ship.accent} size="compact" />
+          <FuelBadge remaining={fuel} accent={palette.accent} size="compact" />
         </View>
       </View>
 
@@ -155,9 +153,9 @@ export default function SectorScreen() {
             cx={currentPx.x}
             cy={currentPx.y}
             r={JUMP_RANGE * scale}
-            fill={ship.accent}
+            fill={palette.accent}
             fillOpacity={dry ? 0 : 0.035}
-            stroke={ship.accent}
+            stroke={palette.accent}
             strokeOpacity={dry ? 0.07 : 0.22}
             strokeWidth={1}
             strokeDasharray="3 5"
@@ -174,7 +172,7 @@ export default function SectorScreen() {
                 y1={currentPx.y}
                 x2={to.x}
                 y2={to.y}
-                stroke={index === boss ? palette.danger : ship.accent}
+                stroke={index === boss ? palette.danger : palette.accent}
                 strokeOpacity={chosen ? 0.85 : 0.2}
                 strokeWidth={chosen ? 1.8 : 1}
                 strokeDasharray={chosen ? undefined : '2 6'}
@@ -212,7 +210,7 @@ export default function SectorScreen() {
                     cx={px.x}
                     cy={px.y}
                     r={star.radius + (isBoss ? 11 : 7)}
-                    fill={isBoss ? palette.danger : ship.accent}
+                    fill={isBoss ? palette.danger : palette.accent}
                     fillOpacity={dim ? 0.1 : 0.16}
                   />
                 ) : null}
@@ -220,7 +218,7 @@ export default function SectorScreen() {
                   cx={px.x}
                   cy={px.y}
                   r={star.radius}
-                  fill={star.fill === 'accent' ? ship.accent : star.fill}
+                  fill={star.fill === 'accent' ? palette.accent : star.fill}
                   fillOpacity={star.solid ? 1 : 0.5}
                 />
                 {/* A ring means "we have stood here". It is keyed off the
@@ -306,7 +304,7 @@ export default function SectorScreen() {
 
 type StarKind = 'boss' | 'here' | 'chosen' | 'reachable' | 'visited' | 'far';
 
-/** How each kind of star is drawn. 'accent' means the player ship's colour. */
+/** How each kind of star is drawn. 'accent' means the app's own accent. */
 const STAR: Record<StarKind, { radius: number; fill: string; solid: boolean; halo: boolean }> = {
   boss: { radius: 8, fill: palette.danger, solid: true, halo: false },
   here: { radius: 7, fill: 'accent', solid: true, halo: true },

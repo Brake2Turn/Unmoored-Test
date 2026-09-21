@@ -18,7 +18,6 @@ import { SUBSYSTEM_STYLE } from '@/lib/subsystems';
 
 type Props = {
   shipId: string;
-  accent: string;
   /** The ship art's own size. The systems box around it is larger — see below. */
   width: number;
   height: number;
@@ -257,7 +256,6 @@ function round(n: number): number {
  */
 export function ShipSystems({
   shipId,
-  accent,
   width,
   height,
   shields,
@@ -281,7 +279,7 @@ export function ShipSystems({
         animate={animate}
       />
 
-      <ShipArt shipId={shipId} accent={accent} width={width} height={height} />
+      <ShipArt shipId={shipId} width={width} height={height} />
 
       <Shield level={shields} width={width * SYSTEMS_SPAN} height={height * SYSTEMS_SPAN} />
 
