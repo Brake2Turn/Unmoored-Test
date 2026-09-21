@@ -17,6 +17,7 @@ import { palette } from '@/lib/theme';
  * between.
  */
 const PHOTOS: Partial<Record<EntityId, ImageSourcePropType>> = {
+  pilot: require('@/assets/portraits/pilot.png'),
   spaceTrucker: require('@/assets/portraits/spaceTrucker.png'),
 };
 
