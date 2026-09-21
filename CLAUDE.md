@@ -151,9 +151,27 @@ one to hold that.
 
 A hit (`damageShield`) takes a whole level and the part-charge with it: caught
 at 2.9 the shield drops to 2, not 1.9, so being hit mid-regen costs the
-progress too. Nothing shoots yet — the only thing that calls it is the
-**DEV · HIT SHIELD** control opposite LEAVE on the helm, there so the bar and
-the regen can be watched. Delete the control with the feature it was testing.
+progress too.
+
+**`takeHit` is the one rule for what a hit costs.** Shields soak it while any
+are standing, and only once they are down does the hull start losing plates —
+which is the whole reason to spend energy on shields. Whatever starts shooting
+later calls this rather than inventing its own order. Nothing shoots yet, so
+its only caller is the **DEV · TAKE A HIT** control opposite LEAVE on the helm,
+there so the shield, its effects and the hull can be watched. Delete the
+control with the feature it was testing.
+
+### The hull is not part of the reactor
+
+`lib/hull.ts` is a third pure leaf: `HULL_MAX` plates (8), `damagedHull` takes
+one, and nothing puts any back. It is drawn as a plain white line under the
+panel with HULL on the left — **deliberately outside the panel's card and
+unlike anything in it.** The panel is a set of choices, rows the player moves
+energy between; the hull is not one of those, and giving it the card and the
+cell treatment would have filed it as another thing to fiddle with.
+
+`verify:energy` walks the hull all the way down and holds that it takes exactly
+`HULL_MAX` hits and stays there.
 
 Pulling power is asymmetric on purpose: it drops the charge on the spot, in
 `shiftEnergy`, because the energy holding it is simply gone. A new run launches
@@ -282,10 +300,11 @@ tints live in `lib/subsystems.ts`, which is to it what `encounters.ts` is to
 
 ### Layer boundaries
 
-`lib/theme.ts`, `lib/sectorMap.ts` and `lib/energy.ts` import nothing from the
-project and are the leaves. `lib/ships.ts`, `lib/encounters.ts` and
+`lib/theme.ts`, `lib/sectorMap.ts`, `lib/energy.ts` and `lib/hull.ts` import
+nothing from the project and are the leaves. `lib/ships.ts`, `lib/encounters.ts` and
 `lib/subsystems.ts` depend on the theme; `lib/runStore.ts` depends on ships,
-the map, the energy rules and `encounters.ts` — it reads the `hostile` flag out
+the map, the energy and hull rules, and `encounters.ts` — it reads the
+`hostile` flag out
 of `ENCOUNTER_STYLE` rather than keeping its own list of which stars mean
 trouble. Keep that direction — the theme
 briefly imported a helper from `sectorMap` and it was the wrong way round.

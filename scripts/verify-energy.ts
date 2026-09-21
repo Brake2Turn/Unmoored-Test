@@ -1,5 +1,5 @@
 /**
- * Property checks for reactor energy.
+ * Property checks for reactor energy and the hull.
  *
  * The rules promise things no type can express — a reactor that cannot power
  * everything, an allocation that never exceeds what the reactor makes, a save
@@ -34,6 +34,7 @@ import {
   type EnergyState,
   type Subsystem,
 } from '../lib/energy.ts';
+import { HULL_MAX, damagedHull, isWrecked } from '../lib/hull.ts';
 
 const RUNS = Number(process.argv[2] ?? 2000);
 const failures: string[] = [];
@@ -284,6 +285,28 @@ check('junk charge has no level', shieldLevel(NaN) === 0 && shieldProgress(NaN) 
 check('junk charge starts from nothing', regenShield(NaN, 2, 1) > 0);
 check('negative time does not drain a shield', regenShield(1, 3, -5) === 1);
 
+// ---------------------------------------------------------------------------
+// The hull. Nothing allocates it and nothing repairs it; it only goes down,
+// one plate at a time, and never past nothing.
+// ---------------------------------------------------------------------------
+check('a ship starts with plating', HULL_MAX >= 1);
+check('a hit costs one plate', damagedHull(HULL_MAX) === HULL_MAX - 1);
+check('a bare hull cannot go negative', damagedHull(0) === 0);
+check('junk plating reads as none', damagedHull(NaN) === 0);
+check('a full hull is not a wreck', !isWrecked(HULL_MAX));
+check('no plating is a wreck', isWrecked(0));
+
+// Walking it all the way down takes exactly as many hits as there are plates.
+let plates = HULL_MAX;
+let blows = 0;
+while (!isWrecked(plates) && blows < 100) {
+  plates = damagedHull(plates);
+  blows += 1;
+}
+check(`it takes ${HULL_MAX} hits to strip the hull`, blows === HULL_MAX);
+check('and it stays stripped', damagedHull(plates) === 0);
+
+console.log(`hull plates       ${HULL_MAX}`);
 console.log(`hostile hold      ${holdTimes.map((t) => t.toFixed(1)).join('s, ')}s`);
 console.log(`ordinary jump     ${ordinary.map((t) => t.toFixed(1)).join('s, ')}s`);
 console.log(`shield per bar    ${secondsPerBar.toFixed(1)}s`);

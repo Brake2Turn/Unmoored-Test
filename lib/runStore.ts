@@ -7,6 +7,7 @@ import {
   chargeRate,
   clampEnergy,
   damagedShield,
+  shieldLevel,
   defaultEnergy,
   regenShield,
   shift,
@@ -14,6 +15,7 @@ import {
   type Subsystem,
 } from '@/lib/energy';
 import { ENCOUNTER_STYLE } from '@/lib/encounters';
+import { HULL_MAX, damagedHull } from '@/lib/hull';
 import { DEFAULT_SHIP_ID, shipById } from '@/lib/ships';
 import {
   FUEL_PER_RUN,
@@ -70,6 +72,11 @@ export type RunState = {
    * matching it. A float: the envelope fades up as it charges.
    */
   shieldCharge: number;
+  /**
+   * Plates left on the hull. Nothing allocates it and nothing repairs it yet;
+   * it is simply what is left once the shields have failed to stop something.
+   */
+  hull: number;
   /**
    * How many hits this shield has taken, only ever counted up.
    *
@@ -207,6 +214,7 @@ function createRun(shipId: string): RunState {
     // A run opens with the drive still to build, the same as any arrival.
     jumpCharge: 0,
     weaponCharge: 0,
+    hull: HULL_MAX,
     shieldHits: 0,
     // A run opens with its shields already up; the charge time is for changes
     // made in flight, not a penalty for launching.
@@ -323,6 +331,21 @@ export function shiftEnergy(run: RunState, subsystem: Subsystem, delta: number):
 }
 
 /**
+ * Something hits the ship.
+ *
+ * The shields soak it while any are standing, and only once they are down does
+ * the hull start losing plates — which is the whole reason to spend energy on
+ * shields. One rule, so that whatever starts shooting later does not get to
+ * invent its own order.
+ */
+export function takeHit(run: RunState): RunState {
+  if (shieldLevel(run.shieldCharge) > 0) return damageShield(run);
+
+  const hull = damagedHull(run.hull);
+  return hull === run.hull ? run : { ...run, hull };
+}
+
+/**
  * Takes a level off the shield.
  *
  * The one thing that damages a shield today is the dev control on the helm —
@@ -385,6 +408,8 @@ function hydrate(stored: StoredRun): RunState {
     // into the charge already built, so a run mid-hold keeps its progress.
     jumpCharge: legacyJumpCharge(stored, map, position),
     weaponCharge: clampNumber(stored.weaponCharge, 0, WEAPON_UNITS, 0),
+    // A save from before the hull existed comes back intact rather than wrecked.
+    hull: clampNumber(stored.hull, 0, HULL_MAX, HULL_MAX),
     shieldCharge: clampNumber(stored.shieldCharge, 0, energy.shields, energy.shields),
     // Only ever compared against itself to spot a change, so any finite
     // number will do; a save from before the counter starts at nothing.

@@ -7,6 +7,7 @@ import { Backdrop } from '@/components/Backdrop';
 import { ENERGY_PANEL_HEIGHT, EnergyPanel } from '@/components/EnergyPanel';
 import { FadeInView } from '@/components/FadeInView';
 import { FuelBadge } from '@/components/FuelBadge';
+import { HULL_BAR_HEIGHT, HullBar } from '@/components/HullBar';
 import { MenuButton } from '@/components/MenuButton';
 import { StarField } from '@/components/StarField';
 import { EncounterShip } from '@/components/ships/EncounterShip';
@@ -15,12 +16,12 @@ import { useHaptics, useSettings } from '@/lib/settings';
 import { fonts, layout, palette, tracking, useMenuWidth } from '@/lib/theme';
 import {
   chargeFractions,
-  damageShield,
   jumpBlocker,
   loadRun,
   reactorOf,
   saveRun,
   shiftEnergy,
+  takeHit,
   tickRun,
   type RunState,
 } from '@/lib/runStore';
@@ -105,7 +106,7 @@ export default function RunScreen() {
 
   const buttonWidth = useMenuWidth();
 
-  const canHitShield = !!run && shieldLevel(run.shieldCharge) > 0;
+  const canTakeHit = !!run && (shieldLevel(run.shieldCharge) > 0 || run.hull > 0);
   const charge = run ? chargeFractions(run) : { jump: 0, weapon: 0 };
   // Each clock is worth ticking only while it has somewhere to go and the
   // power to get there — a row with nothing in it does not creep along.
@@ -159,9 +160,10 @@ export default function RunScreen() {
     insets.bottom +
     40 +
     ENERGY_PANEL_HEIGHT +
+    HULL_BAR_HEIGHT +
     FUEL_ROW_HEIGHT +
     layout.buttonHeight +
-    STACK_GAP * 4;
+    STACK_GAP * 5;
   const artBudget = height - chromeHeight;
   const artScale = Math.max(0.55, Math.min(1, artBudget / (waiting.height + SHIP_SLOT_HEIGHT)));
 
@@ -189,12 +191,12 @@ export default function RunScreen() {
   const jumpCaption = blocked === 'engines' ? 'PUT A BAR INTO ENGINES' : undefined;
 
   /**
-   * Dev only: knock a level off the shield so the bar and the regen can be
-   * watched without any combat to do it. Delete this with the button.
+   * Dev only: put a hit on the ship so the shield, its effects and the hull
+   * can be watched without any combat to do it. Delete this with the button.
    */
-  const onHitShield = useCallback(() => {
+  const onTakeHit = useCallback(() => {
     if (!run) return;
-    const next = damageShield(run);
+    const next = takeHit(run);
     if (next === run) return;
     setRun(next);
     haptics.tap();
@@ -240,15 +242,15 @@ export default function RunScreen() {
       <View style={[styles.devRow, { top: insets.top + 6 }]}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Developer: take one level off the shield"
-          accessibilityState={{ disabled: !canHitShield }}
-          disabled={!canHitShield}
-          onPress={onHitShield}
+          accessibilityLabel="Developer: put a hit on the ship"
+          accessibilityState={{ disabled: !canTakeHit }}
+          disabled={!canTakeHit}
+          onPress={onTakeHit}
           hitSlop={16}
           style={styles.leave}
         >
-          <Text style={[styles.leaveLabel, canHitShield && { color: palette.danger }]}>
-            DEV · HIT SHIELD
+          <Text style={[styles.leaveLabel, canTakeHit && { color: palette.danger }]}>
+            DEV · TAKE A HIT
           </Text>
         </Pressable>
       </View>
@@ -302,6 +304,11 @@ export default function RunScreen() {
         ) : (
           <View style={{ height: ENERGY_PANEL_HEIGHT }} />
         )}
+
+        {/* Outside the panel on purpose: the hull is not something the
+            player allocates, it is what is left when everything else has
+            failed to stop a hit. */}
+        <HullBar hull={run?.hull ?? 0} width={buttonWidth} />
 
         <FuelBadge remaining={fuel} accent={ship.accent} />
         <MenuButton
