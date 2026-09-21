@@ -28,6 +28,17 @@ export const palette = {
   trade: '#E8C15F',
 
   /**
+   * Reactor energy nothing has claimed.
+   *
+   * Yellow rather than the accent: spare power was cyan, which is the colour
+   * of the shields row directly above it and of every other reading in the
+   * app, so the one number that means "unspent" looked like another system
+   * reporting in. Loose current should not match anything it could be put
+   * into.
+   */
+  power: '#F2C94C',
+
+  /**
    * The three reactor subsystems, each its own tint so a glance at the helm
    * panel says which row is which without reading the labels. These carry
    * beyond the panel: the shield bubble and the exhaust are drawn in them.

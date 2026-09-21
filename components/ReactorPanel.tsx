@@ -181,9 +181,9 @@ export function ReactorTab({
 
       {/* What the reactor is making that nothing has claimed. */}
       <View style={styles.tabFreeRow}>
-        <ReactorGlyph color={free > 0 ? palette.accent : palette.textDisabled} size={11} />
+        <ReactorGlyph color={free > 0 ? palette.power : palette.textDisabled} size={11} />
         <Text
-          style={[styles.tabFree, { color: free > 0 ? palette.accent : palette.textDisabled }]}
+          style={[styles.tabFree, { color: free > 0 ? palette.power : palette.textDisabled }]}
         >
           {free}
         </Text>
@@ -251,9 +251,9 @@ export function ReactorControls({
         "spare" and "spent" line up.
       */}
       <View style={styles.controlsFooter}>
-        <ReactorGlyph color={free > 0 ? palette.accent : palette.textDisabled} size={13} />
+        <ReactorGlyph color={free > 0 ? palette.power : palette.textDisabled} size={13} />
         <Text
-          style={[styles.footerFree, { color: free > 0 ? palette.accent : palette.textDisabled }]}
+          style={[styles.footerFree, { color: free > 0 ? palette.power : palette.textDisabled }]}
         >
           {free}
         </Text>
