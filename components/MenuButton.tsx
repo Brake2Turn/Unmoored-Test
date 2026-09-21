@@ -16,6 +16,11 @@ type Props = {
   primary?: boolean;
   disabled?: boolean;
   width: number;
+  /**
+   * Overrides the menu height. The helm's JUMP is a compact control beside
+   * the reactor tab rather than a full menu row, so it asks for less.
+   */
+  height?: number;
 };
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -34,6 +39,7 @@ export function MenuButton({
   primary = false,
   disabled = false,
   width,
+  height = layout.buttonHeight,
 }: Props) {
   const pressed = useSharedValue(0);
 
@@ -85,7 +91,7 @@ export function MenuButton({
         styles.button,
         {
           width,
-          height: layout.buttonHeight,
+          height,
           borderRadius: layout.buttonRadius,
           backgroundColor: scheme.fill,
           borderColor: scheme.border,
@@ -103,7 +109,15 @@ export function MenuButton({
         ]}
       />
       <View pointerEvents="none" style={styles.stack}>
-        <Text style={[styles.label, { color: scheme.label }]}>{label}</Text>
+        <Text
+          style={[
+            styles.label,
+            { color: scheme.label },
+            height < layout.buttonHeight ? styles.labelCompact : null,
+          ]}
+        >
+          {label}
+        </Text>
         {caption ? (
           <Text style={[styles.caption, { color: scheme.caption }]}>{caption}</Text>
         ) : null}
@@ -130,6 +144,7 @@ const styles = StyleSheet.create({
     letterSpacing: tracking.label,
     textAlign: 'center',
   },
+  labelCompact: { fontSize: 14, letterSpacing: tracking.caption },
   caption: {
     fontFamily: fonts.body,
     fontSize: 10,

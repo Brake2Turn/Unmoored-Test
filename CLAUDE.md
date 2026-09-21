@@ -120,8 +120,8 @@ rate at all** — a system with nothing in it sits still rather than creeping.
 Because the rate is read continuously, moving energy mid-charge changes the
 fill under the player's hands.
 
-Two charges run today, both shown as sliders in the panel under the row that
-drives them, and neither carries a number — the bar is the readout.
+Two charges run today, both shown as sliders under the row that drives them in
+the expanded controls, and neither carries a number — the bar is the readout.
 
 - **The drive** (`jumpCharge`) has to build before the ship can leave a star,
   and `applyJump` empties it on arrival. `jumpUnitsFor(run)` is derived from
@@ -164,11 +164,11 @@ control with the feature it was testing.
 ### The hull is not part of the reactor
 
 `lib/hull.ts` is a third pure leaf: `HULL_MAX` plates (8), `damagedHull` takes
-one, and nothing puts any back. It is drawn as a plain white line under the
-panel with HULL on the left — **deliberately outside the panel's card and
-unlike anything in it.** The panel is a set of choices, rows the player moves
-energy between; the hull is not one of those, and giving it the card and the
-cell treatment would have filed it as another thing to fiddle with.
+one, and nothing puts any back. It is drawn as a plain white line with HULL
+on the left, sharing a row with the fuel badge and **outside the reactor's card
+entirely.** The reactor is a set of choices, rows the player moves energy
+between; the hull is not one of those, and giving it the card and the cell
+treatment would have filed it as another thing to fiddle with.
 
 `verify:energy` walks the hull all the way down and holds that it takes exactly
 `HULL_MAX` hits and stays there.
@@ -178,11 +178,11 @@ Pulling power is asymmetric on purpose: it drops the charge on the spot, in
 with its shields already up — the charge is for changes made in flight, not a
 tax on launching.
 
-The LEVEL bar sits under the shields row in the panel and lines up with it
-through the shared `GLYPH_W` / `STEP_W` / `ROW_GAP` constants rather than by
-eye. Squares past the ceiling are drawn as bare outlines; the one currently
-charging fills across, so the five-second wait is visible instead of a number
-that jumps.
+The shield's four squares sit under its row in the expanded controls and line
+up with the cells above through the shared `GLYPH_W` / `STEP_W` / `ROW_GAP`
+constants rather than by eye. Squares past the ceiling are drawn as bare
+outlines; the one currently charging fills across, so the five-second wait is
+visible instead of a number that jumps.
 
 **A break is felt as well as counted.** `ShieldBreak` runs a blade of light
 across the whole face when a layer goes, and tears the field apart when the
@@ -239,11 +239,40 @@ saves. `LEGACY_KEYS` in `lib/energy.ts` carries those bars over — dropping the
 would have loaded a run that could not move. If a subsystem is ever renamed
 again, it gets an entry there and a check in `verify:energy`.
 
-The panel is on the helm only, where the ship is in front of you — the sector
-map is for choosing where to go, and deliberately carries none of it. Because
-the panel takes a fixed, known slice of the helm, the two pieces of ship art
-there are scaled from the space left over rather than sized by hand; fixed
-sizes dropped the Elder Shrike through the player's ship on a short phone.
+### The HUD shows, and only expands when asked
+
+The reactor is on the helm only — the sector map is for choosing where to go
+and deliberately carries none of it — and it has two states
+(`components/ReactorPanel.tsx`).
+
+**Collapsed** it is a thumb-sized tab in the bottom-left: one row per subsystem
+with its icon and what is in it, then a bolt and the power nothing has claimed.
+That is enough to *read* the reactor at a glance, and it is all that is on
+screen while the player is flying.
+
+**Expanded** — tap the tab — the controls open *over* the helm, on a scrim that
+dims it and catches the tap that closes them. They are an overlay rather than a
+row in the layout, which is the whole point: the helm is sized for the tab, so
+the room the controls need is only taken while energy is actually being moved.
+The panel used to hold a third of the screen permanently for controls that go
+untouched most of the time.
+
+**No words.** Not SHIELDS, WEAPONS, ENGINES, LEVEL, CHARGE or DRIVE, in either
+state. The icons carry it, and they are shared between the two states
+(`components/SubsystemGlyph.tsx`) precisely so that what the player learns from
+the controls reads the tab afterwards. Free power is a bolt and a number, not
+`0 FREE`.
+
+Hull and fuel are one line above the controls (`components/StatusBar.tsx`) —
+they are both "what this ship has left", and they were costing two rows for two
+numbers that never change in the same breath. The jump is a compact control
+beside the tab rather than a menu-sized panel; `MenuButton` takes a `height`
+for it and drops its label a size to match.
+
+Because the chrome is now a known, small slice of the helm, the two pieces of
+ship art are scaled from the space left over rather than sized by hand; fixed
+sizes dropped the Elder Shrike through the player's ship on a short phone. The
+saving went straight to the art — a boss no longer shrinks anything.
 
 Two of the three subsystems are drawn on the ship itself
 (`components/ships/ShipSystems.tsx`): shields as a bubble that holds one size
@@ -256,13 +285,14 @@ its white core both brighten, the heat haze around it builds and the pulse
 deepens, so four bars reads as hotter rather than merely longer. Weapons (bright
 red) has no mark yet — there is nothing to shoot.
 
-The panel's cells animate between unlit and their subsystem's colour, with a
-kick and a white flash as the current lands, so a bar moving between two rows
-reads as something travelling. **They also settle by timer.** Reanimated drives
-them off `requestAnimationFrame` on web, and the panel reports an allocation the
-player just changed, so a starved tab must not strand a cell showing the old
-level — the same reason `FadeInView` exists. This was not theoretical: a
-screenshot taken before the guard showed 2/2/2 while the save held 0/2/4.
+The cells in the expanded controls animate between unlit and their subsystem's
+colour, with a kick and a white flash as the current lands, so a bar moving
+between two rows reads as something travelling. **They also settle by timer.**
+Reanimated drives them off `requestAnimationFrame` on web, and they report an
+allocation the player just changed, so a starved tab must not strand a cell
+showing the old level — the same reason `FadeInView` exists. This was not
+theoretical: a screenshot taken before the guard showed 2/2/2 while the save
+held 0/2/4.
 
 The shield's fill is a radial gradient that is fully transparent inside
 `SHIELD_CLEAR` and piles up on the rim. That number is measured, not chosen:

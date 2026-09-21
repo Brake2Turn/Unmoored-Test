@@ -4,10 +4,15 @@ import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-na
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Backdrop } from '@/components/Backdrop';
-import { ENERGY_PANEL_HEIGHT, EnergyPanel } from '@/components/EnergyPanel';
+import {
+  REACTOR_CONTROLS_WIDTH,
+  REACTOR_TAB_HEIGHT,
+  REACTOR_TAB_WIDTH,
+  ReactorControls,
+  ReactorTab,
+} from '@/components/ReactorPanel';
 import { FadeInView } from '@/components/FadeInView';
-import { FuelBadge } from '@/components/FuelBadge';
-import { HULL_BAR_HEIGHT, HullBar } from '@/components/HullBar';
+import { STATUS_BAR_HEIGHT, StatusBar } from '@/components/StatusBar';
 import { MenuButton } from '@/components/MenuButton';
 import { StarField } from '@/components/StarField';
 import { EncounterShip } from '@/components/ships/EncounterShip';
@@ -45,8 +50,15 @@ const SHIP_SLOT_HEIGHT = SHIP_HEIGHT * SYSTEMS_SPAN;
 /** Space between the stacked pieces of the helm. */
 const STACK_GAP = 16;
 
-/** Roughly what the fuel badge stands up in. */
-const FUEL_ROW_HEIGHT = 22;
+/**
+ * The jump is a compact control beside the reactor tab now, not a menu row.
+ * It is still the full width of what is left and the tallest thing a thumb
+ * needs to find, just no longer a panel in its own right.
+ */
+const JUMP_HEIGHT = 46;
+
+/** The bottom row: the reactor tab sets its height. */
+const CONTROL_ROW_HEIGHT = REACTOR_TAB_HEIGHT;
 
 /**
  * How often the helm advances the hold timer and the shield charge.
@@ -74,6 +86,8 @@ export default function RunScreen() {
   const { settings } = useSettings();
 
   const [run, setRun] = useState<RunState | null>(null);
+  // The reactor controls are only on screen while the player is using them.
+  const [managing, setManaging] = useState(false);
 
   // The ticker reads the live run without being rebuilt on every tick.
   const runRef = useRef<RunState | null>(null);
@@ -159,11 +173,9 @@ export default function RunScreen() {
     58 +
     insets.bottom +
     40 +
-    ENERGY_PANEL_HEIGHT +
-    HULL_BAR_HEIGHT +
-    FUEL_ROW_HEIGHT +
-    layout.buttonHeight +
-    STACK_GAP * 5;
+    STATUS_BAR_HEIGHT +
+    CONTROL_ROW_HEIGHT +
+    STACK_GAP * 3;
   const artBudget = height - chromeHeight;
   const artScale = Math.max(0.55, Math.min(1, artBudget / (waiting.height + SHIP_SLOT_HEIGHT)));
 
@@ -172,6 +184,16 @@ export default function RunScreen() {
     haptics.confirm();
     router.push('/sector');
   }, [blocked, haptics, router]);
+
+  const onManage = useCallback(() => {
+    haptics.tap();
+    setManaging(true);
+  }, [haptics]);
+
+  const onDoneManaging = useCallback(() => {
+    haptics.tap();
+    setManaging(false);
+  }, [haptics]);
 
   const onLeave = useCallback(() => {
     haptics.tap();
@@ -289,37 +311,75 @@ export default function RunScreen() {
           />
         </FadeInView>
 
-        {/* Only here, with the ship in front of you — never on the sector map. */}
-        {run ? (
-          <EnergyPanel
-            energy={run.energy}
-            reactor={reactorOf(run)}
-            width={buttonWidth}
-            shieldCharge={run.shieldCharge}
-            engineCharge={charge.jump}
-            weaponCharge={charge.weapon}
-            onShift={onShift}
-            animate={!settings.reduceMotion}
-          />
-        ) : (
-          <View style={{ height: ENERGY_PANEL_HEIGHT }} />
-        )}
-
-        {/* Outside the panel on purpose: the hull is not something the
-            player allocates, it is what is left when everything else has
-            failed to stop a hit. */}
-        <HullBar hull={run?.hull ?? 0} width={buttonWidth} />
-
-        <FuelBadge remaining={fuel} accent={ship.accent} />
-        <MenuButton
-          label={jumpLabel}
-          caption={jumpCaption}
-          onPress={onJump}
-          primary={!blocked}
-          disabled={!!blocked}
+        {/* What this ship has left, on one line. */}
+        <StatusBar
+          hull={run?.hull ?? 0}
+          fuel={fuel}
+          accent={ship.accent}
           width={buttonWidth}
         />
+
+        {/* The reactor at a glance, and the one place to go. */}
+        <View style={[styles.controlRow, { width: buttonWidth }]}>
+          {run ? (
+            <ReactorTab
+              energy={run.energy}
+              reactor={reactorOf(run)}
+              onPress={onManage}
+            />
+          ) : (
+            <View style={{ width: REACTOR_TAB_WIDTH }} />
+          )}
+
+          <View style={styles.jumpHolder}>
+            <MenuButton
+              label={jumpLabel}
+              caption={jumpCaption}
+              onPress={onJump}
+              primary={!blocked}
+              disabled={!!blocked}
+              width={buttonWidth - REACTOR_TAB_WIDTH - STACK_GAP}
+              height={JUMP_HEIGHT}
+            />
+          </View>
+        </View>
       </View>
+
+      {/* The controls open over the helm rather than living in it, so the
+          room they need is only taken while they are being used. */}
+      {managing && run ? (
+        <>
+          {/* Dims the helm behind the controls, and catches the tap that
+              closes them. */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close the reactor controls"
+            onPress={onDoneManaging}
+            style={[StyleSheet.absoluteFill, styles.scrim]}
+          />
+          <View
+            style={[
+              styles.controlsHolder,
+              {
+                bottom: insets.bottom + 40 + CONTROL_ROW_HEIGHT + 12,
+                left: Math.max(16, (width - REACTOR_CONTROLS_WIDTH) / 2),
+              },
+            ]}
+          >
+            <ReactorControls
+              energy={run.energy}
+              reactor={reactorOf(run)}
+              charges={{
+                shield: run.shieldCharge,
+                weapon: charge.weapon,
+                engine: charge.jump,
+              }}
+              onShift={onShift}
+              animate={!settings.reduceMotion}
+            />
+          </View>
+        </>
+      ) : null}
     </View>
   );
 }
@@ -345,4 +405,14 @@ const styles = StyleSheet.create({
   },
   /** Takes the slack, so everything below it sits at a fixed height. */
   encounterSlot: { flex: 1, minHeight: 0, alignItems: 'center', justifyContent: 'flex-start' },
+
+  controlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: CONTROL_ROW_HEIGHT,
+    gap: STACK_GAP,
+  },
+  jumpHolder: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  scrim: { backgroundColor: 'rgba(5,7,15,0.62)', zIndex: 9 },
+  controlsHolder: { position: 'absolute', zIndex: 10 },
 });

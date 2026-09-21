@@ -1,47 +1,51 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { FuelBadge } from '@/components/FuelBadge';
 import { HULL_MAX } from '@/lib/hull';
 import { fonts, palette, tracking } from '@/lib/theme';
 
 type Props = {
   /** Plates left, 0 to `HULL_MAX`. */
   hull: number;
+  /** Jumps left in the tank. */
+  fuel: number;
+  accent: string;
   width: number;
 };
 
-/**
- * Fixed, so the helm can lay itself out around it the same way it does the
- * reactor panel.
- */
-export const HULL_BAR_HEIGHT = 16;
+/** Fixed, so the helm can lay itself out around it. */
+export const STATUS_BAR_HEIGHT = 20;
 
 /**
- * The hull: a plain white line under everything else.
+ * Hull and fuel on one line.
  *
- * Deliberately outside the reactor panel and unlike anything in it. The panel
- * is a set of choices — rows the player moves energy between — and the hull is
- * not one of those: nothing allocates it, nothing charges it, it only ever
- * gets shorter. Giving it the panel's card and cell treatment would have
- * filed it as another thing to fiddle with.
+ * They were two blocks stacked on top of each other, which is two lines of
+ * the helm spent on two numbers that never change in the same breath. They
+ * are both "what this ship has left", so they read as one strip: the hull
+ * takes the room it needs to be a line worth reading, and the fuel sits at
+ * the end of it.
  */
-export function HullBar({ hull, width }: Props) {
+export function StatusBar({ hull, fuel, accent, width }: Props) {
   const left = Math.max(0, Math.min(HULL_MAX, hull));
   const fraction = HULL_MAX > 0 ? left / HULL_MAX : 0;
 
   return (
-    <View
-      accessibilityRole="text"
-      accessibilityLabel={`Hull ${Math.round(left)} of ${HULL_MAX}`}
-      style={[styles.row, { width }]}
-    >
-      <Text numberOfLines={1} style={styles.label}>
+    <View style={[styles.row, { width }]}>
+      <Text
+        accessibilityRole="text"
+        accessibilityLabel={`Hull ${Math.round(left)} of ${HULL_MAX}`}
+        numberOfLines={1}
+        style={styles.label}
+      >
         HULL
       </Text>
 
       <View style={styles.track}>
         <View style={[styles.fill, { width: `${fraction * 100}%` }]} />
       </View>
+
+      <FuelBadge remaining={fuel} accent={accent} size="compact" />
     </View>
   );
 }
@@ -50,7 +54,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: HULL_BAR_HEIGHT,
+    height: STATUS_BAR_HEIGHT,
     gap: 10,
   },
   label: {
