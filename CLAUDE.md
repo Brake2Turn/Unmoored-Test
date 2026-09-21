@@ -220,11 +220,28 @@ recognises the player by speaker name rather than by position, so an encounter
 that opens with the pilot (number 9 does) still lands the right face on the
 right side.
 
-The faces (`components/PortraitArt.tsx`) are **placeholders**: a head and one
-distinguishing mark each, drawn from the same few parts, square for a machine
-and round for a person. They exist so two speakers can be told apart, not as
-art. Adding an entity to the table adds it to `EntityId`, and the compiler
-points at the face table until it has one.
+**Faces come in one at a time.** `components/PortraitArt.tsx` prefers supplied
+art from `PHOTOS` and falls back to a drawn placeholder — a head and one
+distinguishing mark, square for a machine and round for a person — so the set
+can be filled a speaker at a time without anything breaking in between. Both
+kinds sit in the *same frame*, deliberately: while the set is half done the two
+appear one line after another, and a framed portrait beside a bare floating
+glyph would read as a bug rather than as work in progress.
+
+Adding one is two steps. Run `scripts/make-portrait.py <source> <entityId>`,
+then add the `require` line to `PHOTOS`. The `require` has to be a literal
+path — Metro resolves them at build time, so that table cannot be built from a
+directory listing.
+
+The script exists because the art arrives as 1920px busts on flat white, and
+all three things it does are easy to get subtly wrong by hand: it clears the
+background by flooding *inward from the border* rather than replacing every
+white pixel (eyes and highlights are white too, and replacing those punches
+holes through the face), trims the margin, and brings the size down. It reduces
+with a filter rather than nearest-neighbour: the block size was measured across
+every divisor of 1920 and the uniformity curve has no cliff in it, so this art
+is pixel-art *styled* rather than a true integer upscale and has nothing to
+snap to.
 
 **The map is an instrument, not a window.** The title screen and the helm look
 *out* — gradient sky, nebulae, a drifting `StarField`. The sector map does not:

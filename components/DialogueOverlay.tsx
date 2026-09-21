@@ -25,8 +25,8 @@ import { fonts, palette, tracking } from '@/lib/theme';
 const VEIL = 'rgba(214, 224, 244, 0.13)';
 
 /** Portrait size, and how much of it stands proud of the box's top edge. */
-const FACE = 54;
-const FACE_RISE = 22;
+const FACE = 78;
+const FACE_RISE = 30;
 
 /**
  * Margin from the screen edge to the box, and from the box's edge to the face
@@ -140,8 +140,8 @@ const styles = StyleSheet.create({
   },
 
   /** The name sits under the face, on the same side as it. */
-  nameRow: { flexDirection: 'row', marginBottom: 8, paddingLeft: FACE - 4 },
-  nameRowPilot: { justifyContent: 'flex-end', paddingLeft: 0, paddingRight: FACE - 4 },
+  nameRow: { flexDirection: 'row', marginBottom: 8, paddingLeft: FACE - 8 },
+  nameRowPilot: { justifyContent: 'flex-end', paddingLeft: 0, paddingRight: FACE - 8 },
   name: {
     fontFamily: fonts.bodyBold,
     fontSize: 11,

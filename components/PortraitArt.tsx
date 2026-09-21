@@ -1,8 +1,24 @@
 import React from 'react';
+import { Image, StyleSheet, View, type ImageSourcePropType } from 'react-native';
 import Svg, { Circle, G, Line, Path, Rect } from 'react-native-svg';
 
 import type { EntityId } from '@/lib/dialogue';
 import { palette } from '@/lib/theme';
+
+/**
+ * Supplied art, where there is any.
+ *
+ * `require` has to be a literal path — Metro resolves these at build time, so
+ * the table cannot be built from a directory listing or a template string.
+ * Adding a portrait is therefore two steps and no more: run
+ * `scripts/make-portrait.py` over the source, then add its line here. An
+ * entity with no line falls through to the drawn placeholder below, so the
+ * set can be filled in one speaker at a time without anything breaking in
+ * between.
+ */
+const PHOTOS: Partial<Record<EntityId, ImageSourcePropType>> = {
+  spaceTrucker: require('@/assets/portraits/spaceTrucker.png'),
+};
 
 /**
  * Placeholder faces for whoever is speaking.
@@ -258,7 +274,14 @@ const FACES: Record<EntityId, (props: FaceProps) => React.JSX.Element> = {
   ),
 };
 
-/** One speaker's face, at whatever size the box has room for. */
+/**
+ * One speaker's face, in a frame the size the box has room for.
+ *
+ * Supplied art and a drawn placeholder sit in the same frame on purpose: while
+ * the set is half finished the two kinds appear side by side, one line after
+ * another, and a framed portrait next to a bare floating glyph would read as a
+ * bug rather than as work in progress.
+ */
 export function PortraitArt({
   entity,
   size,
@@ -268,12 +291,39 @@ export function PortraitArt({
   size: number;
   stroke?: string;
 }) {
+  const photo = PHOTOS[entity];
   const Face = FACES[entity] ?? FACES.unmoored;
+
   return (
-    <Svg width={size} height={size} viewBox={`0 0 ${BOX} ${BOX}`}>
-      <G>
-        <Face stroke={stroke} />
-      </G>
-    </Svg>
+    <View
+      style={[
+        styles.frame,
+        { width: size, height: size, borderRadius: Math.round(size * 0.22) },
+      ]}
+    >
+      {photo ? (
+        <Image source={photo} style={styles.photo} resizeMode="cover" />
+      ) : (
+        <Svg width={size * 0.8} height={size * 0.8} viewBox={`0 0 ${BOX} ${BOX}`}>
+          <G>
+            <Face stroke={stroke} />
+          </G>
+        </Svg>
+      )}
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  frame: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    borderWidth: 1.2,
+    borderCurve: 'continuous',
+    borderColor: 'rgba(255,255,255,0.26)',
+    // Opaque enough that a portrait never has the helm showing through it.
+    backgroundColor: 'rgba(9,13,26,0.98)',
+  },
+  photo: { width: '100%', height: '100%' },
+});
