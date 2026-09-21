@@ -62,6 +62,38 @@ export function SubsystemGlyph({
   );
 }
 
+/** The hold: a crate, seen face on. */
+export function CargoGlyph({ color, size = 13 }: { color: string; size?: number }) {
+  return (
+    <Svg width={size} height={size * 1.08} viewBox="0 0 16 17">
+      <Path
+        d="M2.2 4.6 L8 1.6 L13.8 4.6 V12.2 L8 15.2 L2.2 12.2 Z"
+        fill="none"
+        stroke={color}
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+      />
+      <Path d="M2.2 4.6 L8 7.6 L13.8 4.6 M8 7.6 V15.2" fill="none" stroke={color} strokeWidth={1.2} strokeOpacity={0.7} />
+    </Svg>
+  );
+}
+
+/** The crew: a head and shoulders. */
+export function CrewGlyph({ color, size = 13 }: { color: string; size?: number }) {
+  return (
+    <Svg width={size} height={size * 1.08} viewBox="0 0 16 17">
+      <Circle cx={8} cy={5} r={3.1} fill="none" stroke={color} strokeWidth={1.5} />
+      <Path
+        d="M2.4 15.4 C2.4 11.3 5 9.4 8 9.4 C11 9.4 13.6 11.3 13.6 15.4"
+        fill="none"
+        stroke={color}
+        strokeWidth={1.5}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
 /** The reactor itself: a bolt, for the power nothing has claimed. */
 export function ReactorGlyph({ color, size = 13 }: { color: string; size?: number }) {
   return (

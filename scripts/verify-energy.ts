@@ -35,6 +35,7 @@ import {
   type Subsystem,
 } from '../lib/energy.ts';
 import { HULL_MAX, damagedHull, isWrecked } from '../lib/hull.ts';
+import { CARGO_SLOTS_MAX, CREW_SLOTS, cargoSlots } from '../lib/hold.ts';
 
 const RUNS = Number(process.argv[2] ?? 2000);
 const failures: string[] = [];
@@ -306,7 +307,36 @@ while (!isWrecked(plates) && blows < 100) {
 check(`it takes ${HULL_MAX} hits to strip the hull`, blows === HULL_MAX);
 check('and it stays stripped', damagedHull(plates) === 0);
 
+// ---------------------------------------------------------------------------
+// The hold and the berths. Nothing fills either yet, so the only rule to hold
+// is that every ship gets a hold with room in it and none gets more than the
+// panel is built to draw.
+// ---------------------------------------------------------------------------
+const cargoDeclared = [...shipSource.matchAll(/^\s*cargo:\s*([\d.]+),/gm)].map((m) => Number(m[1]));
+check('found a cargo stat for every ship', cargoDeclared.length === shipCount);
+
+for (const cargo of cargoDeclared) {
+  const slots = cargoSlots(cargo);
+  check('a cargo stat is a fraction', cargo >= 0 && cargo <= 1);
+  check(`every ship has somewhere to put something (cargo ${cargo})`, slots >= 1);
+  check(`no ship overflows the hold panel (cargo ${cargo})`, slots <= CARGO_SLOTS_MAX);
+  check(`slots are whole (cargo ${cargo})`, Number.isInteger(slots));
+}
+
+// More room on the sheet is never less room in the hold.
+const sorted = [...cargoDeclared].sort((a, b) => a - b);
+for (let i = 1; i < sorted.length; i += 1) {
+  check('a roomier ship never has fewer slots', cargoSlots(sorted[i]) >= cargoSlots(sorted[i - 1]));
+}
+
+check('the roomiest ship fills the panel', cargoSlots(1) === CARGO_SLOTS_MAX);
+check('junk cargo still leaves a slot', cargoSlots(NaN) === 1 && cargoSlots(-4) === 1);
+check('absurd cargo does not overflow', cargoSlots(99) === CARGO_SLOTS_MAX);
+check('there are berths to fill', CREW_SLOTS >= 1);
+
 console.log(`hull plates       ${HULL_MAX}`);
+console.log(`cargo slots       ${cargoDeclared.map(cargoSlots).join(', ')} of ${CARGO_SLOTS_MAX}`);
+console.log(`crew berths       ${CREW_SLOTS}`);
 console.log(`hostile hold      ${holdTimes.map((t) => t.toFixed(1)).join('s, ')}s`);
 console.log(`ordinary jump     ${ordinary.map((t) => t.toFixed(1)).join('s, ')}s`);
 console.log(`shield per bar    ${secondsPerBar.toFixed(1)}s`);

@@ -4,13 +4,8 @@ import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-na
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Backdrop } from '@/components/Backdrop';
-import {
-  REACTOR_CONTROLS_WIDTH,
-  REACTOR_TAB_HEIGHT,
-  REACTOR_TAB_WIDTH,
-  ReactorControls,
-  ReactorTab,
-} from '@/components/ReactorPanel';
+import { ReactorControls, ReactorTab } from '@/components/ReactorPanel';
+import { CargoDetail, CargoTab, CrewDetail, CrewTab } from '@/components/HoldPanels';
 import { FadeInView } from '@/components/FadeInView';
 import { STATUS_BAR_HEIGHT, StatusBar } from '@/components/StatusBar';
 import { MenuButton } from '@/components/MenuButton';
@@ -51,14 +46,27 @@ const SHIP_SLOT_HEIGHT = SHIP_HEIGHT * SYSTEMS_SPAN;
 const STACK_GAP = 16;
 
 /**
- * The jump is a compact control beside the reactor tab now, not a menu row.
- * It is still the full width of what is left and the tallest thing a thumb
- * needs to find, just no longer a panel in its own right.
+ * The jump is a compact control under the tabs now, not a menu row. It is
+ * still the full width of the chrome and the tallest thing a thumb needs to
+ * find, just no longer a panel in its own right.
  */
 const JUMP_HEIGHT = 46;
 
-/** The bottom row: the reactor tab sets its height. */
-const CONTROL_ROW_HEIGHT = REACTOR_TAB_HEIGHT;
+/** Between the three tabs, and between the row of them and the jump. */
+const TAB_GAP = 10;
+
+/** The bottom of the helm: a row of tabs with the jump beneath it. */
+const CONTROL_ROW_HEIGHT = layout.tabHeight + TAB_GAP + JUMP_HEIGHT;
+
+/** Which panel is open over the helm, if any. */
+type OpenPanel = 'reactor' | 'cargo' | 'crew';
+
+/** What the scrim says it will close, so the label matches what is on top. */
+const PANEL_LABEL: Record<OpenPanel, string> = {
+  reactor: 'the reactor controls',
+  cargo: 'the hold',
+  crew: 'the crew',
+};
 
 /**
  * How often the helm advances the hold timer and the shield charge.
@@ -86,8 +94,9 @@ export default function RunScreen() {
   const { settings } = useSettings();
 
   const [run, setRun] = useState<RunState | null>(null);
-  // The reactor controls are only on screen while the player is using them.
-  const [managing, setManaging] = useState(false);
+  // A panel is only on screen while the player is actually looking at it, and
+  // only ever one: they open in the same place, over the same scrim.
+  const [open, setOpen] = useState<OpenPanel | null>(null);
 
   // The ticker reads the live run without being rebuilt on every tick.
   const runRef = useRef<RunState | null>(null);
@@ -119,6 +128,8 @@ export default function RunScreen() {
   const waiting = ENCOUNTER_STYLE[encounter];
 
   const buttonWidth = useMenuWidth();
+  /** The three tabs are identical, and together they are the chrome's width. */
+  const tabWidth = Math.floor((buttonWidth - TAB_GAP * 2) / 3);
 
   const canTakeHit = !!run && (shieldLevel(run.shieldCharge) > 0 || run.hull > 0);
   const charge = run ? chargeFractions(run) : { jump: 0, weapon: 0 };
@@ -185,14 +196,24 @@ export default function RunScreen() {
     router.push('/sector');
   }, [blocked, haptics, router]);
 
-  const onManage = useCallback(() => {
+  const onOpenReactor = useCallback(() => {
     haptics.tap();
-    setManaging(true);
+    setOpen('reactor');
   }, [haptics]);
 
-  const onDoneManaging = useCallback(() => {
+  const onOpenCargo = useCallback(() => {
     haptics.tap();
-    setManaging(false);
+    setOpen('cargo');
+  }, [haptics]);
+
+  const onOpenCrew = useCallback(() => {
+    haptics.tap();
+    setOpen('crew');
+  }, [haptics]);
+
+  const onClosePanel = useCallback(() => {
+    haptics.tap();
+    setOpen(null);
   }, [haptics]);
 
   const onLeave = useCallback(() => {
@@ -320,66 +341,82 @@ export default function RunScreen() {
         {/* What this ship has left, on one line. */}
         <StatusBar hull={run?.hull ?? 0} width={buttonWidth} />
 
-        {/* The reactor at a glance, and the one place to go. */}
-        <View style={[styles.controlRow, { width: buttonWidth }]}>
-          {run ? (
-            <ReactorTab
-              energy={run.energy}
-              reactor={reactorOf(run)}
-              charges={{ shield: run.shieldCharge, weapon: charge.weapon, engine: charge.jump }}
-              onPress={onManage}
-            />
-          ) : (
-            <View style={{ width: REACTOR_TAB_WIDTH }} />
-          )}
-
-          <View style={styles.jumpHolder}>
-            <MenuButton
-              label={jumpLabel}
-              caption={jumpCaption}
-              onPress={onJump}
-              primary={!blocked}
-              disabled={!!blocked}
-              trailingLabel={jumpFuel}
-              width={buttonWidth - REACTOR_TAB_WIDTH - STACK_GAP}
-              height={JUMP_HEIGHT}
-            />
+        {/* What the ship is, at a glance: its reactor, its hold, its berths.
+            Each opens over the helm; the jump sits under all three. */}
+        <View style={{ width: buttonWidth, gap: TAB_GAP }}>
+          <View style={styles.tabRow}>
+            {run ? (
+              <>
+                <ReactorTab
+                  energy={run.energy}
+                  reactor={reactorOf(run)}
+                  charges={{
+                    shield: run.shieldCharge,
+                    weapon: charge.weapon,
+                    engine: charge.jump,
+                  }}
+                  width={tabWidth}
+                  onPress={onOpenReactor}
+                />
+                <CargoTab cargo={ship.cargo} width={tabWidth} onPress={onOpenCargo} />
+                <CrewTab width={tabWidth} onPress={onOpenCrew} />
+              </>
+            ) : (
+              <View style={{ height: layout.tabHeight }} />
+            )}
           </View>
+
+          <MenuButton
+            label={jumpLabel}
+            caption={jumpCaption}
+            onPress={onJump}
+            primary={!blocked}
+            disabled={!!blocked}
+            trailingLabel={jumpFuel}
+            width={buttonWidth}
+            height={JUMP_HEIGHT}
+          />
         </View>
       </View>
 
-      {/* The controls open over the helm rather than living in it, so the
-          room they need is only taken while they are being used. */}
-      {managing && run ? (
+      {/* A panel opens over the helm rather than living in it, so the room it
+          needs is only taken while it is being used. */}
+      {open && run ? (
         <>
-          {/* Dims the helm behind the controls, and catches the tap that
-              closes them. */}
+          {/* Dims the helm behind the panel, and catches the tap that closes
+              it. */}
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Close the reactor controls"
-            onPress={onDoneManaging}
+            accessibilityLabel={`Close ${PANEL_LABEL[open]}`}
+            onPress={onClosePanel}
             style={[StyleSheet.absoluteFill, styles.scrim]}
           />
           <View
             style={[
-              styles.controlsHolder,
+              styles.panelHolder,
               {
                 bottom: insets.bottom + 40 + CONTROL_ROW_HEIGHT + 12,
-                left: Math.max(16, (width - REACTOR_CONTROLS_WIDTH) / 2),
+                left: Math.max(16, (width - layout.panelWidth) / 2),
               },
             ]}
           >
-            <ReactorControls
-              energy={run.energy}
-              reactor={reactorOf(run)}
-              charges={{
-                shield: run.shieldCharge,
-                weapon: charge.weapon,
-                engine: charge.jump,
-              }}
-              onShift={onShift}
-              animate={!settings.reduceMotion}
-            />
+            {open === 'reactor' ? (
+              <ReactorControls
+                energy={run.energy}
+                reactor={reactorOf(run)}
+                charges={{
+                  shield: run.shieldCharge,
+                  weapon: charge.weapon,
+                  engine: charge.jump,
+                }}
+                onShift={onShift}
+                animate={!settings.reduceMotion}
+              />
+            ) : open === 'cargo' ? (
+              <CargoDetail cargo={ship.cargo} />
+            ) : (
+              <CrewDetail />
+            )}
           </View>
         </>
       ) : null}
@@ -409,13 +446,12 @@ const styles = StyleSheet.create({
   /** Takes the slack, so everything below it sits at a fixed height. */
   encounterSlot: { flex: 1, minHeight: 0, alignItems: 'center', justifyContent: 'flex-start' },
 
-  controlRow: {
+  tabRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: CONTROL_ROW_HEIGHT,
-    gap: STACK_GAP,
+    justifyContent: 'space-between',
+    height: layout.tabHeight,
   },
-  jumpHolder: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scrim: { backgroundColor: 'rgba(5,7,15,0.62)', zIndex: 9 },
-  controlsHolder: { position: 'absolute', zIndex: 10 },
+  panelHolder: { position: 'absolute', zIndex: 10 },
 });

@@ -80,6 +80,10 @@ export const layout = {
   buttonSpacing: 16,
   buttonRadius: 14,
   screenMargin: 24,
+  /** Every collapsed HUD tab is this tall, so the three sit as one row. */
+  tabHeight: 100,
+  /** And every panel one opens is this wide, so they swap without shifting. */
+  panelWidth: 252,
   /** Gap between the lowest button and the bottom safe area. */
   menuBottomOffset: 96,
 } as const;

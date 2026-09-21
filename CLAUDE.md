@@ -245,7 +245,8 @@ The reactor is on the helm only — the sector map is for choosing where to go
 and deliberately carries none of it — and it has two states
 (`components/ReactorPanel.tsx`).
 
-**Collapsed** it is a thumb-sized tab in the bottom-left. Each subsystem row is
+**Collapsed** it is a thumb-sized tab, the left of three across the bottom of
+the helm. Each subsystem row is
 two things stacked — its icon and pips for what is *in* it, and a hairline
 track for how far what it is building has got — then a bolt and the power
 nothing has claimed. The charge is the half that changes second to second, so
@@ -260,6 +261,25 @@ the room the controls need is only taken while energy is actually being moved.
 The panel used to hold a third of the screen permanently for controls that go
 untouched most of the time.
 
+**The hold and the berths sit beside it** (`components/HoldPanels.tsx`), in
+exactly the same two states, and the three tabs divide the chrome's width
+evenly with the jump button full-width beneath them. Every tab is
+`layout.tabHeight` tall and everything they open is `layout.panelWidth` wide,
+both shared through the theme rather than repeated per component, so the tabs
+sit as one row and the panels swap without the card shifting under the thumb.
+Only ever one is open: the helm holds `open: 'reactor' | 'cargo' | 'crew' |
+null`, not a flag each, so two panels cannot stack.
+
+Cargo space is drawn as slots, and how many is `cargoSlots(ship.cargo)`
+(`lib/hold.ts`) — the cargo stat is a 0–1 impression rather than a count, so it
+is scaled to at most `CARGO_SLOTS_MAX` (8) and never rounds down to none.
+Berths are a flat `CREW_SLOTS` (3); ships do not differ on crew yet. **Neither
+holds anything.** There is no trade and no crew roster, so every slot is drawn
+empty — but `filled` is threaded through every one of these components, and a
+filled slot is already white, so the thing to change when cargo or crew arrives
+is what the helm passes, not what the panels do. `verify:energy` holds that
+every ship's hold has room in it and that none overflows the panel.
+
 **No words.** Not SHIELDS, WEAPONS, ENGINES, LEVEL, CHARGE or DRIVE, in either
 state. The icons carry it, and they are shared between the two states
 (`components/SubsystemGlyph.tsx`) precisely so that what the player learns from
@@ -272,7 +292,7 @@ takes a `trailingLabel` and pins it inside the right edge in the button's own
 text colour — because the only question fuel answers is whether to jump, and a
 strip of its own was a row spent on a number consulted at one moment. It is
 left off when the label already says the tank is empty. The jump is a compact
-control beside the tab rather than a menu-sized panel; `MenuButton` takes a
+control under the tabs rather than a menu-sized panel; `MenuButton` takes a
 `height` for it and drops its label a size to match.
 
 Because the chrome is now a known, small slice of the helm, the two pieces of
@@ -336,8 +356,8 @@ tints live in `lib/subsystems.ts`, which is to it what `encounters.ts` is to
 
 ### Layer boundaries
 
-`lib/theme.ts`, `lib/sectorMap.ts`, `lib/energy.ts` and `lib/hull.ts` import
-nothing from the project and are the leaves. `lib/ships.ts`, `lib/encounters.ts` and
+`lib/theme.ts`, `lib/sectorMap.ts`, `lib/energy.ts`, `lib/hull.ts` and
+`lib/hold.ts` import nothing from the project and are the leaves. `lib/ships.ts`, `lib/encounters.ts` and
 `lib/subsystems.ts` depend on the theme; `lib/runStore.ts` depends on ships,
 the map, the energy and hull rules, and `encounters.ts` — it reads the
 `hostile` flag out

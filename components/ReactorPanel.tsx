@@ -22,7 +22,7 @@ import {
   type Subsystem,
 } from '@/lib/energy';
 import { SUBSYSTEM_STYLE } from '@/lib/subsystems';
-import { fonts, palette, tracking } from '@/lib/theme';
+import { fonts, layout, palette, tracking } from '@/lib/theme';
 
 /**
  * The reactor, in two states.
@@ -41,10 +41,12 @@ import { fonts, palette, tracking } from '@/lib/theme';
  * (`SubsystemGlyph`) so what is learned from the controls reads the tab.
  */
 
-/** Both are fixed, so the helm can lay itself out around them. */
-export const REACTOR_TAB_WIDTH = 78;
-export const REACTOR_TAB_HEIGHT = 100;
-export const REACTOR_CONTROLS_WIDTH = 252;
+/*
+ * The tab is one of three across the bottom of the helm and is handed its
+ * width, so the row can be divided evenly however wide the phone is. Its
+ * height and the width of what it opens are shared with the other two
+ * (`layout.tabHeight`, `layout.panelWidth`) rather than kept here.
+ */
 
 /**
  * A subsystem row in the tab is two things stacked: what is *in* it, and how
@@ -99,11 +101,13 @@ export function ReactorTab({
   energy,
   reactor,
   charges,
+  width,
   onPress,
 }: {
   energy: EnergyState;
   reactor: number;
   charges: Charges;
+  width: number;
   onPress: () => void;
 }) {
   const free = freeEnergy(energy, reactor);
@@ -117,7 +121,7 @@ export function ReactorTab({
       }
       onPress={onPress}
       hitSlop={10}
-      style={({ pressed }) => [styles.tab, pressed && styles.tabPressed]}
+      style={({ pressed }) => [styles.tab, { width }, pressed && styles.tabPressed]}
     >
       {SUBSYSTEMS.map((subsystem) => {
         const accent = SUBSYSTEM_STYLE[subsystem].accent;
@@ -472,8 +476,7 @@ const CARD: ViewStyle = {
 const styles = StyleSheet.create({
   tab: {
     ...CARD,
-    width: REACTOR_TAB_WIDTH,
-    height: REACTOR_TAB_HEIGHT,
+    height: layout.tabHeight,
     paddingHorizontal: 8,
     paddingVertical: 7,
     justifyContent: 'space-between',
@@ -513,7 +516,7 @@ const styles = StyleSheet.create({
   controls: {
     ...CARD,
     borderColor: 'rgba(255,255,255,0.14)',
-    width: REACTOR_CONTROLS_WIDTH,
+    width: layout.panelWidth,
     paddingHorizontal: 13,
     paddingVertical: 11,
   },
