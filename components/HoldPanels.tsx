@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { CargoGlyph, CrewGlyph } from '@/components/SubsystemGlyph';
-import { CARD, TabHeader } from '@/components/TabHeader';
+import { CARD, PanelHeader, TabHeader } from '@/components/PanelChrome';
 import { CREW_SLOTS, cargoSlots } from '@/lib/hold';
 import { fonts, layout, palette } from '@/lib/theme';
 
@@ -57,13 +57,11 @@ export function CargoDetail({ cargo, filled = 0 }: { cargo: number; filled?: num
 
   return (
     <View style={styles.detail}>
-      <View style={styles.detailHead}>
-        <CargoGlyph color={palette.textMuted} size={14} />
-        <Text style={styles.detailCount}>
-          {filled}/{slots}
-        </Text>
-        <View style={styles.detailRule} />
-      </View>
+      <PanelHeader
+        icon={<CargoGlyph color={palette.textMuted} size={14} />}
+        name="CARGO"
+        count={`${filled}/${slots}`}
+      />
 
       <View style={styles.detailBody}>
         <SlotGrid count={slots} filled={filled} perRow={4} size={30} gap={9} />
@@ -102,13 +100,11 @@ export function CrewTab({
 export function CrewDetail({ filled = 0 }: { filled?: number }) {
   return (
     <View style={styles.detail}>
-      <View style={styles.detailHead}>
-        <CrewGlyph color={palette.textMuted} size={14} />
-        <Text style={styles.detailCount}>
-          {filled}/{CREW_SLOTS}
-        </Text>
-        <View style={styles.detailRule} />
-      </View>
+      <PanelHeader
+        icon={<CrewGlyph color={palette.textMuted} size={14} />}
+        name="CREW"
+        count={`${filled}/${CREW_SLOTS}`}
+      />
 
       <View style={styles.detailBody}>
         <SlotGrid count={CREW_SLOTS} filled={filled} perRow={3} size={46} gap={12} rounded />
@@ -189,16 +185,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     paddingVertical: 11,
   },
-  detailHead: { flexDirection: 'row', alignItems: 'center', height: 16, gap: 8 },
-  detailCount: {
-    fontFamily: fonts.bodyBold,
-    fontSize: 11,
-    fontWeight: '700',
-    color: palette.textMuted,
-    letterSpacing: 1,
-    fontVariant: ['tabular-nums'],
-  },
-  detailRule: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.08)' },
   detailBody: { alignItems: 'center', paddingTop: 14, paddingBottom: 4 },
 
   slot: {

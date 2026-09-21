@@ -10,7 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { ReactorGlyph, SubstationGlyph, SubsystemGlyph } from '@/components/SubsystemGlyph';
-import { CARD, TabHeader } from '@/components/TabHeader';
+import { CARD, PanelHeader, TabHeader } from '@/components/PanelChrome';
 import {
   SUBSYSTEMS,
   SUBSYSTEM_CAPACITY,
@@ -212,15 +212,10 @@ export function ReactorControls({
 
   return (
     <View style={styles.controls}>
-      <View style={styles.controlsHeader}>
-        <ReactorGlyph color={free > 0 ? palette.accent : palette.textDisabled} size={13} />
-        <Text
-          style={[styles.headerFree, { color: free > 0 ? palette.accent : palette.textDisabled }]}
-        >
-          {free}
-        </Text>
-        <View style={styles.headerRule} />
-      </View>
+      <PanelHeader
+        icon={<SubstationGlyph color={palette.textMuted} size={14} />}
+        name={SECTION_NAME}
+      />
 
       {SUBSYSTEMS.map((subsystem) => (
         <React.Fragment key={subsystem}>
@@ -245,6 +240,24 @@ export function ReactorControls({
           )}
         </React.Fragment>
       ))}
+
+      {/*
+        What nothing has claimed, under everything that could claim it.
+
+        It sat at the top, above the rows, which read as a heading for them —
+        as though it were the reactor's size rather than what is left of it.
+        At the foot of the three rows it is plainly the remainder, and the
+        bolt lands in the same column as the subsystem marks above, so
+        "spare" and "spent" line up.
+      */}
+      <View style={styles.controlsFooter}>
+        <ReactorGlyph color={free > 0 ? palette.accent : palette.textDisabled} size={13} />
+        <Text
+          style={[styles.footerFree, { color: free > 0 ? palette.accent : palette.textDisabled }]}
+        >
+          {free}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -527,14 +540,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     paddingVertical: 11,
   },
-  controlsHeader: { flexDirection: 'row', alignItems: 'center', height: 15, gap: 7 },
-  headerFree: {
+  controlsFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 15,
+    gap: 7,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  footerFree: {
     fontFamily: fonts.bodyBold,
     fontSize: 12,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
-  headerRule: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.08)' },
 
   row: { flexDirection: 'row', alignItems: 'center', height: ROW_HEIGHT, gap: ROW_GAP },
   pips: { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 },
