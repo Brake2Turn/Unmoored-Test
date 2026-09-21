@@ -6,8 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FuelBadge } from '@/components/FuelBadge';
 import { MenuButton } from '@/components/MenuButton';
-import { useHaptics, useSettings } from '@/lib/settings';
-import { StarField } from '@/components/StarField';
+import { useHaptics } from '@/lib/settings';
+import { StarChart } from '@/components/StarChart';
 import { fonts, palette, tracking, useMenuWidth } from '@/lib/theme';
 import {
   applyJump,
@@ -42,7 +42,6 @@ export default function SectorScreen() {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const haptics = useHaptics();
-  const { settings } = useSettings();
 
   const [run, setRun] = useState<RunState | null>(null);
   const [target, setTarget] = useState<number | null>(null);
@@ -128,8 +127,6 @@ export default function SectorScreen() {
 
   return (
     <View style={styles.container}>
-      <StarField width={width} height={height} reduceMotion={settings.reduceMotion} />
-
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable
           accessibilityRole="button"
@@ -148,6 +145,16 @@ export default function SectorScreen() {
 
       <View style={[styles.board, { top: boardTop, height: boardH }]}>
         <Svg width={boardW} height={boardH}>
+          {/* The console the sector is charted on. Everything below is drawn
+              on top of it, in the same coordinate system. */}
+          <StarChart
+            width={boardW}
+            height={boardH}
+            offsetX={offsetX}
+            offsetY={offsetY}
+            scale={scale}
+          />
+
           {/* How far this ship can jump — meaningless with an empty tank. */}
           <Circle
             cx={currentPx.x}

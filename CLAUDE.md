@@ -172,6 +172,26 @@ what is waiting is only learned by jumping there, where the ship appears at the
 helm. The boss is the single exception, red from the start — red and nothing
 else, with no ring or halo around it.
 
+**The map is an instrument, not a window.** The title screen and the helm look
+*out* — gradient sky, nebulae, a drifting `StarField`. The sector map does not:
+it is a chart on a piloting console (`components/StarChart.tsx`), with a lit
+display a shade off the housing, the sector's own graticule, graduations down
+two edges, a bezel with corner brackets and a vignette curving the glass. The
+`StarField` is gone from this screen entirely, because the same stars drifting
+behind a chart of stars read as two of the same thing.
+
+The graticule is generated from the board's `offsetX` / `offsetY` / `scale` —
+the very numbers the nodes are placed with — so a heavy line is a round number
+of *map* units rather than of pixels, and the grid cannot drift out of register
+with what sits on it. The chart renders as bare SVG elements into the board's
+own `<Svg>` for that reason: a separate layer behind it would mean two
+transforms to keep in step, and they would part company the first time the
+board was resized.
+
+Nothing on it moves. A radar sweep would say "console" louder than any of it,
+but motion cannot be checked in this container at all, and a scanner that
+silently sat still would be worse than one that was never there.
+
 A ring means **the ship has stood there**. It is drawn off the visited set
 rather than off the star's `kind`, so a star already walked keeps its ring while
 it is in range, chosen, or under the ship — which is the whole point of it.

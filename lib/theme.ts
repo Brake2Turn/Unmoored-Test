@@ -29,6 +29,15 @@ export const palette = {
    */
   player: '#FFFFFF',
 
+  /**
+   * The sector map's display, a shade lifted off the void around it.
+   *
+   * The map is the one screen the player is meant to read as an instrument
+   * rather than as a window — a chart on a console, not open space — and the
+   * difference between the glass and the housing is what sells it.
+   */
+  chartPanel: '#070D17',
+
   star: '#E8EEFF',
   starWarm: '#FFE2C8',
   starCool: '#BADBFF',
