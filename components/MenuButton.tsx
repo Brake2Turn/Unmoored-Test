@@ -22,11 +22,16 @@ type Props = {
    */
   height?: number;
   /**
-   * A small reading pinned to the right inside the button, in the button's own
-   * text colour. The helm's fuel lives here rather than in a strip of its own:
-   * it is only ever consulted when deciding whether to jump.
+   * A gauge pinned inside the right of the button, drawn in the button's own
+   * text colour and boxed off from the label by its own outline. The helm's
+   * fuel lives here rather than in a strip of its own: it is only ever
+   * consulted when deciding whether to jump.
+   *
+   * It takes the name and the reading apart rather than one string, so the
+   * word can be set small and tracked against a large figure — `F 10` fitted
+   * a corner but had to be learned before it said anything.
    */
-  trailingLabel?: string;
+  gauge?: { label: string; value: string };
 };
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -46,7 +51,7 @@ export function MenuButton({
   disabled = false,
   width,
   height = layout.buttonHeight,
-  trailingLabel,
+  gauge,
 }: Props) {
   const pressed = useSharedValue(0);
 
@@ -115,9 +120,12 @@ export function MenuButton({
           bloomStyle,
         ]}
       />
-      {trailingLabel ? (
+      {gauge ? (
         <View pointerEvents="none" style={styles.trailing}>
-          <Text style={[styles.trailingLabel, { color: scheme.label }]}>{trailingLabel}</Text>
+          <View style={[styles.gauge, { borderColor: scheme.label }]}>
+            <Text style={[styles.gaugeLabel, { color: scheme.label }]}>{gauge.label}</Text>
+            <Text style={[styles.gaugeValue, { color: scheme.label }]}>{gauge.value}</Text>
+          </View>
         </View>
       ) : null}
 
@@ -158,14 +166,32 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   labelCompact: { fontSize: 14, letterSpacing: tracking.caption },
-  trailing: { position: 'absolute', right: 13, top: 0, bottom: 0, justifyContent: 'center' },
-  trailingLabel: {
+  trailing: { position: 'absolute', right: 10, top: 0, bottom: 0, justifyContent: 'center' },
+  gauge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderWidth: 1.1,
+    borderRadius: 7,
+    borderCurve: 'continuous',
+    // The outline is the button's own ink, held back so the box frames the
+    // reading without competing with the label beside it.
+    opacity: 0.8,
+  },
+  gaugeLabel: {
+    fontFamily: fonts.body,
+    fontSize: 8,
+    fontWeight: '600',
+    letterSpacing: 1.1,
+    marginRight: -1.1,
+  },
+  gaugeValue: {
     fontFamily: fonts.bodyBold,
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
-    letterSpacing: 1,
     fontVariant: ['tabular-nums'],
-    opacity: 0.85,
   },
   caption: {
     fontFamily: fonts.body,

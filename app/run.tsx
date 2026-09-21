@@ -237,7 +237,7 @@ export default function RunScreen() {
    * question it answers is whether to jump. It is left off when the label is
    * already saying the tank is empty.
    */
-  const jumpFuel = blocked === 'fuel' ? undefined : `F ${fuel}`;
+  const jumpFuel = blocked === 'fuel' ? undefined : { label: 'FUEL', value: String(fuel) };
 
   /**
    * Dev only: put a hit on the ship so the shield, its effects and the hull
@@ -372,7 +372,7 @@ export default function RunScreen() {
             onPress={onJump}
             primary={!blocked}
             disabled={!!blocked}
-            trailingLabel={jumpFuel}
+            gauge={jumpFuel}
             width={buttonWidth}
             height={JUMP_HEIGHT}
           />
