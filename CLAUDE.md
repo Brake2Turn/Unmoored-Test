@@ -248,10 +248,15 @@ kinds sit in the *same frame*, deliberately: while the set is half done the two
 appear one line after another, and a framed portrait beside a bare floating
 glyph would read as a bug rather than as work in progress.
 
-Seven are real art: `pilot`, `spaceTrucker`, `ai`, `merchant`,
-`illegalMerchant`, `spacePolice`, `pirate`. Three are still drawn stand-ins —
-`unmoored`, `abandonedShip`, `convict` — and the fallback is what is holding
-them.
+Nine of the ten are real art. Only `abandonedShip` is still a drawn stand-in,
+and the fallback is what is holding it — though a dead screen with the lights
+out may be the one face that never needs a photograph.
+
+The pilot has been recast once: the first pilot portrait became `unmoored`,
+which is what that entity is — another drifter, and a face the player will
+recognise as having been theirs. Retiring a portrait to another entity is a
+file copy, because the id is the filename; it does not need re-cutting from
+the source.
 
 Adding one is two steps: `python3 scripts/make-portrait.py <source> <entityId>`,
 then `node scripts/inline-portraits.mjs`. The second bakes every PNG in
