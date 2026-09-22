@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
-import { PortraitArt } from '@/components/PortraitArt';
+import { PortraitArt, hasPortrait } from '@/components/PortraitArt';
 import { PILOT, faceFor, type Meeting } from '@/lib/dialogue';
 import { fonts, palette, tracking } from '@/lib/theme';
 
@@ -19,14 +19,34 @@ import { fonts, palette, tracking } from '@/lib/theme';
  * carried by `faceFor`, which recognises the player by name rather than by
  * position — encounter 9 opens with the pilot, and still puts the right face
  * on the right side.
+ *
+ * **A speaker without art has no face and keeps no room for one.** The
+ * abandoned ship is the standing case, and the box closes up around it rather
+ * than holding a portrait-shaped gap. The side still speaks: the name stays
+ * left or right as it would have, so even a faceless line says who is talking.
  */
 
 /** The wash. Light and thin: the ship underneath should still be readable. */
 const VEIL = 'rgba(214, 224, 244, 0.13)';
 
-/** Portrait size, and how much of it stands proud of the box's top edge. */
-const FACE = 78;
-const FACE_RISE = 30;
+/**
+ * Portrait size, and how much of it clears the box's top edge.
+ *
+ * The face carries no frame, so it is simply the bust standing on the scene.
+ * That is what lets it be this large: a card this wide over the helm would
+ * have been a second box arguing with the first, while a cut-out at the same
+ * size just reads as someone leaning into frame.
+ *
+ * **The box is drawn over the portrait's foot, not under it.** Every bust ends
+ * in a straight cut at the bottom of its own square — with a frame around it
+ * that read as a portrait in a window, but bare it read as a picture someone
+ * had sliced through. So the face is painted *first* and the box covers the
+ * last `FACE - FACE_RISE` of it, which hides the cut and leaves the speaker
+ * rising out of the box instead of balancing on it. Raise `FACE_RISE` too far
+ * and the cut comes back out from behind the box.
+ */
+const FACE = 140;
+const FACE_RISE = 96;
 
 /**
  * Margin from the screen edge to the box, and from the box's edge to the face
@@ -38,6 +58,9 @@ const FACE_RISE = 30;
  */
 const GUTTER = 18;
 const FACE_INSET = GUTTER + 10;
+
+/** The box's own inner margin. */
+const BOX_PAD = 18;
 
 const CARD: ViewStyle = {
   borderRadius: 16,
@@ -79,6 +102,10 @@ export function DialogueOverlay({
   const isPilot = line.speaker === PILOT;
   const face = faceFor(meeting, line);
 
+  // A speaker with no art gets no portrait and no room kept for one — see
+  // `PortraitArt`. The abandoned ship is the standing case: nobody is aboard.
+  const faced = hasPortrait(face);
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -91,6 +118,19 @@ export function DialogueOverlay({
       style={[StyleSheet.absoluteFill, styles.veil]}
     >
       <View style={[styles.holder, { paddingBottom: bottom }]} pointerEvents="none">
+        {/* Drawn before the box, so the box covers where the bust is cut. */}
+        {faced ? (
+          <View
+            style={[
+              styles.face,
+              { top: -FACE_RISE },
+              isPilot ? { right: FACE_INSET } : { left: FACE_INSET },
+            ]}
+          >
+            <PortraitArt entity={face} size={FACE} />
+          </View>
+        ) : null}
+
         <View style={styles.box}>
           <View style={[styles.nameRow, isPilot && styles.nameRowPilot]}>
             <Text numberOfLines={1} style={styles.name}>
@@ -111,16 +151,6 @@ export function DialogueOverlay({
           </View>
         </View>
 
-        {/* Sits proud of the box, on the speaker's own side. */}
-        <View
-          style={[
-            styles.face,
-            { top: -FACE_RISE },
-            isPilot ? { right: FACE_INSET } : { left: FACE_INSET },
-          ]}
-        >
-          <PortraitArt entity={face} size={FACE} />
-        </View>
       </View>
     </Pressable>
   );
@@ -133,15 +163,20 @@ const styles = StyleSheet.create({
 
   box: {
     ...CARD,
-    paddingTop: FACE_RISE + 12,
+    paddingTop: 14,
     paddingBottom: 14,
-    paddingHorizontal: 18,
-    minHeight: 128,
+    paddingHorizontal: BOX_PAD,
+    minHeight: 112,
   },
 
-  /** The name sits under the face, on the same side as it. */
-  nameRow: { flexDirection: 'row', marginBottom: 8, paddingLeft: FACE - 8 },
-  nameRowPilot: { justifyContent: 'flex-end', paddingLeft: 0, paddingRight: FACE - 8 },
+  /**
+   * The name sits under the face, on the same side as it. Nothing overlaps it
+   * any more — the portrait is behind the box, not inside it — so it needs no
+   * clearance, and a faceless speaker's name sits exactly where a faced one's
+   * does.
+   */
+  nameRow: { flexDirection: 'row', marginBottom: 8 },
+  nameRowPilot: { justifyContent: 'flex-end' },
   name: {
     fontFamily: fonts.bodyBold,
     fontSize: 11,

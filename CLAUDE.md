@@ -240,17 +240,35 @@ recognises the player by speaker name rather than by position, so an encounter
 that opens with the pilot (number 9 does) still lands the right face on the
 right side.
 
-**Faces come in one at a time.** `components/PortraitArt.tsx` prefers supplied
-art from `PORTRAIT_URIS` and falls back to a drawn placeholder — a head and one
-distinguishing mark, square for a machine and round for a person — so the set
-can be filled a speaker at a time without anything breaking in between. Both
-kinds sit in the *same frame*, deliberately: while the set is half done the two
-appear one line after another, and a framed portrait beside a bare floating
-glyph would read as a bug rather than as work in progress.
+**A portrait is the art and nothing else** (`components/PortraitArt.tsx`) — no
+frame, no border, no backing. It had all three while the cast was half drawn,
+to make a placeholder glyph look deliberate; the art is cut out against
+transparency, so once it was real the box only put a window between the
+speaker and the scene.
 
-Nine of the ten are real art. Only `abandonedShip` is still a drawn stand-in,
-and the fallback is what is holding it — though a dead screen with the lights
-out may be the one face that never needs a photograph.
+**The box is drawn over the portrait's foot.** Every bust ends in a straight
+cut at the bottom of its own square. Framed, that read as a portrait in a
+window; bare, it read as a picture someone had sliced through. So the face is
+painted *before* the box and the box covers its last `FACE - FACE_RISE`, which
+hides the cut and leaves the speaker rising out of the box rather than
+balancing on it. Raise `FACE_RISE` too far and the cut comes back out from
+behind the box — that is the constraint on how large the portrait can go, not
+the screen.
+
+**No art means no portrait, and no room kept for one.** `abandonedShip` has
+none on purpose: nobody is aboard to have a face, and its one line is `…`, so
+the box closes up and the silence is the whole effect. The side still speaks —
+the name stays left or right as it would have — so a faceless line still says
+who is talking.
+
+There was a table of drawn placeholders here for that miss, a head and one
+mark per entity. It has gone with the frame. It was scaffolding for a
+half-finished cast, and once the cast was finished nothing could render it — a
+table of faces that cannot appear is a table that quietly rots. A new entity
+added to `MEETINGS` now speaks faceless until its art arrives, which is the
+same rule `abandonedShip` lives under. **That is why the bundle got smaller
+once**, against the rule below that it only grows: about two hundred lines of
+SVG were deleted in the same build. Nothing else has ever shrunk it.
 
 The pilot has been recast once: the first pilot portrait became `unmoored`,
 which is what that entity is — another drifter, and a face the player will
