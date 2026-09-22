@@ -241,17 +241,24 @@ that opens with the pilot (number 9 does) still lands the right face on the
 right side.
 
 **Faces come in one at a time.** `components/PortraitArt.tsx` prefers supplied
-art from `PHOTOS` and falls back to a drawn placeholder — a head and one
+art from `PORTRAIT_URIS` and falls back to a drawn placeholder — a head and one
 distinguishing mark, square for a machine and round for a person — so the set
 can be filled a speaker at a time without anything breaking in between. Both
 kinds sit in the *same frame*, deliberately: while the set is half done the two
 appear one line after another, and a framed portrait beside a bare floating
 glyph would read as a bug rather than as work in progress.
 
+Seven are real art: `pilot`, `spaceTrucker`, `ai`, `merchant`,
+`illegalMerchant`, `spacePolice`, `pirate`. Three are still drawn stand-ins —
+`unmoored`, `abandonedShip`, `convict` — and the fallback is what is holding
+them.
+
 Adding one is two steps: `python3 scripts/make-portrait.py <source> <entityId>`,
 then `node scripts/inline-portraits.mjs`. The second bakes every PNG in
 `assets/portraits/` into `lib/portraits.ts` as a data URI, keyed by filename,
-so nothing else has to be edited.
+so nothing else has to be edited. The entity id *is* the filename, so getting
+two of them the wrong way round is fixed by re-running the first step on both
+sources and the second once.
 
 **They are inlined rather than required, and that was hard won.** A required
 image becomes a separate hashed asset the bundle fetches by URL at runtime,
