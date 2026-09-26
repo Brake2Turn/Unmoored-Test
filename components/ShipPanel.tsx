@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { PanResponder, Platform, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
 import { CargoGlyph, CrewGlyph, ShipGlyph, SubsystemGlyph } from '@/components/SubsystemGlyph';
-import { CARD, PanelHeader, TabHeader } from '@/components/PanelChrome';
+import { CARD, PanelHeader } from '@/components/PanelChrome';
 import { WeaponIcon } from '@/components/WeaponArt';
 import { CREW_SLOTS, firstEmptySlot, itemAt, type Loadout, type Place } from '@/lib/hold';
 import { weaponById } from '@/lib/weapons';
@@ -21,9 +21,8 @@ import { fonts, layout, palette, tracking } from '@/lib/theme';
  * empty. The hold takes weapons.
  */
 
-/** A slot that has something in it is white; an empty one is an outline. */
+/** An empty slot is an outline. */
 const SLOT_EMPTY_BORDER = 'rgba(255,255,255,0.20)';
-const SLOT_FILLED = '#FFFFFF';
 
 /** Web-only CSS that `ViewStyle` has no names for; nothing on native. */
 const webOnly = (rule: Record<string, string>): ViewStyle | null =>
@@ -441,79 +440,12 @@ function SectionLabel({ icon, name, count }: { icon: React.ReactNode; name: stri
   );
 }
 
-/* ------------------------------------------------------------------ slot -- */
-
-/**
- * A plain grid of slots, wrapping at `perRow`. A slot holding something is
- * white — at tab size there is no room for the thing itself.
- */
-function SlotGrid({
-  items,
-  perRow,
-  size,
-  gap,
-  rounded = false,
-}: {
-  items: (string | null)[];
-  perRow: number;
-  size: number;
-  gap: number;
-  rounded?: boolean;
-}) {
-  const rows: number[][] = [];
-  for (let i = 0; i < items.length; i += perRow) {
-    rows.push(Array.from({ length: Math.min(perRow, items.length - i) }, (_, k) => i + k));
-  }
-
-  return (
-    <View style={{ gap }}>
-      {rows.map((row, r) => (
-        <View key={r} style={{ flexDirection: 'row', gap }}>
-          {row.map((index) => (
-            <View
-              key={index}
-              style={[
-                styles.slot,
-                {
-                  width: size,
-                  height: size,
-                  borderRadius: rounded ? size / 2 : Math.max(1.5, size * 0.16),
-                },
-                items[index] !== null && styles.slotFilled,
-              ]}
-            />
-          ))}
-        </View>
-      ))}
-    </View>
-  );
-}
-
 /** "WEAPON 1" → "Weapon 1", for a screen reader rather than for the eye. */
 function titleCase(name: string): string {
   return name.charAt(0) + name.slice(1).toLowerCase();
 }
 
 const styles = StyleSheet.create({
-  tab: {
-    ...CARD,
-    height: layout.tabHeight,
-    paddingHorizontal: 8,
-    paddingVertical: 9,
-    justifyContent: 'flex-start',
-  },
-  tabPressed: { backgroundColor: 'rgba(255,255,255,0.06)' },
-  /** Whatever the header leaves: the hardpoint beside the hold and berths. */
-  tabBody: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  tabMount: { width: 34, height: 34, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
-  tabHold: { gap: 8, alignItems: 'flex-start' },
-
   detail: {
     ...CARD,
     borderColor: 'rgba(255,255,255,0.14)',
@@ -625,7 +557,6 @@ const styles = StyleSheet.create({
     borderColor: SLOT_EMPTY_BORDER,
     backgroundColor: 'rgba(255,255,255,0.03)',
   },
-  slotFilled: { backgroundColor: SLOT_FILLED, borderColor: SLOT_FILLED },
   /** A cargo slot holding a weapon shows the weapon, not a white square. */
   slotHolding: { borderColor: 'rgba(255,255,255,0.55)', alignItems: 'center', justifyContent: 'center' },
   /** An empty place a dragged weapon could land in. */

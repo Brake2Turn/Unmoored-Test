@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-na
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Backdrop } from '@/components/Backdrop';
-import { ReactorControls, ReactorTab } from '@/components/ReactorPanel';
+import { REACTOR_PANEL_HEIGHT, ReactorPanel } from '@/components/ReactorPanel';
 import { ShipButton, ShipDetail } from '@/components/ShipPanel';
 import { FireButton } from '@/components/FireButton';
 import { FOE_STATUS_HEIGHT, FoeStatus } from '@/components/FoeStatus';
@@ -81,7 +81,7 @@ const STACK_GAP = 16;
  * still the full width of the chrome and the tallest thing a thumb needs to
  * find, just no longer a panel in its own right.
  */
-const JUMP_HEIGHT = 46;
+const JUMP_HEIGHT = 52;
 
 /** Between the two tabs, and between the row of them and the jump. */
 const TAB_GAP = 10;
@@ -118,14 +118,16 @@ const ARENA_MARGIN = 12;
 const ARENA_GAP = 4;
 
 /** The bottom of the helm: a row of tabs with the jump beneath it. */
-const CONTROL_ROW_HEIGHT = layout.tabHeight + TAB_GAP + JUMP_HEIGHT;
+const CONTROL_ROW_HEIGHT = REACTOR_PANEL_HEIGHT + TAB_GAP + JUMP_HEIGHT;
 
-/** Which panel is open over the helm, if any. */
-type OpenPanel = 'reactor' | 'ship';
+/**
+ * Which panel is open over the helm, if any. Only the ship's opens now: the
+ * reactor's controls sit on the helm itself, always open.
+ */
+type OpenPanel = 'ship';
 
 /** What the scrim says it will close, so the label matches what is on top. */
 const PANEL_LABEL: Record<OpenPanel, string> = {
-  reactor: 'the reactor controls',
   ship: 'the ship',
 };
 
@@ -212,8 +214,6 @@ export default function RunScreen() {
   const wrecked = !!run && isWrecked(run.hull);
 
   const buttonWidth = useMenuWidth();
-  /** The reactor tab has the row to itself: the chrome's full width. */
-  const tabWidth = buttonWidth;
 
   /**
    * What this star still has to say, if anything.
@@ -313,11 +313,6 @@ export default function RunScreen() {
     haptics.confirm();
     router.push('/sector');
   }, [blocked, haptics, router]);
-
-  const onOpenReactor = useCallback(() => {
-    haptics.tap();
-    setOpen('reactor');
-  }, [haptics]);
 
   const onOpenShip = useCallback(() => {
     haptics.tap();
@@ -736,28 +731,25 @@ export default function RunScreen() {
           {/* What this ship has left, on one line. */}
           <StatusBar hull={run?.hull ?? 0} width={buttonWidth} />
 
-          {/* The reactor across the full width, and under it FIRE, the SHIP
-              square and JUMP. Both the reactor and the ship open over the helm. */}
+          {/* The reactor across the full width, its controls right on it, and
+              under it FIRE, the SHIP square and JUMP. */}
           <View style={{ width: buttonWidth, gap: TAB_GAP }}>
-            <View style={styles.tabRow}>
-              {run ? (
-                <>
-                  <ReactorTab
-                    energy={run.energy}
-                    reactor={reactorOf(run)}
-                    charges={{
-                      shield: run.shieldCharge,
-                      weapon: charge.weapon,
-                      engine: charge.jump,
-                    }}
-                    width={tabWidth}
-                    onPress={onOpenReactor}
-                  />
-                </>
-              ) : (
-                <View style={{ height: layout.tabHeight }} />
-              )}
-            </View>
+            {run ? (
+              <ReactorPanel
+                energy={run.energy}
+                reactor={reactorOf(run)}
+                charges={{
+                  shield: run.shieldCharge,
+                  weapon: charge.weapon,
+                  engine: charge.jump,
+                }}
+                width={buttonWidth}
+                onShift={onShift}
+                animate={!settings.reduceMotion}
+              />
+            ) : (
+              <View style={{ height: REACTOR_PANEL_HEIGHT }} />
+            )}
 
             <View style={styles.actionRow}>
               <FireButton
@@ -836,21 +828,7 @@ export default function RunScreen() {
               },
             ]}
           >
-            {open === 'reactor' ? (
-              <ReactorControls
-                energy={run.energy}
-                reactor={reactorOf(run)}
-                charges={{
-                  shield: run.shieldCharge,
-                  weapon: charge.weapon,
-                  engine: charge.jump,
-                }}
-                onShift={onShift}
-                animate={!settings.reduceMotion}
-              />
-            ) : (
-              <ShipDetail loadout={{ mounted: run.mounted, hold: run.hold }} onMove={onMoveGear} />
-            )}
+            <ShipDetail loadout={{ mounted: run.mounted, hold: run.hold }} onMove={onMoveGear} />
           </View>
         </>
       ) : null}
@@ -911,12 +889,6 @@ const styles = StyleSheet.create({
     gap: STACK_GAP,
   },
 
-  tabRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    height: layout.tabHeight,
-  },
   scrim: { backgroundColor: 'rgba(5,7,15,0.62)', zIndex: 9 },
   panelHolder: { position: 'absolute', zIndex: 10 },
 });

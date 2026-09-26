@@ -389,8 +389,8 @@ rate at all** — a system with nothing in it sits still rather than creeping.
 Because the rate is read continuously, moving energy mid-charge changes the
 fill under the player's hands.
 
-Two charges run today, both shown as sliders under the row that drives them in
-the expanded controls, and neither carries a number — the bar is the readout.
+Two charges run today, both shown as hairline tracks under the row that drives
+them in the reactor panel, and neither carries a number — the bar is the readout.
 
 - **The drive** (`jumpCharge`) has to build before the ship can leave a star,
   and `applyJump` empties it on arrival. `jumpUnitsFor(run)` is derived from
@@ -447,12 +447,6 @@ Pulling power is asymmetric on purpose: it drops the charge on the spot, in
 with its shields already up — the charge is for changes made in flight, not a
 tax on launching.
 
-The shield's four squares sit under its row in the expanded controls and line
-up with the cells above through the shared `GLYPH_W` / `STEP_W` / `ROW_GAP`
-constants rather than by eye. Squares past the ceiling are drawn as bare
-outlines; the one currently charging fills across, so the five-second wait is
-visible instead of a number that jumps.
-
 **A break is felt as well as counted.** `ShieldBreak` runs a blade of light
 across the whole face when a layer goes, and tears the field apart when the
 last one does. Which plays is decided by the level *before* the hit against the
@@ -507,34 +501,28 @@ saves. `LEGACY_KEYS` in `lib/energy.ts` carries those bars over — dropping the
 would have loaded a run that could not move. If a subsystem is ever renamed
 again, it gets an entry there and a check in `verify:energy`.
 
-### The HUD shows, and only expands when asked
+### The reactor is always open
 
 The reactor is on the helm only — the sector map is for choosing where to go
-and deliberately carries none of it — and it has two states
-(`components/ReactorPanel.tsx`).
+and deliberately carries none of it — and it is **one panel, always open**
+(`components/ReactorPanel.tsx`, `REACTOR_PANEL_HEIGHT`), the full width of
+the chrome above FIRE, the SHIP square and JUMP. The author asked for energy
+to be moved without opening anything, and supplied a mock-up ("minimal list
+view") to take influence from: short rows, big buttons.
 
-**Collapsed** it is a tab the full width of the chrome, above FIRE, the SHIP
-square and JUMP. Every tab opens with its own mark and its name on one line
-(`components/PanelChrome.tsx`, shared by both, along with the header the
-opened panel carries and the `CARD` both are drawn on — a tab and its panel
-have to look like one section, which is easier to keep true with the two
-headers side by side). The reactor's mark is a power station, *not* the bolt: the bolt
-means unclaimed power and sits inside the same tab beside a number, so the
-section and one reading within it would otherwise be the same glyph. Below the
-header each subsystem row is
-two things stacked — its icon and pips for what is *in* it, and a hairline
-track for how far what it is building has got — then a bolt and the power
-nothing has claimed. The charge is the half that changes second to second, so
-leaving it out meant opening the controls just to see whether the drive was
-nearly there. The shield's track is measured against the ceiling it is powered
-for, not against four: the pips beside it already say how high that cap is.
+Each subsystem row, left to right: its mark (`SubsystemGlyph`), then its
+name in its colour over two stacked readings — the bars *in* it (animated
+`EnergyCell`s) and a hairline track for how far what it is building has got
+— then `n/4`, then − and + buttons (`STEP_W` × `STEP_H`, 44×34), the biggest
+thing in the row because they are what gets pressed. The rows are kept squat
+so the panel costs little more height than the old collapsed tab. The header
+carries the section's mark and REACTOR, and at its right the power nothing
+has claimed, a yellow bolt and a number. The shield's track is measured
+against the ceiling it is powered for, not against four.
 
-**Expanded** — tap the tab — the controls open *over* the helm, on a scrim that
-dims it and catches the tap that closes them. They are an overlay rather than a
-row in the layout, which is the whole point: the helm is sized for the tab, so
-the room the controls need is only taken while energy is actually being moved.
-The panel used to hold a third of the screen permanently for controls that go
-untouched most of the time.
+It was a tab that opened a controls panel over the helm on a scrim. That
+panel, its separate shield-level squares and its tap-to-open are gone; only
+the ship panel opens over the helm now.
 
 **The ship section** (`components/ShipPanel.tsx`) is collapsed to a small
 **white SHIP square between FIRE and JUMP** (`ShipButton`, `SHIP_BUTTON_WIDTH`),
@@ -765,11 +753,10 @@ To check a shot in headless, the probe holds the shot's timers (skip any
 frame; guessing a `--virtual-time-budget` that lands inside a 200ms flight
 did not work.
 
-**No words inside the reactor.** Not SHIELDS, WEAPONS, ENGINES, LEVEL, CHARGE
-or DRIVE, in either state. The icons carry it, and they are shared between the
-two states (`components/SubsystemGlyph.tsx`) precisely so that what the player
-learns from the controls reads the tab afterwards. Free power is a bolt and a
-number, not `0 FREE`.
+**The reactor rows are named** — SHIELDS, WEAPONS, ENGINES, beside their
+marks. They were wordless for a long while (the marks were meant to carry it);
+the author's mock-up put the names back, and the author's call wins. Free
+power is still a bolt and a number, not `0 FREE`.
 
 **Unclaimed power is yellow** (`palette.power`), not the accent. It was cyan,
 which is the shields row directly above it and every other live reading in the
@@ -779,16 +766,11 @@ rows rather than above them: at the top it read as a heading, as though it were
 the reactor's size rather than its remainder, and at the bottom the bolt falls
 in the same column as the subsystem marks, so spare and spent line up.
 
-**An opened panel repeats its tab's name.** The panel covers the helm on a
-scrim, so the tab that was tapped is dimmed behind it and cannot be what says
-which section this is.
-
-**The sections do carry their names**, on the tab header line: REACTOR and
-SHIP. That is not the same rule bending. A subsystem is met in the
-controls, where there is room to learn what its mark means; a tab is the first
-thing tapped and nothing teaches it beforehand. Every mark in the set is an
-outline, including the bolt — it was the one filled glyph, which gave a
-footnote about spare power more weight than the rows above it.
+**The opened ship panel repeats its name** in its header: it covers the helm
+on a scrim, so the SHIP button behind it cannot be what says which section
+this is. Every mark in the set is an outline, including the bolt — it was the
+one filled glyph, which gave a footnote about spare power more weight than the
+rows above it.
 
 The hull is one white line above the controls (`components/StatusBar.tsx`),
 the full width of the chrome, with the plates left written at its right end
@@ -809,7 +791,7 @@ has to be the near-black the label uses, and a cyan figure on cyan is not a
 figure. The label centres in what is left rather than in the whole button. It
 is
 left off when the label already says the tank is empty. The jump is a compact
-control under the tabs rather than a menu-sized panel; `MenuButton` takes a
+control under the reactor rather than a menu-sized panel (`JUMP_HEIGHT`, 52); `MenuButton` takes a
 `height` for it and drops its label a size to match.
 
 Because the chrome is now a known, small slice of the helm, the two pieces of
@@ -828,7 +810,7 @@ its white core both brighten, the heat haze around it builds and the pulse
 deepens, so four bars reads as hotter rather than merely longer. Weapons (bright
 red) is drawn as the weapon on the nose and the bolt it fires.
 
-The cells in the expanded controls animate between unlit and their subsystem's
+The cells in the reactor rows animate between unlit and their subsystem's
 colour, with a kick and a white flash as the current lands, so a bar moving
 between two rows reads as something travelling. **They also settle by timer.**
 Reanimated drives them off `requestAnimationFrame` on web, and they report an

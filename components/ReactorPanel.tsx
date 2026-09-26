@@ -10,91 +10,51 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { ReactorGlyph, SubstationGlyph, SubsystemGlyph } from '@/components/SubsystemGlyph';
-import { CARD, PanelHeader, TabHeader } from '@/components/PanelChrome';
+import { CARD } from '@/components/PanelChrome';
 import {
   SUBSYSTEMS,
   SUBSYSTEM_CAPACITY,
   canAdd,
   canRemove,
   freeEnergy,
-  shieldLevel,
-  shieldProgress,
   type EnergyState,
   type Subsystem,
 } from '@/lib/energy';
 import { SUBSYSTEM_STYLE } from '@/lib/subsystems';
-import { fonts, layout, palette, tracking } from '@/lib/theme';
+import { fonts, palette } from '@/lib/theme';
 
 /**
- * The reactor, in two states.
+ * The reactor, always open.
  *
- * Collapsed it is a thumb-sized tab: one row per subsystem showing its icon
- * and what is in it, then the power nothing has claimed. That is everything
- * needed to *read* the reactor at a glance, and it is all that is on screen
- * while the player is flying.
+ * One row per subsystem: its mark and name, the bars in it with the charge it
+ * is building underneath, a count, and − and + right there. Energy is moved
+ * without opening anything — the panel used to be a tab that opened a set of
+ * controls over the helm, and every change cost a tap in and a tap out.
  *
- * Tapping it opens the controls over the top. They only take the room while
- * the player is actually moving energy about, which is the whole idea — the
- * panel used to hold a third of the helm permanently for controls that are
- * untouched most of the time.
- *
- * Neither state carries a word. The icons are shared between them
- * (`SubsystemGlyph`) so what is learned from the controls reads the tab.
+ * Laid out after a mock-up the author supplied ("minimal list view"): short
+ * rows, big buttons. The rows are kept squat so the whole panel costs little
+ * more height than the tab did, and the buttons are the biggest thing in each
+ * row because they are the part that gets pressed.
  */
 
-/*
- * The tab is one of three across the bottom of the helm and is handed its
- * width, so the row can be divided evenly however wide the phone is. Its
- * height and the width of what it opens are shared with the other two
- * (`layout.tabHeight`, `layout.panelWidth`) rather than kept here.
- */
+/** Each row's height, and the − / + buttons in it. */
+const ROW_HEIGHT = 40;
+const STEP_W = 44;
+const STEP_H = 34;
 
-/**
- * A subsystem row in the tab is two things stacked: what is *in* it, and how
- * far what it is building has got. The charge is the half that changes second
- * to second, so leaving it out of the collapsed state meant opening the
- * controls just to see whether the drive was nearly there.
- */
-const TAB_ROW_HEIGHT = 20;
-const TAB_PIP = 5;
-const TAB_TRACK_HEIGHT = 2.5;
+/** The whole panel's height, so the helm can lay itself out around it. */
+export const REACTOR_PANEL_HEIGHT = 7 + 20 + 3 * (ROW_HEIGHT + 6) + 3 + 2;
 
-/** Columns in the expanded controls, so the bars line up under the cells. */
-const GLYPH_W = 13;
-const STEP_W = 24;
-const ROW_GAP = 8;
-const ROW_HEIGHT = 26;
-const SUB_ROW_HEIGHT = 13;
-const PIP_HEIGHT = 9;
+/** The bars in a subsystem, and the charge track under them. */
+const PIP_HEIGHT = 6;
+const TRACK_HEIGHT = 3;
 
 const EMPTY_CELL = 'rgba(255,255,255,0.13)';
-
-/**
- * What the tab calls itself.
- *
- * One constant because it is the section's name rather than a subsystem's —
- * the rows inside stay wordless, which is the rule that matters.
- */
-const SECTION_NAME = 'REACTOR';
 
 const CHARGE_MS = 240;
 const SURGE_UP_MS = 110;
 const SURGE_DOWN_MS = 300;
 const SETTLE_MS = SURGE_UP_MS + SURGE_DOWN_MS + 120;
-
-/**
- * How full a subsystem's own business is, 0 to 1.
- *
- * The shield is measured against the ceiling it is powered for rather than
- * against four, so a shield at its cap reads full — the pips beside it already
- * say how high that cap is.
- */
-function tabCharge(subsystem: Subsystem, energy: EnergyState, charges: Charges): number {
-  if (subsystem === 'shields') {
-    return energy.shields > 0 ? Math.min(1, charges.shield / energy.shields) : 0;
-  }
-  return Math.max(0, Math.min(1, subsystem === 'weapons' ? charges.weapon : charges.engine));
-}
 
 type Charges = {
   /** The shield's live strength, a float — see `shieldLevel`. */
@@ -104,160 +64,77 @@ type Charges = {
   engine: number;
 };
 
-/* ------------------------------------------------------------------ tab -- */
+/**
+ * How full a subsystem's own business is, 0 to 1.
+ *
+ * The shield is measured against the ceiling it is powered for rather than
+ * against four, so a shield at its cap reads full — the bars beside it already
+ * say how high that cap is.
+ */
+function chargeOf(subsystem: Subsystem, energy: EnergyState, charges: Charges): number {
+  if (subsystem === 'shields') {
+    return energy.shields > 0 ? Math.min(1, charges.shield / energy.shields) : 0;
+  }
+  return Math.max(0, Math.min(1, subsystem === 'weapons' ? charges.weapon : charges.engine));
+}
 
-export function ReactorTab({
+/** Everything a row needs to spell out what it would do, in its label. */
+const NAME: Record<Subsystem, string> = {
+  shields: 'shields',
+  weapons: 'weapons',
+  engines: 'engines',
+};
+
+export function ReactorPanel({
   energy,
   reactor,
   charges,
   width,
-  onPress,
-}: {
-  energy: EnergyState;
-  reactor: number;
-  charges: Charges;
-  width: number;
-  onPress: () => void;
-}) {
-  const free = freeEnergy(energy, reactor);
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={
-        `Reactor: shields ${energy.shields}, weapons ${energy.weapons}, ` +
-        `engines ${energy.engines}, ${free} free. Open the reactor controls`
-      }
-      onPress={onPress}
-      hitSlop={10}
-      style={({ pressed }) => [styles.tab, { width }, pressed && styles.tabPressed]}
-    >
-      <TabHeader
-        icon={<SubstationGlyph color={palette.textMuted} size={11} />}
-        name={SECTION_NAME}
-      />
-
-      <View style={styles.tabBody}>
-      {SUBSYSTEMS.map((subsystem) => {
-        const accent = SUBSYSTEM_STYLE[subsystem].accent;
-        const lit = energy[subsystem] > 0;
-        const filled = tabCharge(subsystem, energy, charges);
-
-        return (
-          <View key={subsystem} style={styles.tabRow}>
-            <SubsystemGlyph
-              subsystem={subsystem}
-              color={lit ? accent : palette.textDisabled}
-              size={11}
-            />
-
-            <View style={styles.tabStack}>
-              <View style={styles.tabPips}>
-                {Array.from({ length: SUBSYSTEM_CAPACITY }, (_, i) => (
-                  <View
-                    key={i}
-                    style={[styles.tabPip, i < energy[subsystem] ? { backgroundColor: accent } : null]}
-                  />
-                ))}
-              </View>
-
-              {/* How far this system has got, without opening anything. */}
-              <View style={[styles.tabTrack, !lit && styles.tabTrackStalled]}>
-                <View
-                  style={[
-                    styles.tabTrackFill,
-                    {
-                      width: `${filled * 100}%`,
-                      backgroundColor: accent,
-                      opacity: filled >= 1 ? 1 : 0.6,
-                    },
-                  ]}
-                />
-              </View>
-            </View>
-          </View>
-        );
-      })}
-
-      {/* What the reactor is making that nothing has claimed. */}
-      <View style={styles.tabFreeRow}>
-        <ReactorGlyph color={free > 0 ? palette.power : palette.textDisabled} size={11} />
-        <Text
-          style={[styles.tabFree, { color: free > 0 ? palette.power : palette.textDisabled }]}
-        >
-          {free}
-        </Text>
-      </View>
-      </View>
-    </Pressable>
-  );
-}
-
-/* ------------------------------------------------------------- controls -- */
-
-export function ReactorControls({
-  energy,
-  reactor,
-  charges,
   onShift,
   animate = true,
 }: {
   energy: EnergyState;
   reactor: number;
   charges: Charges;
+  width: number;
   onShift: (subsystem: Subsystem, delta: number) => void;
   animate?: boolean;
 }) {
   const free = freeEnergy(energy, reactor);
 
   return (
-    <View style={styles.controls}>
-      <PanelHeader
-        icon={<SubstationGlyph color={palette.textMuted} size={14} />}
-        name={SECTION_NAME}
-      />
-
-      {SUBSYSTEMS.map((subsystem) => (
-        <React.Fragment key={subsystem}>
-          <SubsystemRow
-            subsystem={subsystem}
-            level={energy[subsystem]}
-            canAddMore={canAdd(energy, reactor, subsystem)}
-            canTakeAway={canRemove(energy, subsystem)}
-            onShift={onShift}
-            animate={animate}
-          />
-
-          {/* What the row has actually got, under the power driving it. */}
-          {subsystem === 'shields' ? (
-            <ShieldStrength charge={charges.shield} cap={energy.shields} />
-          ) : (
-            <ChargeSlider
-              fraction={subsystem === 'weapons' ? charges.weapon : charges.engine}
-              accent={SUBSYSTEM_STYLE[subsystem].accent}
-              stalled={energy[subsystem] <= 0}
-            />
-          )}
-        </React.Fragment>
-      ))}
-
-      {/*
-        What nothing has claimed, under everything that could claim it.
-
-        It sat at the top, above the rows, which read as a heading for them —
-        as though it were the reactor's size rather than what is left of it.
-        At the foot of the three rows it is plainly the remainder, and the
-        bolt lands in the same column as the subsystem marks above, so
-        "spare" and "spent" line up.
-      */}
-      <View style={styles.controlsFooter}>
-        <ReactorGlyph color={free > 0 ? palette.power : palette.textDisabled} size={13} />
-        <Text
-          style={[styles.footerFree, { color: free > 0 ? palette.power : palette.textDisabled }]}
-        >
+    <View
+      accessibilityLabel={
+        `Reactor: shields ${energy.shields}, weapons ${energy.weapons}, ` +
+        `engines ${energy.engines}, ${free} free`
+      }
+      style={[styles.panel, { width, height: REACTOR_PANEL_HEIGHT }]}
+    >
+      {/* The section's name, and the power nothing has claimed yet — yellow,
+          the one reading that is not a subsystem. */}
+      <View style={styles.header}>
+        <SubstationGlyph color={palette.textMuted} size={12} />
+        <Text style={styles.title}>REACTOR</Text>
+        <View style={styles.headerRule} />
+        <ReactorGlyph color={free > 0 ? palette.power : palette.textDisabled} size={12} />
+        <Text style={[styles.free, { color: free > 0 ? palette.power : palette.textDisabled }]}>
           {free}
         </Text>
       </View>
+
+      {SUBSYSTEMS.map((subsystem, index) => (
+        <SubsystemRow
+          key={subsystem}
+          subsystem={subsystem}
+          level={energy[subsystem]}
+          charge={chargeOf(subsystem, energy, charges)}
+          canAddMore={canAdd(energy, reactor, subsystem)}
+          canTakeAway={canRemove(energy, subsystem)}
+          onShift={onShift}
+          animate={animate}
+          last={index === SUBSYSTEMS.length - 1}
+        />
+      ))}
     </View>
   );
 }
@@ -265,29 +142,61 @@ export function ReactorControls({
 function SubsystemRow({
   subsystem,
   level,
+  charge,
   canAddMore,
   canTakeAway,
   onShift,
   animate,
+  last,
 }: {
   subsystem: Subsystem;
   level: number;
+  charge: number;
   canAddMore: boolean;
   canTakeAway: boolean;
   onShift: (subsystem: Subsystem, delta: number) => void;
   animate: boolean;
+  last: boolean;
 }) {
   const style = SUBSYSTEM_STYLE[subsystem];
-  const name = style.label.toLowerCase();
+  const lit = level > 0;
+  const name = NAME[subsystem];
 
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, !last && styles.rowRule]}>
       <SubsystemGlyph
         subsystem={subsystem}
-        color={level > 0 ? style.accent : palette.textDisabled}
+        color={lit ? style.accent : palette.textDisabled}
+        size={17}
       />
 
-      {/* Take on the left, add on the right, with the cells between them. */}
+      <View style={styles.middle}>
+        <Text style={[styles.label, { color: lit ? style.accent : palette.textDisabled }]}>
+          {style.label}
+        </Text>
+
+        {/* What is in it: one cell per bar. */}
+        <View style={styles.pips}>
+          {Array.from({ length: SUBSYSTEM_CAPACITY }, (_, i) => (
+            <EnergyCell key={i} lit={i < level} accent={style.accent} animate={animate} style={styles.pip} />
+          ))}
+        </View>
+
+        {/* How far what it is building has got. */}
+        <View style={[styles.track, !lit && styles.trackStalled]}>
+          <View
+            style={[
+              styles.trackFill,
+              { width: `${charge * 100}%`, backgroundColor: style.accent, opacity: charge >= 1 ? 1 : 0.6 },
+            ]}
+          />
+        </View>
+      </View>
+
+      <Text style={[styles.count, { color: lit ? palette.textPrimary : palette.textDisabled }]}>
+        {level}/{SUBSYSTEM_CAPACITY}
+      </Text>
+
       <StepButton
         symbol="−"
         enabled={canTakeAway}
@@ -295,19 +204,6 @@ function SubsystemRow({
         label={`Take one bar of energy out of ${name}, now ${level} of ${SUBSYSTEM_CAPACITY}`}
         onPress={() => onShift(subsystem, -1)}
       />
-
-      <View style={styles.pips}>
-        {Array.from({ length: SUBSYSTEM_CAPACITY }, (_, i) => (
-          <EnergyCell
-            key={i}
-            lit={i < level}
-            accent={style.accent}
-            animate={animate}
-            style={styles.pip}
-          />
-        ))}
-      </View>
-
       <StepButton
         symbol="+"
         enabled={canAddMore}
@@ -319,86 +215,15 @@ function SubsystemRow({
   );
 }
 
-/** The shield's live strength: four squares, one per level it holds. */
-function ShieldStrength({ charge, cap }: { charge: number; cap: number }) {
-  const level = shieldLevel(charge);
-  const progress = shieldProgress(charge);
-  const tint = SUBSYSTEM_STYLE.shields.accent;
-
-  return (
-    <View
-      accessibilityRole="text"
-      accessibilityLabel={`Shield strength ${level} of ${cap} levels`}
-      style={styles.subRow}
-    >
-      <View style={{ width: GLYPH_W + ROW_GAP + STEP_W }} />
-      <View style={styles.squares}>
-        {Array.from({ length: SUBSYSTEM_CAPACITY }, (_, i) => {
-          const capped = i >= cap;
-          const charging = i === level && !capped;
-          return (
-            <View key={i} style={[styles.square, capped && styles.squareCapped]}>
-              {i < level ? (
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: tint }]} />
-              ) : null}
-              {charging ? (
-                <View
-                  style={[
-                    styles.squareCharge,
-                    { width: `${Math.round(progress * 100)}%`, backgroundColor: tint },
-                  ]}
-                />
-              ) : null}
-            </View>
-          );
-        })}
-      </View>
-      <View style={{ width: STEP_W }} />
-    </View>
-  );
-}
-
-/** A charge building up: one continuous track, no number. */
-function ChargeSlider({
-  fraction,
-  accent,
-  stalled,
-}: {
-  fraction: number;
-  accent: string;
-  stalled: boolean;
-}) {
-  const filled = Math.max(0, Math.min(1, fraction));
-
-  return (
-    <View
-      accessibilityRole="text"
-      accessibilityLabel={`Charge ${Math.round(filled * 100)} percent`}
-      style={styles.subRow}
-    >
-      <View style={{ width: GLYPH_W + ROW_GAP + STEP_W }} />
-      <View style={[styles.track, stalled && styles.trackStalled]}>
-        <View
-          style={[
-            styles.trackFill,
-            { width: `${filled * 100}%`, backgroundColor: accent, opacity: filled >= 1 ? 1 : 0.62 },
-          ]}
-        />
-      </View>
-      <View style={{ width: STEP_W }} />
-    </View>
-  );
-}
-
 /**
- * One cell of energy, which powers up and down rather than just changing
- * colour: it fades between unlit and its subsystem's tint, and kicks with a
- * white flash as the current lands.
+ * One bar of a subsystem. It fades between unlit and its colour with a kick
+ * and a white flash as the current lands, so a bar moving between rows reads
+ * as something travelling.
  *
- * It settles by timer as well. Reanimated drives this off
- * `requestAnimationFrame` on web, and the cell reports an allocation the
- * player has just changed, so a starved tab must never strand one showing the
- * old level — the same reason `FadeInView` exists.
+ * **It also settles by timer.** Reanimated drives it off
+ * `requestAnimationFrame` on web, and a starved tab must never strand a cell
+ * showing the old level — a screenshot once showed 2/2/2 while the save held
+ * 0/2/4. Content is never hostage to an animation.
  */
 function EnergyCell({
   lit,
@@ -448,15 +273,12 @@ function EnergyCell({
 
   return (
     <Animated.View style={[style, cellStyle]}>
-      <Animated.View
-        pointerEvents="none"
-        style={[StyleSheet.absoluteFill, styles.flash, flashStyle]}
-      />
+      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.flash, flashStyle]} />
     </Animated.View>
   );
 }
 
-/** One − or + control, small but with a thumb-sized `hitSlop`. */
+/** One − or + control: the biggest thing in the row, since it is the thing pressed. */
 function StepButton({
   symbol,
   enabled,
@@ -477,11 +299,11 @@ function StepButton({
       accessibilityState={{ disabled: !enabled }}
       disabled={!enabled}
       onPress={onPress}
-      hitSlop={9}
+      hitSlop={3}
       style={({ pressed }) => [
         styles.step,
-        { borderColor: enabled ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.06)' },
-        pressed && enabled ? { backgroundColor: 'rgba(255,255,255,0.10)' } : null,
+        { borderColor: enabled ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.07)' },
+        pressed && enabled ? { backgroundColor: 'rgba(255,255,255,0.12)' } : null,
       ]}
     >
       <Text style={[styles.stepSymbol, { color: enabled ? accent : palette.textDisabled }]}>
@@ -492,118 +314,68 @@ function StepButton({
 }
 
 const styles = StyleSheet.create({
-  tab: {
+  panel: {
     ...CARD,
-    height: layout.tabHeight,
-    paddingHorizontal: 8,
-    paddingVertical: 7,
-    justifyContent: 'flex-start',
-  },
-  tabPressed: { backgroundColor: 'rgba(255,255,255,0.06)' },
-  /** Whatever the header leaves: the three rows, then the spare power. */
-  tabBody: { flex: 1, justifyContent: 'space-between', paddingTop: 2 },
-  tabRow: { flexDirection: 'row', alignItems: 'center', height: TAB_ROW_HEIGHT, gap: 6 },
-  tabFreeRow: { flexDirection: 'row', alignItems: 'center', height: 13, gap: 6 },
-  tabStack: { flex: 1, gap: 3 },
-  tabPips: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  tabTrack: {
-    height: TAB_TRACK_HEIGHT,
-    borderRadius: TAB_TRACK_HEIGHT / 2,
-    backgroundColor: EMPTY_CELL,
-    overflow: 'hidden',
-  },
-  tabTrackStalled: { backgroundColor: 'rgba(255,255,255,0.05)' },
-  tabTrackFill: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    borderRadius: TAB_TRACK_HEIGHT / 2,
-  },
-  tabPip: {
-    flex: 1,
-    height: TAB_PIP,
-    borderRadius: 1,
-    backgroundColor: EMPTY_CELL,
-  },
-  tabFree: {
-    fontFamily: fonts.bodyBold,
-    fontSize: 11,
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
+    paddingHorizontal: 10,
+    paddingTop: 7,
+    paddingBottom: 3,
   },
 
-  controls: {
-    ...CARD,
-    borderColor: 'rgba(255,255,255,0.14)',
-    width: layout.panelWidth,
-    paddingHorizontal: 13,
-    paddingVertical: 11,
+  header: { flexDirection: 'row', alignItems: 'center', height: 20, gap: 7 },
+  title: {
+    fontFamily: fonts.body,
+    fontSize: 9,
+    fontWeight: '600',
+    color: palette.textMuted,
+    letterSpacing: 1.6,
   },
-  controlsFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 15,
-    gap: 7,
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.08)',
-  },
-  footerFree: {
+  headerRule: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.07)' },
+  free: {
     fontFamily: fonts.bodyBold,
     fontSize: 12,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
 
-  row: { flexDirection: 'row', alignItems: 'center', height: ROW_HEIGHT, gap: ROW_GAP },
-  pips: { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 },
-  pip: {
-    flex: 1,
-    height: PIP_HEIGHT,
-    borderRadius: 2,
-    backgroundColor: EMPTY_CELL,
-    overflow: 'hidden',
+  row: { flexDirection: 'row', alignItems: 'center', height: ROW_HEIGHT + 6, gap: 8 },
+  rowRule: { borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
+
+  middle: { flex: 1, gap: 4, justifyContent: 'center' },
+  label: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 1.4,
   },
+  pips: { flexDirection: 'row', gap: 3 },
+  pip: { flex: 1, height: PIP_HEIGHT, borderRadius: 1.5, overflow: 'hidden' },
   flash: { backgroundColor: '#FFFFFF' },
-
-  subRow: { flexDirection: 'row', alignItems: 'center', height: SUB_ROW_HEIGHT, gap: ROW_GAP },
-  squares: { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 },
-  square: {
-    flex: 1,
-    height: 8,
-    borderRadius: 1.5,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.20)',
-    overflow: 'hidden',
-  },
-  squareCapped: { borderColor: 'rgba(255,255,255,0.07)' },
-  squareCharge: { position: 'absolute', left: 0, top: 0, bottom: 0, opacity: 0.5 },
-
   track: {
-    flex: 1,
-    height: 6,
-    borderRadius: 3,
+    height: TRACK_HEIGHT,
+    borderRadius: TRACK_HEIGHT / 2,
     backgroundColor: EMPTY_CELL,
     overflow: 'hidden',
   },
   trackStalled: { backgroundColor: 'rgba(255,255,255,0.05)' },
-  trackFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 3 },
+  trackFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: TRACK_HEIGHT / 2 },
+
+  count: {
+    width: 26,
+    fontFamily: fonts.bodyBold,
+    fontSize: 11,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+    textAlign: 'right',
+  },
 
   step: {
     width: STEP_W,
-    height: 20,
-    borderRadius: 6,
+    height: STEP_H,
+    borderRadius: 9,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.03)',
   },
-  stepSymbol: {
-    fontFamily: fonts.bodyBold,
-    fontSize: 13,
-    fontWeight: '700',
-    lineHeight: 15,
-    textAlign: 'center',
-  },
+  stepSymbol: { fontFamily: fonts.bodyBold, fontSize: 20, fontWeight: '600', lineHeight: 22 },
 });

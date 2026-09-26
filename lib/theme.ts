@@ -117,15 +117,7 @@ export const layout = {
   buttonSpacing: 16,
   buttonRadius: 14,
   screenMargin: 24,
-  /**
-   * Every collapsed HUD tab is this tall, so the three sit as one row.
-   *
-   * It grew by the height of a header line when the tabs took names: the
-   * reactor's three rows and its spare power already filled the old 100, so
-   * anything above them had to come out of the helm's art budget instead.
-   */
-  tabHeight: 116,
-  /** And every panel one opens is this wide, so they swap without shifting. */
+  /** Every panel that opens over the helm is this wide. */
   panelWidth: 252,
   /** Gap between the lowest button and the bottom safe area. */
   menuBottomOffset: 96,
