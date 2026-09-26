@@ -624,7 +624,14 @@ export default function RunScreen() {
   return (
     <View ref={rootRef} collapsable={false} style={styles.container}>
       <Backdrop width={width} height={height} variant="deep" />
-      <StarField width={width} height={height} reduceMotion={settings.reduceMotion} />
+      {/* Travelling alone the stars stream past, right to left; with another
+          ship alongside they hold still and twinkle. */}
+      <StarField
+        width={width}
+        height={height}
+        reduceMotion={settings.reduceMotion}
+        flowing={laidOut === 'empty'}
+      />
 
       <View style={[styles.leaveRow, { top: insets.top + 2 }]}>
         <Pressable

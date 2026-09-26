@@ -352,11 +352,16 @@ own `<Svg>` for that reason: a separate layer behind it would mean two
 transforms to keep in step, and they would part company the first time the
 board was resized.
 
-**The `StarField` stays put** (title screen and helm alike): stars twinkle and
-some wander a point or two about their own spot and back (`BANDS[].wander`,
-`reach`), each on its own slow loop. It used to slide down the screen in three
-parallax layers; the author asked for stars that stay where they are. Reduce
-Motion holds every star still.
+**The `StarField` has two moods** (`flowing`). On the helm with the player
+alone (`laidOut === 'empty'`) it **flows right to left** in three parallax
+bands, each drawn twice side by side and looped a screen width at a time; a
+few stars twinkle. With another ship alongside it **holds still**: most stars
+twinkle, deeper and quicker (`TWINKLE_STILL`), and some wander a point or two
+about their spot. Stopping freezes each band where it is (the two copies still
+cover the screen at any offset) and setting off runs on from there, so neither
+change jumps. The title screen uses the still mood. The author has asked for
+both of these at different times — first stars that stay put, then this split
+— so check before changing it. Reduce Motion holds every star still.
 
 Nothing on the chart moves. A radar sweep would say "console" louder than any of it,
 but motion cannot be checked in this container at all, and a scanner that
