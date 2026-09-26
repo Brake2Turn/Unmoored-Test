@@ -10,10 +10,21 @@ import type { Encounter } from '@/lib/sectorMap';
  */
 export const ENCOUNTER_STYLE: Record<
   Encounter,
-  { label: string; accent: string; hostile: boolean; width: number; height: number }
+  {
+    label: string;
+    accent: string;
+    hostile: boolean;
+    width: number;
+    height: number;
+    /**
+     * Plates on the ship waiting here, which each hit from the player's weapon
+     * takes one of. Placeholder numbers: nothing happens at zero yet.
+     */
+    hull: number;
+  }
 > = {
-  empty: { label: 'EMPTY', accent: palette.textPrimary, hostile: false, width: 0, height: 0 },
-  enemy: { label: 'SHRIKE', accent: palette.danger, hostile: true, width: 132, height: 172 },
-  merchant: { label: 'MERCHANT', accent: palette.trade, hostile: false, width: 132, height: 172 },
-  boss: { label: 'ELDER SHRIKE', accent: palette.danger, hostile: true, width: 188, height: 244 },
+  empty: { label: 'EMPTY', accent: palette.textPrimary, hostile: false, width: 0, height: 0, hull: 0 },
+  enemy: { label: 'SHRIKE', accent: palette.danger, hostile: true, width: 132, height: 172, hull: 6 },
+  merchant: { label: 'MERCHANT', accent: palette.trade, hostile: false, width: 132, height: 172, hull: 4 },
+  boss: { label: 'ELDER SHRIKE', accent: palette.danger, hostile: true, width: 188, height: 244, hull: 12 },
 };

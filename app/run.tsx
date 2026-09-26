@@ -6,6 +6,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Backdrop } from '@/components/Backdrop';
 import { ReactorControls, ReactorTab } from '@/components/ReactorPanel';
 import { ShipDetail, ShipTab } from '@/components/ShipPanel';
+import { FireButton } from '@/components/FireButton';
+import { FOE_STATUS_HEIGHT, FoeStatus } from '@/components/FoeStatus';
+import { LaserShot, type Point } from '@/components/LaserShot';
+import { MOUNTS } from '@/components/ships/ShipArt';
+import { weaponTip } from '@/components/WeaponArt';
 import { DialogueOverlay } from '@/components/DialogueOverlay';
 import { FadeInView } from '@/components/FadeInView';
 import { STATUS_BAR_HEIGHT, StatusBar } from '@/components/StatusBar';
@@ -17,6 +22,12 @@ import { useHaptics, useSettings } from '@/lib/settings';
 import { fonts, layout, palette, tracking, useMenuWidth } from '@/lib/theme';
 import {
   chargeFractions,
+  fireBlocker,
+  fireWeapon,
+  foeHull,
+  foeHullMax,
+  foeName,
+  hitFoe,
   jumpBlocker,
   loadRun,
   markSpoken,
@@ -34,6 +45,7 @@ import { encounterAt } from '@/lib/sectorMap';
 import { ENCOUNTER_STYLE } from '@/lib/encounters';
 import { chargeRate, shieldLevel, type Subsystem } from '@/lib/energy';
 import type { Place } from '@/lib/hold';
+import { weaponById } from '@/lib/weapons';
 
 /** The player's ship at full size, before the screen decides it has no room. */
 const SHIP_WIDTH = 132;
@@ -77,6 +89,13 @@ const TAB_GAP = 10;
 const HUD_TOP = 44;
 const HUD_BOTTOM = 20;
 
+/** FIRE sits left of JUMP on the bottom row, this wide. */
+const FIRE_WIDTH = 92;
+
+/** Room under LEAVE for the other ship's name and hull, when one is here. */
+const FOE_STATUS_TOP = 30;
+const FOE_STATUS_WIDTH = 132;
+
 /** The bottom of the helm: a row of tabs with the jump beneath it. */
 const CONTROL_ROW_HEIGHT = layout.tabHeight + TAB_GAP + JUMP_HEIGHT;
 
@@ -118,6 +137,11 @@ export default function RunScreen() {
   // A panel is only on screen while the player is actually looking at it, and
   // only ever one: they open in the same place, over the same scrim.
   const [open, setOpen] = useState<OpenPanel | null>(null);
+  // Shots in flight. Each carries the star it was fired at, so a bolt still
+  // flying when the ship jumps lands on nothing rather than the next ship.
+  const [shots, setShots] = useState<Shot[]>([]);
+  const shipRef = useRef<View>(null);
+  const foeRef = useRef<View>(null);
 
   // The ticker reads the live run without being rebuilt on every tick.
   const runRef = useRef<RunState | null>(null);
@@ -217,9 +241,12 @@ export default function RunScreen() {
    * amount of the screen, and fixed art sizes would have dropped the Elder
    * Shrike straight through the player's ship on a short phone.
    */
+  // With a ship here, its name and hull sit under LEAVE, and the art starts
+  // below them rather than underneath.
+  const hudTop = HUD_TOP + (encounter === 'empty' ? 0 : FOE_STATUS_HEIGHT);
   const chromeHeight =
     insets.top +
-    HUD_TOP +
+    hudTop +
     insets.bottom +
     HUD_BOTTOM +
     STATUS_BAR_HEIGHT +
@@ -276,6 +303,56 @@ export default function RunScreen() {
    * Dev only: put a hit on the ship so the shield, its effects and the hull
    * can be watched without any combat to do it. Delete this with the button.
    */
+  const fireBlock = run ? fireBlocker(run) : 'weapon';
+
+  /**
+   * Firing. The charge is spent on the press, so a second press cannot fire
+   * twice; the bolt is then aimed from the weapon's tip to the other ship,
+   * both measured on screen, and the hull only drops when it arrives.
+   */
+  const onFire = useCallback(() => {
+    if (!run) return;
+    const next = fireWeapon(run);
+    if (next === run || !run.mounted) return;
+    setRun(next);
+    haptics.confirm();
+    void saveRun(next);
+
+    const node = run.position;
+    const weapon = run.mounted;
+    const hits = foeHull(run, node) > 0;
+    void Promise.all([measure(shipRef.current), measure(foeRef.current)]).then(([box, foe]) => {
+      if (!box) return;
+      // The systems box is the ship's 200×260 box grown about its centre, so
+      // a point in ship units lands at the box's centre plus its offset.
+      const scale = box.width / SYSTEMS_SPAN / 200;
+      const mount = MOUNTS[ship.id] ?? MOUNTS.drifter;
+      const tip = weaponTip(weapon);
+      const from = {
+        x: box.x + box.width / 2 + (mount.x + tip.x - 100) * scale,
+        y: box.y + box.height / 2 + (mount.y + tip.y - 130) * scale,
+      };
+      const to = foe && hits
+        ? { x: from.x, y: foe.y + foe.height * 0.55 }
+        : { x: from.x, y: -40 };
+      setShots((current) => [...current, { id: Date.now() + Math.random(), node, from, to, hits: hits && !!foe }]);
+    });
+  }, [haptics, run, ship.id]);
+
+  const onImpact = useCallback((node: number) => {
+    const current = runRef.current;
+    if (!current) return;
+    const next = hitFoe(current, node);
+    if (next === current) return;
+    setRun(next);
+    haptics.tap();
+    void saveRun(next);
+  }, [haptics]);
+
+  const onShotDone = useCallback((id: number) => {
+    setShots((current) => current.filter((shot) => shot.id !== id));
+  }, []);
+
   const onTakeHit = useCallback(() => {
     if (!run) return;
     const next = takeHit(run);
@@ -336,6 +413,18 @@ export default function RunScreen() {
         </Pressable>
       </View>
 
+      {/* Who is out here, and how much hull they have left. */}
+      {run && encounter !== 'empty' ? (
+        <View style={[styles.foeRow, { top: insets.top + FOE_STATUS_TOP }]}>
+          <FoeStatus
+            name={foeName(run) ?? waiting.label}
+            hull={foeHull(run)}
+            max={foeHullMax(run)}
+            width={FOE_STATUS_WIDTH}
+          />
+        </View>
+      ) : null}
+
       {/* Dev only, opposite LEAVE: there is nothing to shoot the shield yet. */}
       <View style={[styles.devRow, { top: insets.top + 2 }]}>
         <Pressable
@@ -356,18 +445,20 @@ export default function RunScreen() {
       <View
         style={[
           styles.stack,
-          { paddingTop: insets.top + HUD_TOP, paddingBottom: insets.bottom + HUD_BOTTOM },
+          { paddingTop: insets.top + hudTop, paddingBottom: insets.bottom + HUD_BOTTOM },
         ]}
       >
         {/* Whatever is waiting here holds the upper half, facing down. */}
         <View style={styles.encounterSlot}>
           {encounter === 'empty' ? null : (
             <FadeInView enabled={!settings.reduceMotion} duration={520} delay={160}>
-              <EncounterShip
-                encounter={encounter}
-                width={waiting.width * artScale}
-                height={waiting.height * artScale}
-              />
+              <View ref={foeRef} collapsable={false}>
+                <EncounterShip
+                  encounter={encounter}
+                  width={waiting.width * artScale}
+                  height={waiting.height * artScale}
+                />
+              </View>
             </FadeInView>
           )}
         </View>
@@ -375,16 +466,18 @@ export default function RunScreen() {
         {/* The reactor allocation, drawn on the ship: a bubble for shields, a
             longer exhaust for engines. */}
         <FadeInView enabled={!settings.reduceMotion} duration={700}>
-          <ShipSystems
-            shipId={ship.id}
-            width={SHIP_WIDTH * artScale}
-            height={SHIP_HEIGHT * artScale}
-            shields={shieldLevel(run?.shieldCharge ?? 0)}
-            shieldHits={run?.shieldHits ?? 0}
-            engines={run?.energy.engines ?? 0}
-            weapon={run?.mounted ?? null}
-            animate={!settings.reduceMotion}
-          />
+          <View ref={shipRef} collapsable={false}>
+            <ShipSystems
+              shipId={ship.id}
+              width={SHIP_WIDTH * artScale}
+              height={SHIP_HEIGHT * artScale}
+              shields={shieldLevel(run?.shieldCharge ?? 0)}
+              shieldHits={run?.shieldHits ?? 0}
+              engines={run?.energy.engines ?? 0}
+              weapon={run?.mounted ?? null}
+              animate={!settings.reduceMotion}
+            />
+          </View>
         </FadeInView>
 
         {/* What this ship has left, on one line. */}
@@ -418,18 +511,40 @@ export default function RunScreen() {
             )}
           </View>
 
-          <MenuButton
-            label={jumpLabel}
-            caption={jumpCaption}
-            onPress={onJump}
-            primary={!blocked}
-            disabled={!!blocked}
-            gauge={jumpFuel}
-            width={buttonWidth}
-            height={JUMP_HEIGHT}
-          />
+          <View style={styles.actionRow}>
+            <FireButton
+              blocked={fireBlock}
+              weaponName={weaponById(run?.mounted)?.name ?? null}
+              width={FIRE_WIDTH}
+              height={JUMP_HEIGHT}
+              onPress={onFire}
+            />
+            <MenuButton
+              label={jumpLabel}
+              caption={jumpCaption}
+              onPress={onJump}
+              primary={!blocked}
+              disabled={!!blocked}
+              gauge={jumpFuel}
+              width={buttonWidth - FIRE_WIDTH - TAB_GAP}
+              height={JUMP_HEIGHT}
+            />
+          </View>
         </View>
       </View>
+
+      {/* Bolts in flight and the sparks where they land, over both ships. */}
+      {shots.map((shot) => (
+        <LaserShot
+          key={shot.id}
+          from={shot.from}
+          to={shot.to}
+          hits={shot.hits}
+          animate={!settings.reduceMotion}
+          onImpact={() => onImpact(shot.node)}
+          onDone={() => onShotDone(shot.id)}
+        />
+      ))}
 
       {/* A panel opens over the helm rather than living in it, so the room it
           needs is only taken while it is being used. */}
@@ -487,6 +602,8 @@ export default function RunScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: palette.void },
   leaveRow: { position: 'absolute', left: 20, zIndex: 5 },
+  foeRow: { position: 'absolute', left: 24, zIndex: 5 },
+  actionRow: { flexDirection: 'row', gap: TAB_GAP },
   devRow: { position: 'absolute', right: 20, zIndex: 5 },
   leave: { paddingVertical: 6, paddingHorizontal: 4 },
   leaveLabel: {
@@ -515,3 +632,16 @@ const styles = StyleSheet.create({
   scrim: { backgroundColor: 'rgba(5,7,15,0.62)', zIndex: 9 },
   panelHolder: { position: 'absolute', zIndex: 10 },
 });
+
+/** One bolt in flight: where from, where to, and the star it was fired at. */
+type Shot = { id: number; node: number; from: Point; to: Point; hits: boolean };
+
+/** A view's box on screen, or null when it is not mounted. */
+function measure(
+  view: View | null,
+): Promise<{ x: number; y: number; width: number; height: number } | null> {
+  return new Promise((resolve) => {
+    if (!view) return resolve(null);
+    view.measureInWindow((x, y, width, height) => resolve({ x, y, width, height }));
+  });
+}

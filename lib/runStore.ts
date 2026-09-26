@@ -15,7 +15,7 @@ import {
   type Subsystem,
 } from '@/lib/energy';
 import { ENCOUNTER_STYLE } from '@/lib/encounters';
-import type { Meeting } from '@/lib/dialogue';
+import { nameOf, type Meeting } from '@/lib/dialogue';
 import { HULL_MAX, damagedHull } from '@/lib/hull';
 import { cargoSlots, fitHold, moveItem, type Place } from '@/lib/hold';
 import { DEFAULT_SHIP_ID, shipById } from '@/lib/ships';
@@ -109,6 +109,12 @@ export type RunState = {
    * null for an empty slot. Always exactly `cargoSlots(ship.cargo)` long.
    */
   hold: (string | null)[];
+  /**
+   * Hits the player has landed on the ship at each star, keyed by node index.
+   * Stored as damage rather than hull left, so the other ship's hull is always
+   * its kind's `hull` minus this, and retuning that number moves every save.
+   */
+  foeDamage: Record<string, number>;
 };
 
 /**
@@ -184,6 +190,67 @@ export function pendingMeeting(run: RunState): Meeting | null {
 export function markSpoken(run: RunState): RunState {
   if (run.spoken.includes(run.position)) return run;
   return { ...run, spoken: [...run.spoken, run.position] };
+}
+
+/** Why the weapon cannot fire, or null when it can. */
+export type FireBlock = 'weapon' | 'charging' | null;
+
+/**
+ * What is stopping the weapon firing: nothing on the hardpoint, or a charge
+ * not yet full. The fire button reads this, and `fireWeapon` refuses on it,
+ * the same way the jump button and `applyJump` both ask `jumpBlocker`.
+ */
+export function fireBlocker(run: RunState): FireBlock {
+  if (!run.mounted) return 'weapon';
+  if (run.weaponCharge < WEAPON_UNITS) return 'charging';
+  return null;
+}
+
+/**
+ * Fires the weapon: spends the whole charge, so it fires once and then has
+ * to build again. Refused (the same run back) when `fireBlocker` says so.
+ *
+ * It does not touch the other ship — the bolt has to get there first, and
+ * `hitFoe` is what lands it.
+ */
+export function fireWeapon(run: RunState): RunState {
+  if (fireBlocker(run)) return run;
+  return { ...run, weaponCharge: 0 };
+}
+
+/** Plates on the ship waiting at a star when it is undamaged; 0 for none. */
+export function foeHullMax(run: RunState, node: number = run.position): number {
+  return ENCOUNTER_STYLE[encounterAt(run.map, node)].hull;
+}
+
+/** Plates left on the ship waiting at a star. */
+export function foeHull(run: RunState, node: number = run.position): number {
+  return Math.max(0, foeHullMax(run, node) - (run.foeDamage[String(node)] ?? 0));
+}
+
+/**
+ * A bolt lands on the ship at `node`, taking a plate.
+ *
+ * Takes the node the shot was fired at rather than reading `position`, so a
+ * bolt still in flight when the ship jumps cannot land on the next star's
+ * ship instead. Nothing at the star, or nothing left of its hull, and the run
+ * comes back unchanged.
+ */
+export function hitFoe(run: RunState, node: number): RunState {
+  if (foeHull(run, node) <= 0) return run;
+  const key = String(node);
+  return { ...run, foeDamage: { ...run.foeDamage, [key]: (run.foeDamage[key] ?? 0) + 1 } };
+}
+
+/**
+ * What the other party at this star is called: the name they speak under, or
+ * for a ship that says nothing (the boss) the kind of ship it is.
+ */
+export function foeName(run: RunState): string | null {
+  const here = encounterAt(run.map, run.position);
+  if (here === 'empty') return null;
+  const meeting = meetingAt(run.map, run.position);
+  return (meeting && nameOf(meeting)) ?? ENCOUNTER_STYLE[here].label;
 }
 
 /** How far each charge has come, 0 to 1, for the sliders on the helm. */
@@ -268,6 +335,7 @@ function createRun(shipId: string): RunState {
     // Every ship launches armed, with an empty hold.
     mounted: ship.weapon,
     hold: Array.from({ length: cargoSlots(ship.cargo) }, () => null),
+    foeDamage: {},
   };
 }
 
@@ -495,7 +563,19 @@ function hydrate(stored: StoredRun): RunState {
     mounted:
       'mounted' in stored ? (weaponById(stored.mounted)?.id ?? null) : ship.weapon,
     hold: fitHold(stored.hold, cargoSlots(ship.cargo), (id) => weaponById(id) !== null),
+    // A save from before weapons fired has hit nothing.
+    foeDamage: cleanDamage(stored.foeDamage),
   };
+}
+
+/** Only whole, positive hit counts survive a load. */
+function cleanDamage(value: unknown): Record<string, number> {
+  if (!value || typeof value !== 'object') return {};
+  const clean: Record<string, number> = {};
+  for (const [key, hits] of Object.entries(value)) {
+    if (typeof hits === 'number' && Number.isFinite(hits) && hits > 0) clean[key] = Math.floor(hits);
+  }
+  return clean;
 }
 
 /** Reads either shape of drive charge off a save, new or old. */

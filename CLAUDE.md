@@ -375,8 +375,8 @@ and cold engines are not building a charge at all — and both the helm and the
 sector map ask it rather than each deciding
 for itself, so the button that offers a jump and the button that performs it
 can never disagree. `applyJump` refuses a blocked jump and hands the run
-straight back, the same way `shiftEnergy` refuses an illegal move. Weapons
-still does nothing — there is nothing to shoot.
+straight back, the same way `shiftEnergy` refuses an illegal move. The
+weapons row feeds the fire button — see "Firing" below.
 
 **Systems charge, and one curve drives all of them.** Charge is counted in
 *units of work* rather than seconds, and a subsystem builds it at
@@ -396,8 +396,8 @@ the expanded controls, and neither carries a number — the bar is the readout.
   `JUMP_UNITS` (14, about 11s at two bars), a hostile one `HOSTILE_JUMP_UNITS`
   (40, about 31s). That is what being pinned down by a Shrike now amounts to —
   a far longer build, not a separate timer with its own rules.
-- **The weapons** (`weaponCharge`) build the same way and reset the same way.
-  Nothing reads the result; there is still nothing to shoot.
+- **The weapons** (`weaponCharge`) build the same way and reset the same way,
+  and firing spends the whole of it (below).
 
 The jump button says nothing about any of this. While the drive builds it is
 simply closed, because the slider is the readout — a countdown printed over the
@@ -599,6 +599,43 @@ every slot. Headless Chromium drives it with synthetic `mousedown` /
 `mousemove` / `mouseup` spaced on timers — react-native-web's responder
 listens for those, not for pointer events.
 
+### Firing, and the other ship's hull
+
+**FIRE sits left of JUMP** on the space screen (`components/FireButton.tsx`),
+and its look is its state: grey with nothing on the hardpoint, dark red while
+the weapon charges, bright red when it is ready. `fireBlocker(run)` returns
+`'weapon'`, `'charging'` or null, and both the button and `fireWeapon` ask
+it — the same pattern as `jumpBlocker` and `applyJump`. A shot spends the
+whole charge on the press, so it fires once per charge and a second press
+before the bolt lands does nothing.
+
+**The rule and the picture are two steps.** `fireWeapon` only spends the
+charge. The bolt (`components/LaserShot.tsx`) then flies from the weapon's tip
+— `MOUNTS` plus `WEAPON_TIPS` in `WeaponArt.tsx`, converted to screen through
+the measured systems box — to the other ship, and `hitFoe` takes the plate
+when it arrives. Arrival is a `setTimeout`, not the end of the animation,
+because Reanimated does not advance in headless and a hit must never wait on
+a frame. Each shot carries the node it was fired at, so a bolt in flight
+when the ship jumps lands on nothing rather than on the next star's ship.
+With no ship at the star the bolt flies off the top of the screen.
+
+**The other ship's hull is stored as damage**, `run.foeDamage[node]`, and
+the hull left is derived: `ENCOUNTER_STYLE[kind].hull` minus it (Shrike 6,
+merchant 4, Elder Shrike 12 — placeholders). Nothing happens at zero yet: the
+ship stays and further bolts land without effect. Any ship present can be
+shot, merchants included.
+
+**Their name sits top left, under LEAVE** (`components/FoeStatus.tsx`), with
+their hull as a white line beneath it — the same white line as the player's
+own hull. The name is `nameOf(meeting)`, the first speaker who is not the
+pilot, so it matches the dialogue box; the boss has no meeting and shows its
+kind, ELDER SHRIKE. The art starts below it (`hudTop`) rather than behind it.
+
+To check a shot in headless, the probe holds the shot's timers (skip any
+`setTimeout` of 150–800ms after pressing FIRE) so the bolt stays at its first
+frame; guessing a `--virtual-time-budget` that lands inside a 200ms flight
+did not work.
+
 **No words inside the reactor.** Not SHIELDS, WEAPONS, ENGINES, LEVEL, CHARGE
 or DRIVE, in either state. The icons carry it, and they are shared between the
 two states (`components/SubsystemGlyph.tsx`) precisely so that what the player
@@ -659,7 +696,7 @@ is the engines row — and a ship with no flame is a ship that cannot jump. Each
 bar does more to the exhaust than lengthen it: the plume widens, the plume and
 its white core both brighten, the heat haze around it builds and the pulse
 deepens, so four bars reads as hotter rather than merely longer. Weapons (bright
-red) has no mark yet — there is nothing to shoot.
+red) is drawn as the weapon on the nose and the bolt it fires.
 
 The cells in the expanded controls animate between unlit and their subsystem's
 colour, with a kick and a white flash as the current lands, so a bar moving

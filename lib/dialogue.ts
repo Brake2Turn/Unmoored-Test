@@ -186,6 +186,16 @@ export function meetingById(id: number): Meeting | undefined {
  * rewritten encounter that opens with the pilot — encounter 9 does — still
  * puts the right face on the right line.
  */
+/**
+ * What the other party is called, for the name over their hull on the space
+ * screen: the first name that is not the pilot's, exactly as the author wrote
+ * it, so it matches the name in the dialogue box. Null when only the pilot
+ * speaks — the screen then falls back to the kind of ship.
+ */
+export function nameOf(meeting: Meeting): string | null {
+  return meeting.lines.find((line) => line.speaker !== PILOT)?.speaker ?? null;
+}
+
 export function faceFor(meeting: Meeting, line: Line): EntityId {
   return line.speaker === PILOT ? 'pilot' : meeting.entity;
 }

@@ -64,6 +64,21 @@ export function WeaponShape({ weaponId, line, fill, strokeWidth = 2 }: ShapeProp
   );
 }
 
+/**
+ * Where a bolt leaves each weapon, relative to the mount, in the same units as
+ * the shapes above. Read off them: the muzzle of the single barrel, the top of
+ * the left of the twin barrels, the point of the spike.
+ */
+export const WEAPON_TIPS: Record<string, { x: number; y: number }> = {
+  weapon1: { x: 0, y: -33 },
+  weapon2: { x: -7, y: -27 },
+  weapon3: { x: 0, y: -34 },
+};
+
+export function weaponTip(weaponId: string): { x: number; y: number } {
+  return WEAPON_TIPS[weaponId] ?? WEAPON_TIPS.weapon1;
+}
+
 /** A weapon drawn on a ship, at the ship's mount point. */
 export function MountedWeapon({
   weaponId,
