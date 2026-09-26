@@ -812,7 +812,10 @@ rows above it.
 
 The hull is one white line above the controls (`components/StatusBar.tsx`),
 the full width of the chrome, with the plates left written at its right end
-as `8/8`. **Fuel rides on the jump button** — `MenuButton`
+as `8/8`. **A hull line changes colour as it empties** — `hullColor(fraction)`
+in `lib/theme.ts`, used by this line and the other ship's (`FoeStatus`)
+alike: white at half or more, a soft yellow under half, red under a quarter.
+Only the line changes; the number beside it stays white. **Fuel rides on the jump button** — `MenuButton`
 takes a `gauge` of `{ label, value }` and gives it a section of its own at the
 right end, the full height of the button and divided off by a rule — because
 the only question fuel answers is whether to jump, and a strip of its own was a

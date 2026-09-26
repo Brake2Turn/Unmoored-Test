@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { HULL_MAX } from '@/lib/hull';
-import { fonts, palette, tracking } from '@/lib/theme';
+import { fonts, hullColor, palette, tracking } from '@/lib/theme';
 
 type Props = {
   /** Plates left, 0 to `HULL_MAX`. */
@@ -36,7 +36,9 @@ export function StatusBar({ hull, width }: Props) {
       </Text>
 
       <View style={styles.track}>
-        <View style={[styles.fill, { width: `${fraction * 100}%` }]} />
+        <View
+          style={[styles.fill, { width: `${fraction * 100}%`, backgroundColor: hullColor(fraction) }]}
+        />
       </View>
 
       {/* The same reading as a number, plates left over plates in all. */}

@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { fonts, palette, tracking } from '@/lib/theme';
+import { fonts, hullColor, palette, tracking } from '@/lib/theme';
 
 /** Fixed, so the space screen can keep the other ship clear of it. */
 export const FOE_STATUS_HEIGHT = 26;
@@ -26,7 +26,9 @@ export function FoeStatus({ name, hull, max, width }: { name: string; hull: numb
         {name.toUpperCase()}
       </Text>
       <View style={styles.track}>
-        <View style={[styles.fill, { width: `${fraction * 100}%` }]} />
+        <View
+          style={[styles.fill, { width: `${fraction * 100}%`, backgroundColor: hullColor(fraction) }]}
+        />
       </View>
     </View>
   );
