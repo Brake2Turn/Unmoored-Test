@@ -172,22 +172,35 @@ const FLICKER_MS = 420;
  */
 
 /**
- * The sweep: a vertical blade of light that crosses the whole face of the
- * shield, not just its edge.
+ * The sweep: a curved wave of light that starts where the bolt struck and
+ * rolls across the whole face of the shield, away from it.
  *
- * The trick that makes it stay inside the envelope without any clipping is
- * that the blade is squashed as it travels. A vertical chord of an ellipse at
- * horizontal position `x` (in units of `SHIELD_RX`) has half-height
- * `SHIELD_RY * sqrt(1 - x²)` — so scaling the blade by exactly that factor
- * traces the inside of the ellipse precisely, edge to edge, while a plain
- * `translateX` carries it across. Both come off one progress value.
+ * In the ship's own upright drawing the bolts land on the nose — the ship is
+ * laid on its side facing whatever shoots at it — so the wave starts at the
+ * top of the envelope (`from: 'front'`) and runs to the tail, bowed forward
+ * like a ripple spreading from the impact. `'back'` runs it the other way.
+ *
+ * It stays inside the envelope without any clipping by being squeezed as it
+ * travels. A horizontal chord of an ellipse at height `y` (in units of
+ * `SHIELD_RY`) has half-width `SHIELD_RX * sqrt(1 - y²)`, so scaling the wave
+ * across by exactly that factor keeps its ends on the rim, edge to edge, while
+ * a plain `translateY` carries it along. Both come off one progress value.
+ *
+ * Four layers, each a little wider, dimmer and later than the one in front,
+ * so what crosses the face is a soft wash with depth rather than a line.
  */
 const SWEEP_LAYERS = [
-  { id: 'sheenA', lag: 0, rx: 26, opacity: 0.26 },
-  { id: 'sheenB', lag: 0.05, rx: 46, opacity: 0.17 },
-  { id: 'sheenC', lag: 0.11, rx: 70, opacity: 0.11 },
-  { id: 'sheenD', lag: 0.19, rx: 94, opacity: 0.06 },
+  { lag: 0, width: 9, opacity: 0.34 },
+  { lag: 0.05, width: 20, opacity: 0.18 },
+  { lag: 0.11, width: 36, opacity: 0.1 },
+  { lag: 0.19, width: 56, opacity: 0.055 },
 ];
+
+/** How far the middle of the wave leads its ends, in ship units. */
+const SWEEP_BOW = 42;
+
+/** Which end of the ship a hit landed on, in the ship's upright drawing. */
+export type HitSide = 'front' | 'back';
 
 /**
  * The debris: fine slivers scattered across the whole field, not wedges cut
@@ -293,6 +306,9 @@ export function ShipSystems({
         width={width * SYSTEMS_SPAN}
         height={height * SYSTEMS_SPAN}
         animate={animate}
+        // Every shot comes from whatever the ship is facing: the other ship
+        // sits off its nose, so hits land on the front.
+        from="front"
       />
     </View>
   );
@@ -391,12 +407,14 @@ function ShieldBreak({
   width,
   height,
   animate,
+  from,
 }: {
   level: number;
   hits: number;
   width: number;
   height: number;
   animate: boolean;
+  from: HitSide;
 }) {
   const [effect, setEffect] = useState<{ id: number; kind: 'shimmer' | 'dissipate' } | null>(null);
   const lastHits = useRef(hits);
@@ -428,7 +446,7 @@ function ShieldBreak({
   if (!effect) return null;
 
   return effect.kind === 'shimmer' ? (
-    <ShieldSweep key={effect.id} width={width} height={height} />
+    <ShieldSweep key={effect.id} width={width} height={height} from={from} />
   ) : (
     <ShieldDissipate key={effect.id} width={width} height={height} />
   );
@@ -443,7 +461,7 @@ function ShieldBreak({
  * of them is opaque and none has a hard edge; the gradient inside each falls
  * away gently on both sides.
  */
-function ShieldSweep({ width, height }: { width: number; height: number }) {
+function ShieldSweep({ width, height, from }: { width: number; height: number; from: HitSide }) {
   const tint = SUBSYSTEM_STYLE.shields.accent;
   const progress = useSharedValue(0);
   const ring = useSharedValue(0);
@@ -480,15 +498,16 @@ function ShieldSweep({ width, height }: { width: number; height: number }) {
         </Svg>
       </Animated.View>
 
-      {SWEEP_LAYERS.map((layer) => (
+      {SWEEP_LAYERS.map((layer, index) => (
         <SweepSheen
-          key={layer.id}
+          key={index}
           layer={layer}
           progress={progress}
           unit={unit}
           tint={tint}
           width={width}
           height={height}
+          from={from}
         />
       ))}
     </View>
@@ -496,12 +515,12 @@ function ShieldSweep({ width, height }: { width: number; height: number }) {
 }
 
 /**
- * One sheen of the wash.
+ * One layer of the wave: a curved band, its middle bowed ahead of its ends in
+ * the direction it travels, squeezed across as it goes so its ends ride the
+ * rim (see `SWEEP_LAYERS`).
  *
- * The squash is what keeps it inside the envelope with no clipping: a vertical
- * chord of an ellipse at horizontal position `x` (in units of `SHIELD_RX`) has
- * half-height `SHIELD_RY * sqrt(1 - x²)`, so scaling by exactly that traces
- * the inside of the shield edge to edge while `translateX` carries it across.
+ * Its first frame is already visible, at the rim where the bolt struck, so a
+ * hit shows even where frames are scarce.
  */
 function SweepSheen({
   layer,
@@ -510,6 +529,7 @@ function SweepSheen({
   tint,
   width,
   height,
+  from,
 }: {
   layer: (typeof SWEEP_LAYERS)[number];
   progress: SharedValue<number>;
@@ -517,39 +537,49 @@ function SweepSheen({
   tint: string;
   width: number;
   height: number;
+  from: HitSide;
 }) {
+  // +1 travels nose to tail (down the upright drawing), −1 tail to nose.
+  const dir = from === 'front' ? 1 : -1;
+
   const style = useAnimatedStyle(() => {
     // Trailing layers start later and so sit behind the ones in front.
     const t = Math.max(0, (progress.value - layer.lag) / (1 - layer.lag));
-    const x = t * 2 - 1;
-    const chord = Math.sqrt(Math.max(0, 1 - x * x));
+    // How far the wave has come, in ship units, travel direction positive:
+    // its ends start on the struck rim and its bowed middle ends on the far one.
+    const shift = (t * 2 - 1) * (SHIELD_RY - SWEEP_BOW / 2);
+    // The chord is measured where the *ends* are — half a bow behind the
+    // middle — since the ends are what must stay on the rim. A little under
+    // the true chord leaves room for the band's own thickness; a little width
+    // even at the very rim keeps the first frame visible at the impact.
+    const endsAt = (shift - SWEEP_BOW / 2) / SHIELD_RY;
+    // Wider layers are drawn in further, since their thickness overhangs more.
+    const inset = 0.92 - layer.width / 400;
+    const chord = Math.max(0.2, inset * Math.sqrt(Math.max(0, 1 - endsAt * endsAt)));
 
     return {
-      opacity: interpolate(progress.value, [0, 0.14, 0.72, 1], [0, 1, 0.85, 0], Extrapolation.CLAMP),
-      transform: [{ translateX: x * SHIELD_RX * unit }, { scaleY: chord }],
+      opacity: interpolate(progress.value, [0, 0.1, 0.7, 1], [0.8, 1, 0.85, 0], Extrapolation.CLAMP),
+      transform: [{ translateY: shift * dir * unit }, { scaleX: chord }],
     };
   });
+
+  // The band in ship units, centred on the shield: ends on the horizontal
+  // through the centre, middle bowed `SWEEP_BOW` ahead. A quadratic curve's
+  // apex sits halfway to its control point, hence twice the bow.
+  const ends = SHIELD_CY - (dir * SWEEP_BOW) / 2;
+  const control = ends + dir * SWEEP_BOW * 2;
+  const d = `M ${SHIELD_CX - SHIELD_RX} ${ends} Q ${SHIELD_CX} ${control} ${SHIELD_CX + SHIELD_RX} ${ends}`;
 
   return (
     <Animated.View style={[StyleSheet.absoluteFill, style]}>
       <Svg width={width} height={height} viewBox={VIEW_BOX}>
-        <Defs>
-          {/* Five stops rather than three: the extra pair round the shoulders
-              off, so the band has no visible edge anywhere. */}
-          <LinearGradient id={layer.id} x1="0" y1="0" x2="1" y2="0">
-            <Stop offset="0" stopColor={tint} stopOpacity={0} />
-            <Stop offset="0.28" stopColor={tint} stopOpacity={layer.opacity * 0.22} />
-            <Stop offset="0.5" stopColor={tint} stopOpacity={layer.opacity} />
-            <Stop offset="0.72" stopColor={tint} stopOpacity={layer.opacity * 0.22} />
-            <Stop offset="1" stopColor={tint} stopOpacity={0} />
-          </LinearGradient>
-        </Defs>
-        <Ellipse
-          cx={SHIELD_CX}
-          cy={SHIELD_CY}
-          rx={layer.rx}
-          ry={SHIELD_RY}
-          fill={`url(#${layer.id})`}
+        <Path
+          d={d}
+          fill="none"
+          stroke={tint}
+          strokeOpacity={layer.opacity}
+          strokeWidth={layer.width}
+          strokeLinecap="round"
         />
       </Svg>
     </Animated.View>

@@ -456,8 +456,8 @@ Pulling power is asymmetric on purpose: it drops the charge on the spot, in
 with its shields already up — the charge is for changes made in flight, not a
 tax on launching.
 
-**A break is felt as well as counted.** `ShieldBreak` runs a blade of light
-across the whole face when a layer goes, and tears the field apart when the
+**A break is felt as well as counted.** `ShieldBreak` runs a curved wave of
+light across the whole face when a layer goes, and tears the field apart when the
 last one does. Which plays is decided by the level *before* the hit against the
 level after, and it fires on a change in `run.shieldHits` rather than on the
 level dropping — pulling the power lowers the level too, and that must stay
@@ -465,16 +465,24 @@ silent. Each effect is keyed on the hit that caused it, so a second hit
 restarts it cleanly. Neither is load-bearing: if they never play, the bar and
 the bubble still tell the truth.
 
-The wash is four broad translucent sheens, each wider, dimmer and later than
-the one in front, with five-stop gradients so none of them has a visible edge.
-It was one bright blade first and read as a hard line rather than a shimmer.
+**The wave starts where the bolt struck and rolls away from it** (`HitSide`,
+`from`). Every shot comes from whatever the ship faces, which on its side is
+its nose — the front of the upright drawing — so the wave starts at the
+envelope's top in upright terms (the right on screen, facing the enemy) and
+runs to the tail. It is **curved**: each of four stroked layers is a quadratic
+arc bowed `SWEEP_BOW` ahead of its ends, like a ripple spreading from the
+impact, each wider, dimmer and later than the one in front. It was straight
+vertical bands running one fixed way across the upright drawing — which, once
+the ships were turned, ran top to bottom on screen with no regard to the hit.
 
-The one piece of real maths is **the sweep needs no clipping**. A vertical
-chord of an ellipse at horizontal position `x` (in units of `SHIELD_RX`) has
-half-height `SHIELD_RY * sqrt(1 - x²)`, so scaling a sheen by exactly that
-factor traces the inside of the envelope precisely, edge to edge, while a plain
-`translateX` carries it across. Both come off one progress value, and both are
-plain view transforms — as is everything in these effects. **Animated SVG
+The one piece of real maths is **the sweep needs no clipping**. A horizontal
+chord of an ellipse at height `y` (in units of `SHIELD_RY`) has half-width
+`SHIELD_RX * sqrt(1 - y²)`, so scaling the arc across by that factor — measured
+where its *ends* are, half a bow behind its middle, and inset a little more for
+the wider layers' thickness — keeps it inside the envelope while a plain
+`translateY` carries it along. Both come off one progress value, and both are
+plain view transforms — as is everything in these effects. The geometry was
+checked on a scratch page drawing five moments of it with plain SVG. **Animated SVG
 attributes are avoided on purpose:** view transforms behave identically on both
 platforms, and since motion cannot be checked here at all (below), the parts
 that cannot be verified are kept to the ones least able to surprise.
