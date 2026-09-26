@@ -18,6 +18,7 @@ import { STATUS_BAR_HEIGHT, StatusBar } from '@/components/StatusBar';
 import { MenuButton } from '@/components/MenuButton';
 import { StarField } from '@/components/StarField';
 import { EncounterShip, foeMuzzle } from '@/components/ships/EncounterShip';
+import { Sideways, sidewaysPoint } from '@/components/ships/Sideways';
 import { GameOver } from '@/components/GameOver';
 import { ModeBadge } from '@/components/ModeBadge';
 import { SYSTEMS_SPAN, ShipSystems } from '@/components/ships/ShipSystems';
@@ -111,6 +112,10 @@ const SHIP_BUTTON_WIDTH = 52;
 /** Room under LEAVE for the other ship's name and hull, when one is here. */
 const FOE_STATUS_TOP = 30;
 const FOE_STATUS_WIDTH = 132;
+
+/** Kept clear at each side of the ships, and between the two of them. */
+const ARENA_MARGIN = 12;
+const ARENA_GAP = 4;
 
 /** The bottom of the helm: a row of tabs with the jump beneath it. */
 const CONTROL_ROW_HEIGHT = layout.tabHeight + TAB_GAP + JUMP_HEIGHT;
@@ -271,15 +276,16 @@ export default function RunScreen() {
   }, [driveBuilding, focused, foeBuilding, shieldBuilding, weaponBuilding]);
 
   /**
-   * The two pieces of ship art share whatever the controls leave over.
+   * The two ships lie on their sides, side by side: the player on the left
+   * facing right, whatever is waiting on the right facing left. Alone, the
+   * player sits in the middle.
    *
-   * Worked out rather than guessed: the controls now take a fixed, known
-   * amount of the screen, and fixed art sizes would have dropped the Elder
-   * Shrike straight through the player's ship on a short phone.
+   * Both are scaled together from whichever runs out first — the width they
+   * share, or the height the controls leave. Laid on its side a ship's length
+   * runs across the screen, so it is the width that usually decides; the
+   * Elder Shrike beside the player's shield is the widest pair.
    */
-  // With a ship here, its name and hull sit under LEAVE, and the art starts
-  // below them rather than underneath.
-  const hudTop = HUD_TOP + (encounter === 'empty' ? 0 : FOE_STATUS_HEIGHT);
+  const hudTop = HUD_TOP;
   const chromeHeight =
     insets.top +
     hudTop +
@@ -289,7 +295,18 @@ export default function RunScreen() {
     CONTROL_ROW_HEIGHT +
     STACK_GAP * 3;
   const artBudget = height - chromeHeight;
-  const artScale = Math.max(0.55, Math.min(1, artBudget / (waiting.height + SHIP_SLOT_HEIGHT)));
+  const acrossBudget = width - ARENA_MARGIN * 2 - (encounter === 'empty' ? 0 : ARENA_GAP);
+  const artScale = Math.max(
+    0.45,
+    Math.min(
+      1,
+      // Across: the player's turned systems box plus the other ship's length.
+      acrossBudget / (SHIP_SLOT_HEIGHT + waiting.height),
+      // Down: the taller of the player's turned box and the other ship with
+      // its name above it.
+      artBudget / Math.max(SHIP_WIDTH * SYSTEMS_SPAN, waiting.width + FOE_STATUS_HEIGHT / 0.8),
+    ),
+  );
 
   const onJump = useCallback(() => {
     if (blocked) return;
@@ -355,24 +372,27 @@ export default function RunScreen() {
     const hits = foeHull(run, node) > 0;
     void Promise.all([measure(shipRef.current), measure(foeRef.current)]).then(([box, foe]) => {
       if (!box) return;
-      // The systems box is the ship's 200×260 box grown about its centre, so
-      // a point in ship units lands at the box's centre plus its offset.
-      const scale = box.width / SYSTEMS_SPAN / 200;
+      // The systems box is the ship's 200×260 box grown about its centre and
+      // then laid on its side, so its on-screen *height* is the upright width.
+      // A point in ship units is its offset from the centre, turned.
+      const scale = box.height / SYSTEMS_SPAN / 200;
       const mount = MOUNTS[ship.id] ?? MOUNTS.drifter;
       const tip = weaponTip(weapon);
-      const from = {
-        x: box.x + box.width / 2 + (mount.x + tip.x - 100) * scale,
-        y: box.y + box.height / 2 + (mount.y + tip.y - 130) * scale,
-      };
+      const from = sidewaysPoint(
+        box,
+        (mount.x + tip.x - 100) * scale,
+        (mount.y + tip.y - 130) * scale,
+      );
+      // Straight across to the other ship's middle, or off the right edge.
       const to = foe && hits
-        ? { x: from.x, y: foe.y + foe.height * 0.55 }
-        : { x: from.x, y: -40 };
+        ? { x: foe.x + foe.width * 0.45, y: from.y }
+        : { x: width + 40, y: from.y };
       setShots((current) => [
         ...current,
         { id: Date.now() + Math.random(), by: 'player', node, from, to, hits: hits && !!foe },
       ]);
     });
-  }, [haptics, run, ship.id]);
+  }, [haptics, run, ship.id, width]);
 
   /**
    * A red ship's weapon has charged: it fires at the player. Nothing but the
@@ -393,12 +413,16 @@ export default function RunScreen() {
     const shielded = shieldLevel(current.shieldCharge) > 0;
     void Promise.all([measure(foeRef.current), measure(shipRef.current)]).then(([foe, box]) => {
       if (!foe || !box) return;
+      // The other ship is on its side too; its on-screen height is its
+      // upright width, 200 units across.
       const muzzle = foeMuzzle(encounterAt(current.map, node));
-      const from = {
-        x: foe.x + (muzzle.x / 200) * foe.width,
-        y: foe.y + (muzzle.y / 260) * foe.height,
-      };
-      const to = { x: from.x, y: box.y + box.height * (shielded ? 0.12 : 0.24) };
+      const foeScale = foe.height / 200;
+      const from = sidewaysPoint(foe, (muzzle.x - 100) * foeScale, (muzzle.y - 130) * foeScale);
+      // The player's nose faces it. The shield's rim stands 140 units out
+      // from the ship's centre along its length, the hull's nose about 92.
+      const playerScale = box.height / SYSTEMS_SPAN / 200;
+      const reach = (shielded ? 136 : 92) * playerScale;
+      const to = { x: box.x + box.width / 2 + reach, y: from.y };
       setShots((shots) => [
         ...shots,
         { id: Date.now() + Math.random(), by: 'foe', node, from, to, hits: true },
@@ -581,19 +605,6 @@ export default function RunScreen() {
         </Pressable>
       </View>
 
-      {/* Who is out here, and how much hull they have left. Gone with their
-          ship once it is destroyed. */}
-      {run && present !== 'empty' ? (
-        <View style={[styles.foeRow, { top: insets.top + FOE_STATUS_TOP }]}>
-          <FoeStatus
-            name={foeName(run) ?? waiting.label}
-            hull={foeHull(run)}
-            max={foeHullMax(run)}
-            width={FOE_STATUS_WIDTH}
-          />
-        </View>
-      ) : null}
-
       {/* Which mode the run is in, opposite LEAVE. */}
       {run ? (
         <View style={[styles.devRow, { top: insets.top + 2 }]}>
@@ -652,44 +663,69 @@ export default function RunScreen() {
           { paddingTop: insets.top + hudTop, paddingBottom: insets.bottom + HUD_BOTTOM },
         ]}
       >
-        {/* Whatever is waiting here holds the upper half, facing down. */}
-        <View style={styles.encounterSlot}>
+        {/* The two ships, side by side: the player on the left facing right,
+            whatever is waiting on the right facing left. Alone, the player
+            holds the middle. */}
+        <View style={styles.arena}>
+          {/* The reactor allocation, drawn on the ship: a bubble for shields,
+              a longer exhaust for engines. */}
+          <FadeInView enabled={!settings.reduceMotion} duration={700}>
+            <View ref={shipRef} collapsable={false} style={wrecked ? styles.gone : null}>
+              <Sideways
+                width={SHIP_WIDTH * artScale * SYSTEMS_SPAN}
+                height={SHIP_HEIGHT * artScale * SYSTEMS_SPAN}
+              >
+                <ShipSystems
+                  shipId={ship.id}
+                  width={SHIP_WIDTH * artScale}
+                  height={SHIP_HEIGHT * artScale}
+                  shields={shieldLevel(run?.shieldCharge ?? 0)}
+                  shieldHits={run?.shieldHits ?? 0}
+                  engines={run?.energy.engines ?? 0}
+                  weapon={run?.mounted ?? null}
+                  animate={!settings.reduceMotion}
+                />
+              </Sideways>
+            </View>
+          </FadeInView>
+
           {encounter === 'empty' ? null : (
             <FadeInView enabled={!settings.reduceMotion} duration={520} delay={160}>
-              {/* Kept in the layout once destroyed, just not drawn, so
-                  nothing else on the screen moves when it goes. */}
-              <View
-                ref={foeRef}
-                collapsable={false}
-                style={present === 'empty' ? styles.gone : null}
-              >
-                <EncounterShip
-                  encounter={encounter}
-                  angry={!!run && foeLooksHostile(run)}
-                  width={waiting.width * artScale}
-                  height={waiting.height * artScale}
-                />
+              <View style={styles.foeColumn}>
+                {/* Who is out here and their hull, over their own ship. Gone
+                    with it once it is destroyed, but its room is kept. */}
+                <View style={[styles.foeStatus, present === 'empty' && styles.gone]}>
+                  {run ? (
+                    <FoeStatus
+                      name={foeName(run) ?? waiting.label}
+                      hull={foeHull(run)}
+                      max={foeHullMax(run)}
+                      width={Math.min(FOE_STATUS_WIDTH, waiting.height * artScale)}
+                    />
+                  ) : (
+                    <View style={{ height: FOE_STATUS_HEIGHT }} />
+                  )}
+                </View>
+                {/* Kept in the layout once destroyed, just not drawn, so
+                    nothing else on the screen moves when it goes. */}
+                <View
+                  ref={foeRef}
+                  collapsable={false}
+                  style={present === 'empty' ? styles.gone : null}
+                >
+                  <Sideways width={waiting.width * artScale} height={waiting.height * artScale}>
+                    <EncounterShip
+                      encounter={encounter}
+                      angry={!!run && foeLooksHostile(run)}
+                      width={waiting.width * artScale}
+                      height={waiting.height * artScale}
+                    />
+                  </Sideways>
+                </View>
               </View>
             </FadeInView>
           )}
         </View>
-
-        {/* The reactor allocation, drawn on the ship: a bubble for shields, a
-            longer exhaust for engines. */}
-        <FadeInView enabled={!settings.reduceMotion} duration={700}>
-          <View ref={shipRef} collapsable={false} style={wrecked ? styles.gone : null}>
-            <ShipSystems
-              shipId={ship.id}
-              width={SHIP_WIDTH * artScale}
-              height={SHIP_HEIGHT * artScale}
-              shields={shieldLevel(run?.shieldCharge ?? 0)}
-              shieldHits={run?.shieldHits ?? 0}
-              engines={run?.energy.engines ?? 0}
-              weapon={run?.mounted ?? null}
-              animate={!settings.reduceMotion}
-            />
-          </View>
-        </FadeInView>
 
         {/* The HUD: hull, tabs and the two buttons. Greyed out and dead to
             touch once the ship is destroyed. */}
@@ -835,7 +871,23 @@ export default function RunScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: palette.void },
   leaveRow: { position: 'absolute', left: 20, zIndex: 5 },
-  foeRow: { position: 'absolute', left: 24, zIndex: 5 },
+  /** Takes the slack between the top and the HUD; the ships sit mid-way. */
+  arena: {
+    flex: 1,
+    minHeight: 0,
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-evenly',
+    paddingHorizontal: ARENA_MARGIN,
+    gap: ARENA_GAP,
+  },
+  /**
+   * The other ship's name floats above it rather than stacking on it, so the
+   * two ships' centres stay level and a bolt flies straight between them.
+   */
+  foeColumn: { alignItems: 'center' },
+  foeStatus: { position: 'absolute', bottom: '100%', marginBottom: 10 },
   actionRow: { flexDirection: 'row', gap: TAB_GAP },
   hud: { alignItems: 'center', gap: STACK_GAP },
   hudDead: { opacity: 0.3 },
@@ -858,8 +910,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: STACK_GAP,
   },
-  /** Takes the slack, so everything below it sits at a fixed height. */
-  encounterSlot: { flex: 1, minHeight: 0, alignItems: 'center', justifyContent: 'flex-start' },
 
   tabRow: {
     flexDirection: 'row',

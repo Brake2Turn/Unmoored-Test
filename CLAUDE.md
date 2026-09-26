@@ -265,8 +265,9 @@ would open with a conversation from a merchant long since passed.
 
 The overlay (`components/DialogueOverlay.tsx`) is the whole screen: a pale
 wash, a box above the helm's controls, and a tap anywhere to advance. **Which
-side the face sits on says who is speaking** before a word is read — the other
-party left, the player's pilot right — and that is decided by `faceFor`, which
+side the face sits on says who is speaking** before a word is read — the
+player's pilot left and the other party right, the same sides as their ships
+(it was the other way round while the ships were stacked) — and that is decided by `faceFor`, which
 recognises the player by speaker name rather than by position, so an encounter
 that opens with the pilot (number 9 does) still lands the right face on the
 right side.
@@ -632,9 +633,11 @@ the hull left is derived: `ENCOUNTER_STYLE[kind].hull` minus it (Shrike 6,
 merchant 4, Elder Shrike 12 — placeholders). At zero it is destroyed (below).
 Any ship present can be shot, merchants included — which provokes them.
 
-**Their name sits top left, under LEAVE** (`components/FoeStatus.tsx`), with
+**Their name floats above their own ship** (`components/FoeStatus.tsx`), with
 their hull as a white line beneath it — the same white line as the player's
-own hull. The name is `nameOf(meeting)`, the first speaker who is not the
+own hull. It is absolutely positioned (`styles.foeStatus`) rather than stacked,
+so the two ships' centres stay level and bolts fly straight between them. It
+sat top left under LEAVE until the ships were laid side by side. The name is `nameOf(meeting)`, the first speaker who is not the
 pilot, so it matches the dialogue box; the boss has no meeting and shows its
 kind, ELDER SHRIKE. The art starts below it (`hudTop`) rather than behind it.
 
@@ -673,6 +676,32 @@ ring, debris, 1.1s) fires on the *transition* to zero, compared against the
 last render in a ref, not on the hull being zero — so loading a save with a
 wreck in it does not blow it up again, and every route to zero (either
 ship's bolts, the dev hit) is caught by one check.
+
+### The ships lie on their sides
+
+Every ship is still **drawn upright** in its 200×260 box — the art, shield,
+exhaust, guns, `MOUNTS`, `ENGINES`, `WEAPON_TIPS` and muzzles are all in
+upright coordinates — and **`components/ships/Sideways.tsx` turns the whole
+of it a quarter clockwise**: drawn nose-up faces right (the player), drawn
+nose-down faces left (the other ship). `Sideways` gives its outer box the
+turned size (height wide, width tall), because a rotation does not change
+layout. On the space screen the player is on the left and whatever is
+waiting on the right, in one row (`styles.arena`); alone, the player holds
+the middle. Ship select and the encounter tester's faceless cards use it too.
+
+**Aim through `sidewaysPoint`, and measure the outer box.** A point on an
+upright drawing, as an offset from its centre, turns (dx, dy) → (−dy, dx).
+The turned inner view is never measured — how a rotated view measures
+differs between web and phones — so the outer box is, and its on-screen
+*height* is the upright *width* (which is where each scale factor comes
+from). Bolts fly straight across at the shooter's height; `LaserShot` lays
+the bolt along whichever axis it travels.
+
+**Both ships scale together** (`artScale`) from whichever runs out first: the
+width the pair shares (`SHIP_SLOT_HEIGHT` — the player's turned systems box —
+plus the other ship's length) or the height the controls leave. Width usually
+decides; the Elder Shrike beside the player's shield is the widest pair and
+comes out around 0.7.
 
 **Two modes, explorer and combat** (`modeOf(run)`, shown top right by
 `components/ModeBadge.tsx`, with the dev hit moved down a line under it).

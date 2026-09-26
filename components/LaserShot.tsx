@@ -101,17 +101,27 @@ function Bolt({ from, to, animate }: { from: Point; to: Point; animate: boolean 
     ],
   }));
 
+  // The bolt lies along its line of flight: across for a shot between ships
+  // side by side, upright for one fired up or down. Its front end starts at
+  // the tip, on whichever side the target is.
+  const across = Math.abs(to.x - from.x) >= Math.abs(to.y - from.y);
+  const place = across
+    ? {
+        width: BOLT_LEN,
+        height: BOLT_W,
+        left: to.x > from.x ? from.x : from.x - BOLT_LEN,
+        top: from.y - BOLT_W / 2,
+      }
+    : {
+        width: BOLT_W,
+        height: BOLT_LEN,
+        left: from.x - BOLT_W / 2,
+        top: to.y < from.y ? from.y - BOLT_LEN : from.y,
+      };
+
   return (
-    <Animated.View
-      style={[
-        styles.bolt,
-        // The bolt's front end starts at the tip and travels to the target —
-        // above the tip for a shot going up, below it for one coming down.
-        { left: from.x - BOLT_W / 2, top: to.y < from.y ? from.y - BOLT_LEN : from.y },
-        style,
-      ]}
-    >
-      <View style={styles.boltCore} />
+    <Animated.View style={[styles.bolt, place, across && styles.boltAcross, style]}>
+      <View style={across ? styles.boltCoreAcross : styles.boltCore} />
     </Animated.View>
   );
 }
@@ -164,8 +174,6 @@ function Sparks({ at, animate }: { at: Point; animate: boolean }) {
 const styles = StyleSheet.create({
   bolt: {
     position: 'absolute',
-    width: BOLT_W,
-    height: BOLT_LEN,
     borderRadius: BOLT_W / 2,
     backgroundColor: palette.weapons,
     shadowColor: palette.weapons,
@@ -175,6 +183,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   boltCore: { width: 1, height: BOLT_LEN - 4, marginTop: 2, borderRadius: 0.5, backgroundColor: '#FFFFFF' },
+  boltAcross: { justifyContent: 'center' },
+  boltCoreAcross: { height: 1, width: BOLT_LEN - 4, borderRadius: 0.5, backgroundColor: '#FFFFFF' },
 
   sparkBox: { position: 'absolute', width: SPARK_BOX, height: SPARK_BOX },
   flash: {

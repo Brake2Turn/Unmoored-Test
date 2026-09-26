@@ -23,6 +23,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MenuButton } from '@/components/MenuButton';
 import { ShipArt } from '@/components/ships/ShipArt';
+import { Sideways } from '@/components/ships/Sideways';
 import { useHaptics } from '@/lib/settings';
 import { fonts, palette, tracking, useMenuWidth } from '@/lib/theme';
 import { SHIPS, STARTER_SHIP_IDS, type Ship } from '@/lib/ships';
@@ -316,13 +317,18 @@ const ShipCard = React.memo(function ShipCard({
           locked && styles.cardLocked,
         ]}
       >
-        <ShipArt
-          shipId={ship.id}
-          width={cardWidth * 0.74}
-          height={cardWidth * 0.97}
-          locked={locked}
-          weapon={ship.weapon}
-        />
+        {/* On its side, nose to the right, the way it flies on the space
+            screen. Its length now runs across the card, so it is sized to
+            the card's width. */}
+        <Sideways width={cardWidth * 0.66} height={cardWidth * 0.86}>
+          <ShipArt
+            shipId={ship.id}
+            width={cardWidth * 0.66}
+            height={cardWidth * 0.86}
+            locked={locked}
+            weapon={ship.weapon}
+          />
+        </Sideways>
         {locked ? (
           <View style={styles.lockBadge}>
             <LockGlyph size={13} color={palette.textMuted} />

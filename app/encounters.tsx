@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PortraitArt, hasPortrait } from '@/components/PortraitArt';
 import { EncounterShip } from '@/components/ships/EncounterShip';
+import { Sideways } from '@/components/ships/Sideways';
 import { MEETINGS, nameOf, type Meeting } from '@/lib/dialogue';
 import { ENCOUNTER_STYLE } from '@/lib/encounters';
 import { devStageEncounter, loadRun, saveRun } from '@/lib/runStore';
@@ -90,7 +91,10 @@ export default function EncountersScreen() {
                   <PortraitArt entity={meeting.entity} size={FACE} />
                 ) : (
                   // No face (the abandoned ship): show the ship it arrives in.
-                  <EncounterShip encounter={red ? 'enemy' : 'merchant'} width={FACE * 0.62} height={FACE * 0.8} />
+                  // On its side, facing left, as it sits on the space screen.
+                  <Sideways width={FACE * 0.62} height={FACE * 0.8}>
+                    <EncounterShip encounter={red ? 'enemy' : 'merchant'} width={FACE * 0.62} height={FACE * 0.8} />
+                  </Sideways>
                 )}
               </View>
               {/* The whole name, wrapping onto a second line rather than
@@ -115,7 +119,9 @@ export default function EncountersScreen() {
           ]}
         >
           <View style={styles.face}>
-            <EncounterShip encounter="boss" width={FACE * 0.62} height={FACE * 0.8} />
+            <Sideways width={FACE * 0.62} height={FACE * 0.8}>
+              <EncounterShip encounter="boss" width={FACE * 0.62} height={FACE * 0.8} />
+            </Sideways>
           </View>
           <Text style={styles.name}>{ENCOUNTER_STYLE.boss.label}</Text>
           <Text style={[styles.kind, { color: palette.danger }]}>BOSS</Text>

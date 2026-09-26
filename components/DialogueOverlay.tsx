@@ -14,7 +14,10 @@ import { fonts, palette, tracking } from '@/lib/theme';
  * comes back.
  *
  * **Which side the face sits on says who is speaking** before a word is read.
- * The other party is on the left, the player's own pilot on the right, and the
+ * Each face sits on the same side as its ship on the space screen: the
+ * player's pilot on the left, the other party on the right. (It was the other
+ * way round while the ships were stacked, the other ship above; laying them
+ * side by side put the player's ship on the left, and the faces followed.) The
  * name sits inside the box on the same side as the face it belongs to. That is
  * carried by `faceFor`, which recognises the player by name rather than by
  * position — encounter 9 opens with the pilot, and still puts the right face
@@ -124,7 +127,7 @@ export function DialogueOverlay({
             style={[
               styles.face,
               { top: -FACE_RISE },
-              isPilot ? { right: FACE_INSET } : { left: FACE_INSET },
+              isPilot ? { left: FACE_INSET } : { right: FACE_INSET },
             ]}
           >
             <PortraitArt entity={face} size={FACE} />
@@ -132,7 +135,7 @@ export function DialogueOverlay({
         ) : null}
 
         <View style={styles.box}>
-          <View style={[styles.nameRow, isPilot && styles.nameRowPilot]}>
+          <View style={[styles.nameRow, !isPilot && styles.nameRowOther]}>
             <Text numberOfLines={1} style={styles.name}>
               {line.speaker}
             </Text>
@@ -176,7 +179,7 @@ const styles = StyleSheet.create({
    * does.
    */
   nameRow: { flexDirection: 'row', marginBottom: 8 },
-  nameRowPilot: { justifyContent: 'flex-end' },
+  nameRowOther: { justifyContent: 'flex-end' },
   name: {
     fontFamily: fonts.bodyBold,
     fontSize: 11,
