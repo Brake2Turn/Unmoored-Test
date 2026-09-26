@@ -512,8 +512,8 @@ The reactor is on the helm only — the sector map is for choosing where to go
 and deliberately carries none of it — and it has two states
 (`components/ReactorPanel.tsx`).
 
-**Collapsed** it is a thumb-sized tab, the left of two across the bottom of
-the helm. Every tab opens with its own mark and its name on one line
+**Collapsed** it is a tab the full width of the chrome, above FIRE, the SHIP
+square and JUMP. Every tab opens with its own mark and its name on one line
 (`components/PanelChrome.tsx`, shared by both, along with the header the
 opened panel carries and the `CARD` both are drawn on — a tab and its panel
 have to look like one section, which is easier to keep true with the two
@@ -535,16 +535,16 @@ the room the controls need is only taken while energy is actually being moved.
 The panel used to hold a third of the screen permanently for controls that go
 untouched most of the time.
 
-**The Ship tab sits beside it** (`components/ShipPanel.tsx`), in exactly the
-same two states: the weapon on the hardpoint, the cargo hold and the crew
-berths, together. Cargo and crew were two tabs of their own until weapons
-arrived; they were merged because the weapon has to be dragged between the
-hardpoint and the hold, and a drag cannot cross from one panel into another
-when only one is ever open. The two tabs divide the chrome's width evenly
-with the jump button full-width beneath them. Every tab is
-`layout.tabHeight` tall and everything they open is `layout.panelWidth` wide,
-both shared through the theme rather than repeated per component, so the tabs
-sit as one row and the panels swap without the card shifting under the thumb.
+**The ship section** (`components/ShipPanel.tsx`) is collapsed to a small
+**white SHIP square between FIRE and JUMP** (`ShipButton`, `SHIP_BUTTON_WIDTH`),
+and opens the same way into the weapon on the hardpoint, the cargo hold and the
+crew berths together. It was a half-width tab beside the reactor drawing all of
+that in miniature; the author moved it into the button row and gave the reactor
+the whole width. Cargo and crew were two tabs before that, merged because the
+weapon has to be dragged between the hardpoint and the hold, and a drag cannot
+cross from one panel into another. Everything the tabs open is
+`layout.panelWidth` wide, shared through the theme, so the panels swap without
+the card shifting under the thumb.
 Only ever one is open: the helm holds `open: 'reactor' | 'ship' | null`, not
 a flag each, so two panels cannot stack.
 
@@ -552,7 +552,16 @@ Cargo space is drawn as slots, and how many is `cargoSlots(ship.cargo)`
 (`lib/hold.ts`) — the cargo stat is a 0–1 impression rather than a count, so it
 is scaled to at most `CARGO_SLOTS_MAX` (8) and never rounds down to none.
 Berths are a flat `CREW_SLOTS` (3); ships do not differ on crew yet, and there
-is no crew roster, so the berths are always drawn empty. **The hold takes
+is no crew roster, so the berths are always drawn empty. They are squares the
+size of a cargo slot (they were circles), so the panel reads as one set of
+compartments.
+
+**A tap says what a thing is; only a drag moves it.** Tapping the weapon (on
+the hardpoint or in the hold) or a berth shows a small pop-up just above it —
+the name and one line, the weapon's from `Weapon.description` — which goes on
+a tap or after `INFO_MS`. Its height is only known after layout, so it renders
+invisible for one pass (`infoHeight`). A tap used to move the weapon; that was
+replaced by the pop-up, so probes that need a move must drag. **The hold takes
 weapons**, and nothing else yet — there is no trade.
 
 ### Weapons, the hardpoint and the hold
@@ -593,8 +602,7 @@ adding react-native-gesture-handler would be a native dependency for one drag.
 Drop targets are measured with `measureInWindow` when a drag starts. Dropping
 anywhere on the hold uses the empty slot under the pointer, or the first empty
 one, so "drag it into cargo" never needs aiming. A tap (under six pixels of
-travel) moves it the obvious way, which is also what makes it testable from a
-script. The dragged icon is drawn at the panel's top level so it passes over
+travel) shows the pop-up instead of moving anything. The dragged icon is drawn at the panel's top level so it passes over
 every slot. Headless Chromium drives it with synthetic `mousedown` /
 `mousemove` / `mouseup` spaced on timers — react-native-web's responder
 listens for those, not for pointer events.
@@ -696,13 +704,15 @@ it silently tests the wrong button.
 one switch for every test tool, so none of them reach a player:
 
 - **Settings** shows Unlock All Ships under the switch.
-- **Space screen** shows DEV · TAKE A HIT and, beneath it, DEV · HIT THEM
-  (`hitFoe` on the ship here — it can destroy it, and it does not provoke a
-  yellow ship, since only real fire does).
+- **Space screen** shows DEV · TAKE A HIT, DEV · HIT THEM (`hitFoe` on the
+  ship here — it can destroy it, and it does not provoke a yellow ship, since
+  only real fire does) and DEV · REFILL CHARGES (`devRefillCharges`: drive,
+  weapon if mounted, and shields to their powered level, all full at once).
 - **Star select** shows ENCOUNTERS in a row under the header (the chart moves
   down by `DEV_ROW_HEIGHT`), opening `app/encounters.tsx`: one card per entry
-  in `MEETINGS`, with its portrait (or its ship, for the faceless), plus the
-  boss. Built off the table, so new encounters appear on their own.
+  in `MEETINGS`, with its portrait (or its ship, for the faceless), its full
+  name (wrapping, never cut short) and its kind, plus the boss. No ids are
+  shown — the author asked for the numbering to go. Built off the table, so new encounters appear on their own.
   Pressing one calls `devStageEncounter(run, id | 'boss')` — rewrites the
   meeting at the ship's star (or the first star that can hold one), moves the
   ship there and resets it as never visited: dialogue again, ship undamaged
@@ -752,7 +762,8 @@ outline, including the bolt — it was the one filled glyph, which gave a
 footnote about spare power more weight than the rows above it.
 
 The hull is one white line above the controls (`components/StatusBar.tsx`),
-the full width of the chrome. **Fuel rides on the jump button** — `MenuButton`
+the full width of the chrome, with the plates left written at its right end
+as `8/8`. **Fuel rides on the jump button** — `MenuButton`
 takes a `gauge` of `{ label, value }` and gives it a section of its own at the
 right end, the full height of the button and divided off by a rule — because
 the only question fuel answers is whether to jump, and a strip of its own was a

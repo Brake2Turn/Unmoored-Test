@@ -622,6 +622,26 @@ export function moveGear(run: RunState, from: Place, to: Place): RunState {
 }
 
 /**
+ * Dev mode only: every charge on the player's ship full at once — the drive,
+ * the weapon (if one is mounted) and the shields, up to the level they are
+ * powered for. Returns the run unchanged when there is nothing to fill.
+ */
+export function devRefillCharges(run: RunState): RunState {
+  if (isWrecked(run.hull)) return run;
+  const jumpCharge = jumpUnitsFor(run);
+  const weaponCharge = run.mounted ? WEAPON_UNITS : 0;
+  const shieldCharge = run.energy.shields;
+  if (
+    jumpCharge === run.jumpCharge &&
+    weaponCharge === run.weaponCharge &&
+    shieldCharge === run.shieldCharge
+  ) {
+    return run;
+  }
+  return { ...run, jumpCharge, weaponCharge, shieldCharge };
+}
+
+/**
  * Dev mode only: put the ship in front of a chosen encounter, fresh, so it can
  * be tried out.
  *

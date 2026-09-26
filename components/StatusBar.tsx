@@ -38,6 +38,11 @@ export function StatusBar({ hull, width }: Props) {
       <View style={styles.track}>
         <View style={[styles.fill, { width: `${fraction * 100}%` }]} />
       </View>
+
+      {/* The same reading as a number, plates left over plates in all. */}
+      <Text numberOfLines={1} style={styles.value}>
+        {Math.round(left)}/{HULL_MAX}
+      </Text>
     </View>
   );
 }
@@ -55,6 +60,14 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: palette.textMuted,
     letterSpacing: tracking.caption,
+  },
+  value: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 10,
+    fontWeight: '700',
+    color: palette.textPrimary,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: 0.5,
   },
   track: {
     flex: 1,

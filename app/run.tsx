@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Backdrop } from '@/components/Backdrop';
 import { ReactorControls, ReactorTab } from '@/components/ReactorPanel';
-import { ShipDetail, ShipTab } from '@/components/ShipPanel';
+import { ShipButton, ShipDetail } from '@/components/ShipPanel';
 import { FireButton } from '@/components/FireButton';
 import { FOE_STATUS_HEIGHT, FoeStatus } from '@/components/FoeStatus';
 import { LaserShot, type Point } from '@/components/LaserShot';
@@ -26,6 +26,7 @@ import { fonts, layout, palette, tracking, useMenuWidth } from '@/lib/theme';
 import {
   chargeFractions,
   clearRun,
+  devRefillCharges,
   foeLooksHostile,
   modeOf,
   fireBlocker,
@@ -102,7 +103,10 @@ const HUD_TOP = 44;
 const HUD_BOTTOM = 20;
 
 /** FIRE sits left of JUMP on the bottom row, this wide. */
-const FIRE_WIDTH = 92;
+const FIRE_WIDTH = 84;
+
+/** The white SHIP square between FIRE and JUMP. */
+const SHIP_BUTTON_WIDTH = 52;
 
 /** Room under LEAVE for the other ship's name and hull, when one is here. */
 const FOE_STATUS_TOP = 30;
@@ -203,8 +207,8 @@ export default function RunScreen() {
   const wrecked = !!run && isWrecked(run.hull);
 
   const buttonWidth = useMenuWidth();
-  /** The two tabs are the same size, and together they are the chrome's width. */
-  const tabWidth = Math.floor((buttonWidth - TAB_GAP) / 2);
+  /** The reactor tab has the row to itself: the chrome's full width. */
+  const tabWidth = buttonWidth;
 
   /**
    * What this star still has to say, if anything.
@@ -495,6 +499,20 @@ export default function RunScreen() {
   }, [haptics]);
 
   /**
+   * Dev only: drive, weapon and shields all full this instant, so a jump or a
+   * shot can be tried without waiting on the bars.
+   */
+  const onRefill = useCallback(() => {
+    const current = runRef.current;
+    if (!current) return;
+    const next = devRefillCharges(current);
+    if (next === current) return;
+    setRun(next);
+    haptics.tap();
+    void saveRun(next);
+  }, [haptics]);
+
+  /**
    * Dev only: put a hit on the ship so the shield, its effects and the hull
    * can be watched without any combat to do it. Delete this with the button.
    */
@@ -612,6 +630,19 @@ export default function RunScreen() {
               DEV · HIT THEM
             </Text>
           </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Developer: fill every charge"
+            accessibilityState={{ disabled: wrecked }}
+            disabled={wrecked}
+            onPress={onRefill}
+            hitSlop={8}
+            style={styles.leave}
+          >
+            <Text style={[styles.leaveLabel, !wrecked && { color: palette.power }]}>
+              DEV · REFILL CHARGES
+            </Text>
+          </Pressable>
         </View>
       ) : null}
 
@@ -669,8 +700,8 @@ export default function RunScreen() {
           {/* What this ship has left, on one line. */}
           <StatusBar hull={run?.hull ?? 0} width={buttonWidth} />
 
-          {/* What the ship is, at a glance: its reactor, and its weapon, hold
-              and berths. Each opens over the helm; the jump sits under both. */}
+          {/* The reactor across the full width, and under it FIRE, the SHIP
+              square and JUMP. Both the reactor and the ship open over the helm. */}
           <View style={{ width: buttonWidth, gap: TAB_GAP }}>
             <View style={styles.tabRow}>
               {run ? (
@@ -686,11 +717,6 @@ export default function RunScreen() {
                     width={tabWidth}
                     onPress={onOpenReactor}
                   />
-                  <ShipTab
-                    loadout={{ mounted: run.mounted, hold: run.hold }}
-                    width={tabWidth}
-                    onPress={onOpenShip}
-                  />
                 </>
               ) : (
                 <View style={{ height: layout.tabHeight }} />
@@ -705,6 +731,12 @@ export default function RunScreen() {
                 height={JUMP_HEIGHT}
                 onPress={onFire}
               />
+              <ShipButton
+                loadout={{ mounted: run?.mounted ?? null, hold: run?.hold ?? [] }}
+                width={SHIP_BUTTON_WIDTH}
+                height={JUMP_HEIGHT}
+                onPress={onOpenShip}
+              />
               <MenuButton
                 label={jumpLabel}
                 caption={jumpCaption}
@@ -714,7 +746,7 @@ export default function RunScreen() {
                 gauge={jumpFuel}
                 tone={BUTTON_TONE.engines}
                 charging={blocked === 'charging'}
-                width={buttonWidth - FIRE_WIDTH - TAB_GAP}
+                width={buttonWidth - FIRE_WIDTH - SHIP_BUTTON_WIDTH - TAB_GAP * 2}
                 height={JUMP_HEIGHT}
               />
             </View>

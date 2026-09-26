@@ -93,11 +93,11 @@ export default function EncountersScreen() {
                   <EncounterShip encounter={red ? 'enemy' : 'merchant'} width={FACE * 0.62} height={FACE * 0.8} />
                 )}
               </View>
-              <Text numberOfLines={1} style={styles.name}>
-                {name.toUpperCase()}
-              </Text>
+              {/* The whole name, wrapping onto a second line rather than
+                  being cut short on a narrow phone. */}
+              <Text style={styles.name}>{name.toUpperCase()}</Text>
               <Text style={[styles.kind, { color: red ? palette.danger : palette.trade }]}>
-                {KIND_LABEL[meeting.kind]} · #{meeting.id}
+                {KIND_LABEL[meeting.kind]}
               </Text>
             </Pressable>
           );
@@ -117,9 +117,7 @@ export default function EncountersScreen() {
           <View style={styles.face}>
             <EncounterShip encounter="boss" width={FACE * 0.62} height={FACE * 0.8} />
           </View>
-          <Text numberOfLines={1} style={styles.name}>
-            {ENCOUNTER_STYLE.boss.label}
-          </Text>
+          <Text style={styles.name}>{ENCOUNTER_STYLE.boss.label}</Text>
           <Text style={[styles.kind, { color: palette.danger }]}>BOSS</Text>
         </Pressable>
       </ScrollView>
@@ -191,6 +189,7 @@ const styles = StyleSheet.create({
     color: palette.textPrimary,
     letterSpacing: 0.8,
     marginTop: 8,
+    textAlign: 'center',
   },
   kind: {
     fontFamily: fonts.body,

@@ -12,12 +12,14 @@
 export type Weapon = {
   id: string;
   name: string;
+  /** One line for the pop-up in the ship panel. Placeholder, like the rest. */
+  description: string;
 };
 
 export const WEAPONS: Weapon[] = [
-  { id: 'weapon1', name: 'WEAPON 1' },
-  { id: 'weapon2', name: 'WEAPON 2' },
-  { id: 'weapon3', name: 'WEAPON 3' },
+  { id: 'weapon1', name: 'WEAPON 1', description: 'A single long barrel. One bolt per full charge.' },
+  { id: 'weapon2', name: 'WEAPON 2', description: 'Twin barrels on a wide mount. One bolt per full charge.' },
+  { id: 'weapon3', name: 'WEAPON 3', description: 'A spiked emitter on a round turret. One bolt per full charge.' },
 ];
 
 /** Null for an id the table no longer carries, so a stale save drops it. */

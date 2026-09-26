@@ -1,10 +1,10 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { PanResponder, Platform, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
 import { CargoGlyph, CrewGlyph, ShipGlyph, SubsystemGlyph } from '@/components/SubsystemGlyph';
 import { CARD, PanelHeader, TabHeader } from '@/components/PanelChrome';
 import { WeaponIcon } from '@/components/WeaponArt';
-import { CREW_SLOTS, firstEmptySlot, type Loadout, type Place } from '@/lib/hold';
+import { CREW_SLOTS, firstEmptySlot, itemAt, type Loadout, type Place } from '@/lib/hold';
 import { weaponById } from '@/lib/weapons';
 import { fonts, layout, palette, tracking } from '@/lib/theme';
 
@@ -44,13 +44,21 @@ const DROP_SLOP = 8;
 
 /* ------------------------------------------------------------------- tab -- */
 
-export function ShipTab({
+/**
+ * The ship section, collapsed: a small white square between FIRE and JUMP
+ * that says SHIP and opens the panel. It used to be a tab beside the reactor
+ * drawing the hardpoint, hold and berths in miniature; the reactor took that
+ * room, and what is aboard is read in the panel instead.
+ */
+export function ShipButton({
   loadout,
   width,
+  height,
   onPress,
 }: {
   loadout: Loadout;
   width: number;
+  height: number;
   onPress: () => void;
 }) {
   const weapon = weaponById(loadout.mounted);
@@ -65,21 +73,10 @@ export function ShipTab({
         `0 of ${CREW_SLOTS} berths filled. Open the ship`
       }
       onPress={onPress}
-      hitSlop={10}
-      style={({ pressed }) => [styles.tab, { width }, pressed && styles.tabPressed]}
+      hitSlop={6}
+      style={({ pressed }) => [styles.shipButton, { width, height }, pressed && styles.shipButtonPressed]}
     >
-      <TabHeader icon={<ShipGlyph color={palette.textMuted} size={11} />} name="SHIP" />
-      <View style={styles.tabBody}>
-        {/* The hardpoint, with whatever is on it. */}
-        <View style={[styles.slot, styles.tabMount, weapon && styles.mountArmed]}>
-          {weapon ? <WeaponIcon weaponId={weapon.id} size={24} color={palette.player} /> : null}
-        </View>
-
-        <View style={styles.tabHold}>
-          <SlotGrid items={loadout.hold} perRow={4} size={11} gap={4} />
-          <SlotGrid items={Array.from({ length: CREW_SLOTS }, () => null)} perRow={3} size={9} gap={5} rounded />
-        </View>
-      </View>
+      <Text style={styles.shipButtonLabel}>SHIP</Text>
     </Pressable>
   );
 }
@@ -94,6 +91,13 @@ type Drag = { from: Place; item: string; x: number; y: number; moved: boolean };
 
 const MOUNT_SIZE = 56;
 const CARGO_SIZE = 40;
+
+/** The pop-up's width, and how long it stays up untouched. */
+const INFO_W = 190;
+const INFO_MS = 4000;
+
+/** A pop-up's text, and where in the panel it sits. */
+type Info = { title: string; body: string; left: number; bottomAt: number };
 const CARGO_GAP = 8;
 const GHOST_SIZE = 44;
 
@@ -109,6 +113,16 @@ export function ShipDetail({
   const stowed = loadout.hold.filter((item) => item !== null).length;
 
   const [drag, setDrag] = useState<Drag | null>(null);
+  // The little pop-up naming whatever was last tapped, placed over it.
+  const [info, setInfo] = useState<Info | null>(null);
+  const [infoHeight, setInfoHeight] = useState(0);
+
+  // A pop-up goes away on its own, so it never sits over the panel for good.
+  useEffect(() => {
+    if (!info) return;
+    const timer = setTimeout(() => setInfo(null), INFO_MS);
+    return () => clearTimeout(timer);
+  }, [info]);
 
   // Where the panel and every drop target sit on screen, measured when a drag
   // starts. Refs rather than state: nothing is drawn from them.
@@ -130,6 +144,23 @@ export function ShipDetail({
     });
     targets.current.forEach((view, key) => {
       view?.measureInWindow((x, y, w, h) => boxes.current.set(key, { x, y, w, h }));
+    });
+  }, []);
+
+  /**
+   * Show a name and a line about whatever sits in `key` (a slot, the
+   * hardpoint, a berth), in a pop-up just above it and inside the panel.
+   */
+  const showInfo = useCallback((key: string, title: string, body: string) => {
+    const root = rootRef.current;
+    const target = targets.current.get(key);
+    if (!root || !target) return;
+    root.measureInWindow((rx, ry, rw) => {
+      target.measureInWindow((x, y, w) => {
+        const left = Math.max(6, Math.min(rw - INFO_W - 6, x - rx + w / 2 - INFO_W / 2));
+        setInfoHeight(0);
+        setInfo({ title, body, left, bottomAt: y - ry - 6 });
+      });
     });
   }, []);
 
@@ -158,6 +189,7 @@ export function ShipDetail({
   const onStart = useCallback(
     (from: Place, item: string, x: number, y: number) => {
       measure();
+      setInfo(null);
       setDrag({ from, item, x, y, moved: false });
     },
     [measure],
@@ -171,16 +203,15 @@ export function ShipDetail({
     (from: Place, x: number, y: number, travelled: number) => {
       setDrag(null);
       if (travelled < TAP_SLOP) {
-        // A tap moves it the obvious way: off the hardpoint into the hold, or
-        // out of the hold back onto an empty hardpoint.
-        const to = from === 'mount' ? firstEmptySlot(loadout) : 'mount';
-        if (to !== null) onMove(from, to);
+        // A tap says what it is; only a drag moves it.
+        const item = weaponById(itemAt(loadout, from));
+        if (item) showInfo(from === 'mount' ? 'mount' : `slot${from}`, item.name, item.description);
         return;
       }
       const to = placeAt(x, y);
       if (to !== null && to !== from) onMove(from, to);
     },
-    [loadout, onMove, placeAt],
+    [loadout, onMove, placeAt, showInfo],
   );
 
   const dragging = drag?.moved ? drag : null;
@@ -225,7 +256,7 @@ export function ShipDetail({
             {weapon ? weapon.name : 'NO WEAPON'}
           </Text>
           <Text style={styles.hint}>
-            {weapon ? 'DRAG INTO CARGO TO STOW' : 'DRAG ONE UP FROM CARGO'}
+            {weapon ? 'TAP FOR INFO · DRAG INTO CARGO' : 'DRAG ONE UP FROM CARGO'}
           </Text>
         </View>
       </View>
@@ -275,8 +306,22 @@ export function ShipDetail({
         name="CREW"
         count={`0/${CREW_SLOTS}`}
       />
+      {/* Square, and the same size as a cargo slot, so the panel reads as one
+          set of compartments. Nobody is aboard yet; a tap says so. */}
       <View style={styles.crewWrap}>
-        <SlotGrid items={Array.from({ length: CREW_SLOTS }, () => null)} perRow={3} size={30} gap={10} rounded />
+        <View style={styles.crewRow}>
+          {Array.from({ length: CREW_SLOTS }, (_, i) => (
+            <Pressable
+              key={i}
+              ref={register(`crew${i}`)}
+              collapsable={false}
+              accessibilityRole="button"
+              accessibilityLabel={`Empty berth ${i + 1}`}
+              onPress={() => showInfo(`crew${i}`, 'EMPTY BERTH', 'No crew aboard yet.')}
+              style={[styles.slot, { width: CARGO_SIZE, height: CARGO_SIZE, borderRadius: 6 }]}
+            />
+          ))}
+        </View>
       </View>
 
       {/* What is being carried, under the finger. Drawn at the panel's top
@@ -294,6 +339,24 @@ export function ShipDetail({
         >
           <WeaponIcon weaponId={dragging.item} size={GHOST_SIZE - 6} color={palette.player} />
         </View>
+      ) : null}
+
+      {info ? (
+        <Pressable
+          accessibilityRole="alert"
+          accessibilityLabel={`${info.title}: ${info.body}`}
+          onPress={() => setInfo(null)}
+          // Sits just above what was tapped, clear of the finger. Its height is
+          // only known once laid out, so it stays invisible for that one pass.
+          onLayout={(event) => setInfoHeight(event.nativeEvent.layout.height)}
+          style={[
+            styles.info,
+            { left: info.left, top: info.bottomAt - infoHeight, opacity: infoHeight ? 1 : 0 },
+          ]}
+        >
+          <Text style={styles.infoTitle}>{info.title}</Text>
+          <Text style={styles.infoBody}>{info.body}</Text>
+        </Pressable>
       ) : null}
     </View>
   );
@@ -512,6 +575,50 @@ const styles = StyleSheet.create({
     width: CARGO_SIZE * 4 + CARGO_GAP * 3,
   },
   crewWrap: { alignItems: 'center' },
+  crewRow: { flexDirection: 'row', gap: CARGO_GAP },
+
+  shipButton: {
+    borderRadius: layout.buttonRadius,
+    borderCurve: 'continuous',
+    backgroundColor: palette.player,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shipButtonPressed: { opacity: 0.8 },
+  shipButtonLabel: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 11,
+    fontWeight: '700',
+    color: palette.void,
+    letterSpacing: 1.5,
+    marginRight: -1.5,
+  },
+
+  info: {
+    position: 'absolute',
+    width: INFO_W,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: 'rgba(20,26,46,0.98)',
+    zIndex: 20,
+  },
+  infoTitle: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 10,
+    fontWeight: '700',
+    color: palette.textPrimary,
+    letterSpacing: 1.2,
+  },
+  infoBody: {
+    fontFamily: fonts.body,
+    fontSize: 11,
+    lineHeight: 15,
+    color: palette.textMuted,
+    marginTop: 3,
+  },
 
   slot: {
     borderWidth: 1,
