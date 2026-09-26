@@ -9,6 +9,7 @@ import { ShipDetail, ShipTab } from '@/components/ShipPanel';
 import { FireButton } from '@/components/FireButton';
 import { FOE_STATUS_HEIGHT, FoeStatus } from '@/components/FoeStatus';
 import { LaserShot, type Point } from '@/components/LaserShot';
+import { EXPLOSION_MS, Explosion } from '@/components/Explosion';
 import { MOUNTS } from '@/components/ships/ShipArt';
 import { weaponTip } from '@/components/WeaponArt';
 import { DialogueOverlay } from '@/components/DialogueOverlay';
@@ -16,7 +17,7 @@ import { FadeInView } from '@/components/FadeInView';
 import { STATUS_BAR_HEIGHT, StatusBar } from '@/components/StatusBar';
 import { MenuButton } from '@/components/MenuButton';
 import { StarField } from '@/components/StarField';
-import { EncounterShip } from '@/components/ships/EncounterShip';
+import { EncounterShip, FOE_MUZZLE } from '@/components/ships/EncounterShip';
 import { SYSTEMS_SPAN, ShipSystems } from '@/components/ships/ShipSystems';
 import { useHaptics, useSettings } from '@/lib/settings';
 import { fonts, layout, palette, tracking, useMenuWidth } from '@/lib/theme';
@@ -24,6 +25,9 @@ import {
   chargeFractions,
   fireBlocker,
   fireWeapon,
+  foeArmed,
+  foeDestroyed,
+  foeFires,
   foeHull,
   foeHullMax,
   foeName,
@@ -36,6 +40,7 @@ import {
   reactorOf,
   saveRun,
   shiftEnergy,
+  shipHere,
   takeHit,
   tickRun,
   type RunState,
@@ -43,7 +48,9 @@ import {
 import { shipById } from '@/lib/ships';
 import { encounterAt } from '@/lib/sectorMap';
 import { ENCOUNTER_STYLE } from '@/lib/encounters';
-import { chargeRate, shieldLevel, type Subsystem } from '@/lib/energy';
+import { WEAPON_UNITS, chargeRate, shieldLevel, type Subsystem } from '@/lib/energy';
+import { isWrecked } from '@/lib/hull';
+import { BUTTON_TONE } from '@/lib/subsystems';
 import type { Place } from '@/lib/hold';
 import { weaponById } from '@/lib/weapons';
 
@@ -140,6 +147,8 @@ export default function RunScreen() {
   // Shots in flight. Each carries the star it was fired at, so a bolt still
   // flying when the ship jumps lands on nothing rather than the next ship.
   const [shots, setShots] = useState<Shot[]>([]);
+  // Ships blowing apart, the player's or the other one's.
+  const [blasts, setBlasts] = useState<Blast[]>([]);
   const shipRef = useRef<View>(null);
   const foeRef = useRef<View>(null);
 
@@ -169,8 +178,14 @@ export default function RunScreen() {
   const blocked = run ? jumpBlocker(run) : 'fuel';
 
   // What is here is only learned by arriving — the sector map shows plain dots.
+  //
+  // The layout is sized for whatever the star holds, even once its ship has
+  // been destroyed, so that blowing it up does not jolt the player's ship to a
+  // new size mid-explosion. The destroyed ship is simply no longer drawn.
   const encounter = run ? encounterAt(run.map, run.position) : 'empty';
   const waiting = ENCOUNTER_STYLE[encounter];
+  const present = run ? shipHere(run) : 'empty';
+  const wrecked = !!run && isWrecked(run.hull);
 
   const buttonWidth = useMenuWidth();
   /** The two tabs are the same size, and together they are the chrome's width. */
@@ -200,6 +215,7 @@ export default function RunScreen() {
   const driveBuilding = !!run && charge.jump < 1 && chargeRate(run.energy.engines) > 0;
   const weaponBuilding = !!run && charge.weapon < 1 && chargeRate(run.energy.weapons) > 0;
   const shieldBuilding = !!run && run.shieldCharge < run.energy.shields;
+  const foeBuilding = !!run && foeArmed(run) && run.foeCharge < WEAPON_UNITS;
 
   /**
    * The helm's clocks.
@@ -209,7 +225,7 @@ export default function RunScreen() {
    * to count, not on every tick.
    */
   useEffect(() => {
-    if (!driveBuilding && !weaponBuilding && !shieldBuilding) return;
+    if (!driveBuilding && !weaponBuilding && !shieldBuilding && !foeBuilding) return;
 
     let ticks = 0;
     const timer = setInterval(() => {
@@ -232,7 +248,7 @@ export default function RunScreen() {
       clearInterval(timer);
       if (runRef.current) void saveRun(runRef.current);
     };
-  }, [driveBuilding, shieldBuilding, weaponBuilding]);
+  }, [driveBuilding, foeBuilding, shieldBuilding, weaponBuilding]);
 
   /**
    * The two pieces of ship art share whatever the controls leave over.
@@ -290,7 +306,13 @@ export default function RunScreen() {
    * different problem and the slider would just sit there unexplained.
    */
   const jumpLabel =
-    blocked === 'fuel' ? 'OUT OF FUEL' : blocked === 'engines' ? 'NO ENGINES' : 'JUMP';
+    blocked === 'wrecked'
+      ? 'DESTROYED'
+      : blocked === 'fuel'
+        ? 'OUT OF FUEL'
+        : blocked === 'engines'
+          ? 'NO ENGINES'
+          : 'JUMP';
   const jumpCaption = blocked === 'engines' ? 'POWER THE ENGINES' : undefined;
   /**
    * Fuel rides on the button rather than in a strip of its own, since the only
@@ -299,10 +321,6 @@ export default function RunScreen() {
    */
   const jumpFuel = blocked === 'fuel' ? undefined : { label: 'FUEL', value: String(fuel) };
 
-  /**
-   * Dev only: put a hit on the ship so the shield, its effects and the hull
-   * can be watched without any combat to do it. Delete this with the button.
-   */
   const fireBlock = run ? fireBlocker(run) : 'weapon';
 
   /**
@@ -335,19 +353,97 @@ export default function RunScreen() {
       const to = foe && hits
         ? { x: from.x, y: foe.y + foe.height * 0.55 }
         : { x: from.x, y: -40 };
-      setShots((current) => [...current, { id: Date.now() + Math.random(), node, from, to, hits: hits && !!foe }]);
+      setShots((current) => [
+        ...current,
+        { id: Date.now() + Math.random(), by: 'player', node, from, to, hits: hits && !!foe },
+      ]);
     });
   }, [haptics, run, ship.id]);
 
-  const onImpact = useCallback((node: number) => {
+  /**
+   * A red ship's weapon has charged: it fires at the player. Nothing but the
+   * clock decides this — no button, no hold, no cargo — so it watches the
+   * charge and shoots the moment it is full, from the muzzle of the Weapon 1
+   * on its nose to the player's ship.
+   */
+  const foeReady = !!run && foeArmed(run) && !talking && run.foeCharge >= WEAPON_UNITS;
+  useEffect(() => {
+    const current = runRef.current;
+    if (!foeReady || !current) return;
+    const next = foeFires(current);
+    if (next === current) return;
+    setRun(next);
+
+    const node = current.position;
+    // Aim at the shield's rim while there is a shield to hit, else the hull.
+    const shielded = shieldLevel(current.shieldCharge) > 0;
+    void Promise.all([measure(foeRef.current), measure(shipRef.current)]).then(([foe, box]) => {
+      if (!foe || !box) return;
+      const from = {
+        x: foe.x + (FOE_MUZZLE.x / 200) * foe.width,
+        y: foe.y + (FOE_MUZZLE.y / 260) * foe.height,
+      };
+      const to = { x: from.x, y: box.y + box.height * (shielded ? 0.12 : 0.24) };
+      setShots((shots) => [
+        ...shots,
+        { id: Date.now() + Math.random(), by: 'foe', node, from, to, hits: true },
+      ]);
+    });
+  }, [foeReady]);
+
+  /**
+   * A bolt arrives. The player's takes a plate off the other ship; a red
+   * ship's goes through `takeHit`, so the shields soak it before the hull
+   * does. Either way it only lands if the ship is still at the star it was
+   * fired at.
+   */
+  const onImpact = useCallback((shot: Shot) => {
     const current = runRef.current;
     if (!current) return;
-    const next = hitFoe(current, node);
+    const next =
+      shot.by === 'player'
+        ? hitFoe(current, shot.node)
+        : current.position === shot.node
+          ? takeHit(current)
+          : current;
     if (next === current) return;
     setRun(next);
     haptics.tap();
     void saveRun(next);
   }, [haptics]);
+
+  /**
+   * Explosions, played when a hull *reaches* nothing rather than when it is
+   * nothing — so loading a save with a wreck in it does not blow it up again,
+   * while every way of getting there (the player's bolts, a red ship's, the
+   * dev hit) is caught by the one check.
+   */
+  const seen = useRef<{ id: string; position: number; hull: number; foeGone: boolean } | null>(null);
+  useEffect(() => {
+    if (!run) return;
+    const before = seen.current;
+    const now = { id: run.id, position: run.position, hull: run.hull, foeGone: foeDestroyed(run) };
+    seen.current = now;
+    if (!before || before.id !== now.id) return;
+
+    const blowUp = (view: View | null) =>
+      void measure(view).then((box) => {
+        if (!box) return;
+        const id = Date.now() + Math.random();
+        const at = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+        const size = Math.max(box.width, box.height) * 0.8;
+        setBlasts((current) => [...current, { id, at, size }]);
+        setTimeout(() => setBlasts((current) => current.filter((b) => b.id !== id)), EXPLOSION_MS + 50);
+      });
+
+    if (before.hull > 0 && now.hull <= 0) blowUp(shipRef.current);
+    if (before.position === now.position && !before.foeGone && now.foeGone) blowUp(foeRef.current);
+  }, [run]);
+
+  /**
+   * Dev only: put a hit on the ship so the shield, its effects and the hull
+   * can be watched without any combat to do it. Delete this with the button.
+   */
 
   const onShotDone = useCallback((id: number) => {
     setShots((current) => current.filter((shot) => shot.id !== id));
@@ -413,8 +509,9 @@ export default function RunScreen() {
         </Pressable>
       </View>
 
-      {/* Who is out here, and how much hull they have left. */}
-      {run && encounter !== 'empty' ? (
+      {/* Who is out here, and how much hull they have left. Gone with their
+          ship once it is destroyed. */}
+      {run && present !== 'empty' ? (
         <View style={[styles.foeRow, { top: insets.top + FOE_STATUS_TOP }]}>
           <FoeStatus
             name={foeName(run) ?? waiting.label}
@@ -452,7 +549,13 @@ export default function RunScreen() {
         <View style={styles.encounterSlot}>
           {encounter === 'empty' ? null : (
             <FadeInView enabled={!settings.reduceMotion} duration={520} delay={160}>
-              <View ref={foeRef} collapsable={false}>
+              {/* Kept in the layout once destroyed, just not drawn, so
+                  nothing else on the screen moves when it goes. */}
+              <View
+                ref={foeRef}
+                collapsable={false}
+                style={present === 'empty' ? styles.gone : null}
+              >
                 <EncounterShip
                   encounter={encounter}
                   width={waiting.width * artScale}
@@ -466,7 +569,7 @@ export default function RunScreen() {
         {/* The reactor allocation, drawn on the ship: a bubble for shields, a
             longer exhaust for engines. */}
         <FadeInView enabled={!settings.reduceMotion} duration={700}>
-          <View ref={shipRef} collapsable={false}>
+          <View ref={shipRef} collapsable={false} style={wrecked ? styles.gone : null}>
             <ShipSystems
               shipId={ship.id}
               width={SHIP_WIDTH * artScale}
@@ -526,6 +629,8 @@ export default function RunScreen() {
               primary={!blocked}
               disabled={!!blocked}
               gauge={jumpFuel}
+              tone={BUTTON_TONE.engines}
+              charging={blocked === 'charging'}
               width={buttonWidth - FIRE_WIDTH - TAB_GAP}
               height={JUMP_HEIGHT}
             />
@@ -541,9 +646,13 @@ export default function RunScreen() {
           to={shot.to}
           hits={shot.hits}
           animate={!settings.reduceMotion}
-          onImpact={() => onImpact(shot.node)}
+          onImpact={() => onImpact(shot)}
           onDone={() => onShotDone(shot.id)}
         />
+      ))}
+
+      {blasts.map((blast) => (
+        <Explosion key={blast.id} at={blast.at} size={blast.size} animate={!settings.reduceMotion} />
       ))}
 
       {/* A panel opens over the helm rather than living in it, so the room it
@@ -604,6 +713,8 @@ const styles = StyleSheet.create({
   leaveRow: { position: 'absolute', left: 20, zIndex: 5 },
   foeRow: { position: 'absolute', left: 24, zIndex: 5 },
   actionRow: { flexDirection: 'row', gap: TAB_GAP },
+  /** A destroyed ship: still holding its place, no longer drawn. */
+  gone: { opacity: 0 },
   devRow: { position: 'absolute', right: 20, zIndex: 5 },
   leave: { paddingVertical: 6, paddingHorizontal: 4 },
   leaveLabel: {
@@ -634,7 +745,18 @@ const styles = StyleSheet.create({
 });
 
 /** One bolt in flight: where from, where to, and the star it was fired at. */
-type Shot = { id: number; node: number; from: Point; to: Point; hits: boolean };
+type Shot = {
+  id: number;
+  /** Who fired it, which decides what its arrival does. */
+  by: 'player' | 'foe';
+  node: number;
+  from: Point;
+  to: Point;
+  hits: boolean;
+};
+
+/** One explosion on screen: where, and how big the ship was. */
+type Blast = { id: number; at: Point; size: number };
 
 /** A view's box on screen, or null when it is not mounted. */
 function measure(

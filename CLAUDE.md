@@ -5,7 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 Unmoored is a space roguelike for iOS, built with Expo (React Native) and TypeScript.
-It is pre-release: there is no combat, no run-end state, and no unlock trigger yet.
+It is pre-release: combat is a first placeholder (one bolt each way, see
+"Firing"), and there is no run-end state and no unlock trigger yet.
 
 The author develops on **Windows and has no Mac**, which is why the project is Expo
 rather than native Swift — Expo builds the iOS binary on hosted machines
@@ -423,10 +424,10 @@ progress too.
 **`takeHit` is the one rule for what a hit costs.** Shields soak it while any
 are standing, and only once they are down does the hull start losing plates —
 which is the whole reason to spend energy on shields. Whatever starts shooting
-later calls this rather than inventing its own order. Nothing shoots yet, so
-its only caller is the **DEV · TAKE A HIT** control opposite LEAVE on the helm,
-there so the shield, its effects and the hull can be watched. Delete the
-control with the feature it was testing.
+later calls this rather than inventing its own order. A red ship's bolt
+calls it, and so does the **DEV · TAKE A HIT** control opposite LEAVE on the
+helm, there so the shield, its effects and the hull can be watched on
+demand.
 
 ### The hull is not part of the reactor
 
@@ -631,6 +632,43 @@ own hull. The name is `nameOf(meeting)`, the first speaker who is not the
 pilot, so it matches the dialogue box; the boss has no meeting and shows its
 kind, ELDER SHRIKE. The art starts below it (`hudTop`) rather than behind it.
 
+**Red ships shoot back** — every hostile one (Shrike and Elder Shrike, the
+same `hostile` flag that pins the drive). Each carries a copy of Weapon 1,
+drawn on its nose turned to point down (`FOE_WEAPON`, `FOE_MUZZLE` in
+`EncounterShip.tsx`). `run.foeCharge` builds in `tickRun` as if from two bars
+of weapons (`FOE_WEAPON_BARS`), about nine seconds to full; `foeFires` then
+resets it to a random point up to `FOE_JITTER_UNITS` *below* empty, so shots
+come every nine to fourteen seconds rather than on a beat. It does not charge
+or fire while the star's dialogue is still open, and `applyJump` empties it.
+The helm watches for the charge filling and shoots; the bolt goes through
+`takeHit` on arrival, so shields soak it first, and it aims at the bubble's
+rim while there is a shield and at the hull when there is not.
+
+**A hull at zero is destroyed**, either ship. `foeDestroyed(run)` is derived
+from the damage; `shipHere(run)` reads `empty` for a destroyed ship, and
+`foeArmed` / `jumpUnitsFor` go through it, so a destroyed ship stops shooting
+and stops pinning the drive — a hostile star turns ordinary, charge already
+built included. The player at zero hull is `isWrecked`: `jumpBlocker` and
+`fireBlocker` both return `'wrecked'` first, `tickRun` stops, and JUMP reads
+DESTROYED. There is still no run end — the wreck stays in the save and LEAVE
+is the way out.
+
+**Destroyed ships keep their place in the layout** and are only made
+invisible (`styles.gone`), and the layout is sized from `encounterAt` rather
+than `shipHere` — otherwise removing a ship rescales and moves the other one
+mid-explosion, and the measured refs vanish before the explosion can be
+placed. The explosion (`components/Explosion.tsx`: flash, fireball, shock
+ring, debris, 1.1s) fires on the *transition* to zero, compared against the
+last render in a ref, not on the hull being zero — so loading a save with a
+wreck in it does not blow it up again, and every route to zero (either
+ship's bolts, the dev hit) is caught by one check.
+
+**JUMP is the engines' orange** the way FIRE is the weapons' red: dark while
+the drive charges, bright when it is ready, grey when it cannot (no fuel, cold
+engines, destroyed). Both come from `BUTTON_TONE` in `lib/subsystems.ts`;
+`MenuButton` takes a `tone` and a `charging` flag, and uses the tone for its
+fill, its press bloom and the fuel gauge. The star select's JUMP uses it too.
+
 To check a shot in headless, the probe holds the shot's timers (skip any
 `setTimeout` of 150–800ms after pressing FIRE) so the bolt stays at its first
 frame; guessing a `--virtual-time-budget` that lands inside a 200ms flight
@@ -750,7 +788,7 @@ subsystem tints, which are a different question again — a cyan shield bubble
 and an orange exhaust say which *row* is powering them, not which ship it is.
 
 The accent survives only as app chrome that was never ship-specific: the menu
-buttons, the fuel gauge on the jump button and the fuel badge on the map, the
+buttons, the fuel badge on the map, the
 wordmark's rule, the settings controls and the planet's atmosphere.
 
 Hull and speed used to sit beside cargo on the ship cards. They are gone —

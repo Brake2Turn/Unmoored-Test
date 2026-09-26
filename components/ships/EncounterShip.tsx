@@ -1,8 +1,9 @@
 import React from 'react';
-import Svg, { Defs, Ellipse, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import Svg, { Defs, Ellipse, G, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 
 import { ENCOUNTER_STYLE } from '@/lib/encounters';
 import { HULL, HULL_DEEP } from '@/components/ships/ShipArt';
+import { WeaponShape, weaponTip } from '@/components/WeaponArt';
 import type { Encounter } from '@/lib/sectorMap';
 
 type Props = {
@@ -41,9 +42,31 @@ export const EncounterShip = React.memo(function EncounterShip({
         </LinearGradient>
       </Defs>
       {hostile ? <Shrike accent={accent} /> : <Merchant accent={accent} />}
+      {hostile ? (
+        // The red ships' gun, turned round to point at the player.
+        <G transform={`translate(${FOE_MOUNT.x} ${FOE_MOUNT.y}) rotate(180)`}>
+          <WeaponShape weaponId={FOE_WEAPON} line={accent} fill="url(#enc-plate)" />
+        </G>
+      ) : null}
     </Svg>
   );
 });
+
+/**
+ * Every red ship carries a copy of Weapon 1, the player's own placeholder,
+ * mounted on the lower fuselage just behind the nose and pointing down.
+ */
+export const FOE_WEAPON = 'weapon1';
+const FOE_MOUNT = { x: 100, y: 200 };
+
+/**
+ * Where a red ship's bolt leaves, in its 200×260 box: the weapon's tip,
+ * turned round with it, so a tip written as "up 33" comes out 33 lower.
+ */
+export const FOE_MUZZLE = (() => {
+  const tip = weaponTip(FOE_WEAPON);
+  return { x: FOE_MOUNT.x - tip.x, y: FOE_MOUNT.y - tip.y };
+})();
 
 /** Raider plating runs warmer than the player's, so the red reads as its own. */
 const HOSTILE_HULL = '#1E1320';

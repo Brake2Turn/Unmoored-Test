@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FuelBadge } from '@/components/FuelBadge';
 import { MenuButton } from '@/components/MenuButton';
+import { BUTTON_TONE } from '@/lib/subsystems';
 import { useHaptics } from '@/lib/settings';
 import { StarChart } from '@/components/StarChart';
 import { fonts, palette, tracking, useMenuWidth } from '@/lib/theme';
@@ -277,6 +278,8 @@ export default function SectorScreen() {
         >
           {dry
             ? 'NO FUEL — THE SHIP IS ADRIFT'
+            : blocked === 'wrecked'
+            ? 'THE SHIP IS DESTROYED'
             : blocked === 'charging'
             ? 'THE DRIVE IS STILL BUILDING'
             : blocked === 'engines'
@@ -289,7 +292,9 @@ export default function SectorScreen() {
         </Text>
         <MenuButton
           label={
-            blocked === 'fuel'
+            blocked === 'wrecked'
+              ? 'SHIP DESTROYED'
+              : blocked === 'fuel'
               ? 'OUT OF FUEL'
               : blocked === 'charging'
                 ? 'DRIVE CHARGING'
@@ -301,6 +306,8 @@ export default function SectorScreen() {
           }
           onPress={onConfirmJump}
           primary={!blocked && target !== null}
+          tone={BUTTON_TONE.engines}
+          charging={blocked === 'charging'}
           disabled={!!blocked || target === null}
           width={buttonWidth}
         />

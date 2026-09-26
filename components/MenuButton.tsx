@@ -6,6 +6,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import type { ButtonTone } from '@/lib/subsystems';
 import { fonts, layout, palette, tracking } from '@/lib/theme';
 
 type Props = {
@@ -31,6 +32,14 @@ type Props = {
    * a corner but had to be learned before it said anything.
    */
   gauge?: { label: string; value: string };
+  /**
+   * A colour of its own in place of the accent — the space screen's JUMP
+   * takes the engines' orange. With a tone, `charging` draws the disabled
+   * button in the tone's dark version rather than greyed out, so "not yet"
+   * and "cannot" look different.
+   */
+  tone?: ButtonTone;
+  charging?: boolean;
 };
 
 /**
@@ -61,6 +70,8 @@ export function MenuButton({
   width,
   height = layout.buttonHeight,
   gauge,
+  tone,
+  charging = false,
 }: Props) {
   const pressed = useSharedValue(0);
 
@@ -81,7 +92,17 @@ export function MenuButton({
   /** Everything that is *not* the gauge stops here. */
   const gaugeWidth = gauge ? GAUGE_W : 0;
 
-  const scheme = disabled
+  const bright = tone?.bright ?? palette.accent;
+  const dimmed = disabled && !(tone && charging);
+
+  const scheme = disabled && tone && charging
+    ? {
+        fill: tone.dark.fill,
+        border: tone.dark.border,
+        label: tone.dark.label,
+        caption: tone.dark.label,
+      }
+    : disabled
     ? {
         fill: 'rgba(255,255,255,0.02)',
         border: 'rgba(255,255,255,0.07)',
@@ -90,10 +111,10 @@ export function MenuButton({
       }
     : primary
       ? {
-          fill: palette.accent,
-          border: palette.accent,
-          label: palette.void,
-          caption: palette.void,
+          fill: bright,
+          border: bright,
+          label: tone?.ink ?? palette.void,
+          caption: tone?.ink ?? palette.void,
         }
       : {
           fill: 'rgba(255,255,255,0.05)',
@@ -120,7 +141,7 @@ export function MenuButton({
           height,
           borderRadius: layout.buttonRadius,
           borderColor: scheme.border,
-          opacity: disabled ? 0.55 : 1,
+          opacity: dimmed ? 0.55 : 1,
         },
         animatedStyle,
       ]}
@@ -135,7 +156,7 @@ export function MenuButton({
         pointerEvents="none"
         style={[
           StyleSheet.absoluteFill,
-          { right: gaugeWidth, backgroundColor: palette.accent },
+          { right: gaugeWidth, backgroundColor: bright },
           bloomStyle,
         ]}
       />
@@ -145,8 +166,8 @@ export function MenuButton({
           pointerEvents="none"
           style={[styles.gauge, { width: GAUGE_W, borderLeftColor: scheme.border }]}
         >
-          <Text style={styles.gaugeLabel}>{gauge.label}</Text>
-          <Text style={styles.gaugeValue}>{gauge.value}</Text>
+          <Text style={[styles.gaugeLabel, { color: bright }]}>{gauge.label}</Text>
+          <Text style={[styles.gaugeValue, { color: bright }]}>{gauge.value}</Text>
         </View>
       ) : null}
 

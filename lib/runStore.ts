@@ -16,7 +16,7 @@ import {
 } from '@/lib/energy';
 import { ENCOUNTER_STYLE } from '@/lib/encounters';
 import { nameOf, type Meeting } from '@/lib/dialogue';
-import { HULL_MAX, damagedHull } from '@/lib/hull';
+import { HULL_MAX, damagedHull, isWrecked } from '@/lib/hull';
 import { cargoSlots, fitHold, moveItem, type Place } from '@/lib/hold';
 import { DEFAULT_SHIP_ID, shipById } from '@/lib/ships';
 import { weaponById } from '@/lib/weapons';
@@ -26,6 +26,7 @@ import {
   meetingAt,
   generateMap,
   migrateMap,
+  type Encounter,
   type SectorMap,
 } from '@/lib/sectorMap';
 
@@ -115,6 +116,13 @@ export type RunState = {
    * its kind's `hull` minus this, and retuning that number moves every save.
    */
   foeDamage: Record<string, number>;
+  /**
+   * Units of charge the hostile ship at this star has built toward its next
+   * shot. It fires when this reaches `WEAPON_UNITS`, the same full charge the
+   * player's weapon needs, and then starts again from a little below nothing
+   * (see `foeFires`). Emptied on every jump.
+   */
+  foeCharge: number;
 };
 
 /**
@@ -139,7 +147,7 @@ export function sectorOf(run: RunState): number {
 export const MIN_JUMP_ENGINES = 1;
 
 /** Why a jump cannot happen, or null when it can. */
-export type JumpBlock = 'fuel' | 'engines' | 'charging' | null;
+export type JumpBlock = 'wrecked' | 'fuel' | 'engines' | 'charging' | null;
 
 /**
  * What is stopping this run from jumping.
@@ -150,6 +158,8 @@ export type JumpBlock = 'fuel' | 'engines' | 'charging' | null;
  * stop, since the engines can be powered again in a moment and fuel cannot.
  */
 export function jumpBlocker(run: RunState): JumpBlock {
+  // A ship with no hull left goes nowhere, whatever is in the tank.
+  if (isWrecked(run.hull)) return 'wrecked';
   if (run.fuel <= 0) return 'fuel';
   // Cold engines outrank a part-built charge: with nothing in the engines the
   // charge is not building at all, so that is the thing to say.
@@ -167,8 +177,9 @@ export function jumpBlocker(run: RunState): JumpBlock {
  * `ENCOUNTER_STYLE`, so this is not a second list of which stars mean trouble.
  */
 export function jumpUnitsFor(run: RunState): number {
-  const here = encounterAt(run.map, run.position);
-  return ENCOUNTER_STYLE[here].hostile ? HOSTILE_JUMP_UNITS : JUMP_UNITS;
+  // Pinned down only while the ship pinning you is still there: destroy it and
+  // the star becomes an ordinary one, charge already built included.
+  return foeArmed(run) ? HOSTILE_JUMP_UNITS : JUMP_UNITS;
 }
 
 /**
@@ -193,7 +204,7 @@ export function markSpoken(run: RunState): RunState {
 }
 
 /** Why the weapon cannot fire, or null when it can. */
-export type FireBlock = 'weapon' | 'charging' | null;
+export type FireBlock = 'wrecked' | 'weapon' | 'charging' | null;
 
 /**
  * What is stopping the weapon firing: nothing on the hardpoint, or a charge
@@ -201,6 +212,7 @@ export type FireBlock = 'weapon' | 'charging' | null;
  * the same way the jump button and `applyJump` both ask `jumpBlocker`.
  */
 export function fireBlocker(run: RunState): FireBlock {
+  if (isWrecked(run.hull)) return 'wrecked';
   if (!run.mounted) return 'weapon';
   if (run.weaponCharge < WEAPON_UNITS) return 'charging';
   return null;
@@ -243,6 +255,57 @@ export function hitFoe(run: RunState, node: number): RunState {
 }
 
 /**
+ * The ship at a star has been shot to nothing. It is gone: not drawn, not
+ * named, not shooting, and no longer pinning the player down. Derived from the
+ * damage, so a reload finds the wreck exactly as it was left.
+ */
+export function foeDestroyed(run: RunState, node: number = run.position): boolean {
+  return foeHullMax(run, node) > 0 && foeHull(run, node) <= 0;
+}
+
+/**
+ * What is at the star the ship is on, as far as the screen is concerned: the
+ * encounter, or `empty` once its ship has been destroyed.
+ */
+export function shipHere(run: RunState): Encounter {
+  return foeDestroyed(run) ? 'empty' : encounterAt(run.map, run.position);
+}
+
+/**
+ * A live red ship is here — the kind that shoots back. Hostile is the same
+ * flag that makes a star hold the drive longer, so "red", "shoots" and "pins
+ * you down" cannot come apart.
+ */
+export function foeArmed(run: RunState): boolean {
+  return ENCOUNTER_STYLE[shipHere(run)].hostile;
+}
+
+/**
+ * How fast a red ship's weapon charges, as if it had this many bars in its
+ * weapons row: two, which fills `WEAPON_UNITS` in about nine seconds.
+ */
+export const FOE_WEAPON_BARS = 2;
+
+/**
+ * After each shot a red ship starts up to this many units *below* empty, so
+ * its shots come every nine to fourteen seconds rather than on a steady beat
+ * the player could count along to.
+ */
+export const FOE_JITTER_UNITS = 6;
+
+/**
+ * The red ship's weapon is charged: it fires, and starts charging again from a
+ * random point just below empty. The run comes back unchanged when there is
+ * nothing to fire, so the caller knows not to draw a shot.
+ */
+export function foeFires(run: RunState): RunState {
+  if (!foeArmed(run) || isWrecked(run.hull) || pendingMeeting(run) || run.foeCharge < WEAPON_UNITS) {
+    return run;
+  }
+  return { ...run, foeCharge: -Math.random() * FOE_JITTER_UNITS };
+}
+
+/**
  * What the other party at this star is called: the name they speak under, or
  * for a ship that says nothing (the boss) the kind of ship it is.
  */
@@ -269,6 +332,15 @@ export function chargeFractions(run: RunState): { jump: number; weapon: number }
  * same run when nothing has anything left to do, so a caller can stop ticking.
  */
 export function tickRun(run: RunState, seconds: number): RunState {
+  // Nothing builds on a wreck.
+  if (isWrecked(run.hull)) return run;
+
+  // A red ship charges its weapon while it is alive and the talking is over:
+  // nobody opens fire in the middle of a conversation.
+  const foeCharge =
+    foeArmed(run) && !pendingMeeting(run)
+      ? Math.min(WEAPON_UNITS, run.foeCharge + seconds * chargeRate(FOE_WEAPON_BARS))
+      : run.foeCharge;
   const jumpCharge = Math.min(
     jumpUnitsFor(run),
     run.jumpCharge + seconds * chargeRate(run.energy.engines),
@@ -282,11 +354,12 @@ export function tickRun(run: RunState, seconds: number): RunState {
   if (
     jumpCharge === run.jumpCharge &&
     weaponCharge === run.weaponCharge &&
-    shieldCharge === run.shieldCharge
+    shieldCharge === run.shieldCharge &&
+    foeCharge === run.foeCharge
   ) {
     return run;
   }
-  return { ...run, jumpCharge, weaponCharge, shieldCharge };
+  return { ...run, jumpCharge, weaponCharge, shieldCharge, foeCharge };
 }
 
 /**
@@ -336,6 +409,7 @@ function createRun(shipId: string): RunState {
     mounted: ship.weapon,
     hold: Array.from({ length: cargoSlots(ship.cargo) }, () => null),
     foeDamage: {},
+    foeCharge: 0,
   };
 }
 
@@ -421,6 +495,8 @@ export function applyJump(run: RunState, target: number): RunState {
     // ship can leave, and a hostile star makes that build far longer.
     jumpCharge: 0,
     weaponCharge: 0,
+    // Whatever is at the next star starts charging from nothing.
+    foeCharge: 0,
   };
 }
 
@@ -565,6 +641,7 @@ function hydrate(stored: StoredRun): RunState {
     hold: fitHold(stored.hold, cargoSlots(ship.cargo), (id) => weaponById(id) !== null),
     // A save from before weapons fired has hit nothing.
     foeDamage: cleanDamage(stored.foeDamage),
+    foeCharge: clampNumber(stored.foeCharge, -FOE_JITTER_UNITS, WEAPON_UNITS, 0),
   };
 }
 

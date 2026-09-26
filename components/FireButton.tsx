@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 
 import type { FireBlock } from '@/lib/runStore';
+import { BUTTON_TONE } from '@/lib/subsystems';
 import { fonts, layout, palette, tracking } from '@/lib/theme';
 
 /**
@@ -12,10 +13,11 @@ import { fonts, layout, palette, tracking } from '@/lib/theme';
  * - **dark red** — a weapon is mounted and still charging;
  * - **bright red** — charged and ready. One press spends the whole charge.
  */
+const TONE = BUTTON_TONE.weapons;
 const LOOK: Record<'weapon' | 'charging' | 'ready', { fill: string; border: string; text: string }> = {
   weapon: { fill: 'rgba(255,255,255,0.03)', border: 'rgba(255,255,255,0.12)', text: palette.textDisabled },
-  charging: { fill: '#3A1216', border: '#6E1F26', text: '#A14A52' },
-  ready: { fill: palette.weapons, border: palette.weapons, text: '#1A0507' },
+  charging: { fill: TONE.dark.fill, border: TONE.dark.border, text: TONE.dark.label },
+  ready: { fill: TONE.bright, border: TONE.bright, text: TONE.ink },
 };
 
 export function FireButton({
@@ -31,10 +33,14 @@ export function FireButton({
   height: number;
   onPress: () => void;
 }) {
-  const state = blocked ?? 'ready';
+  // A destroyed ship has nothing to fire with, which looks the same as having
+  // no weapon mounted.
+  const state = blocked === 'wrecked' ? 'weapon' : (blocked ?? 'ready');
   const look = LOOK[state];
   const label =
-    state === 'weapon'
+    blocked === 'wrecked'
+      ? 'Fire: the ship is destroyed'
+      : state === 'weapon'
       ? 'Fire: no weapon mounted'
       : state === 'charging'
         ? `Fire: ${weaponName ?? 'weapon'} is charging`

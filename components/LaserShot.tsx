@@ -8,7 +8,7 @@ import { palette } from '@/lib/theme';
 export type Point = { x: number; y: number };
 
 /**
- * One shot from the player's weapon: a bolt that flies from the weapon's tip
+ * One shot from a weapon, the player's or a red ship's: a bolt that flies from the weapon's tip
  * to the other ship, and a burst of sparks where it lands.
  *
  * **The timing is kept by timers, not by the animation.** The bolt's flight
@@ -105,8 +105,9 @@ function Bolt({ from, to, animate }: { from: Point; to: Point; animate: boolean 
     <Animated.View
       style={[
         styles.bolt,
-        // The bolt's front end starts at the tip and travels to the target.
-        { left: from.x - BOLT_W / 2, top: from.y - BOLT_LEN },
+        // The bolt's front end starts at the tip and travels to the target —
+        // above the tip for a shot going up, below it for one coming down.
+        { left: from.x - BOLT_W / 2, top: to.y < from.y ? from.y - BOLT_LEN : from.y },
         style,
       ]}
     >
