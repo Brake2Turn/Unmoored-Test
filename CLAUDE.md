@@ -655,11 +655,13 @@ built included. The player at zero hull is `isWrecked`: `jumpBlocker` and
 `fireBlocker` both return `'wrecked'` first, `tickRun` stops, and Game Over
 comes up (below).
 
-**Destroyed ships keep their place in the layout** and are only made
-invisible (`styles.gone`), and the layout is sized from `encounterAt` rather
-than `shipHere` — otherwise removing a ship rescales and moves the other one
-mid-explosion, and the measured refs vanish before the explosion can be
-placed. The explosion (`components/Explosion.tsx`: flash, fireball, shock
+**Destroyed ships keep their place in the layout while they explode**, only
+made invisible (`styles.gone`) — otherwise removing a ship rescales and moves
+the other one mid-explosion, and the measured refs vanish before the
+explosion can be placed. **Once the explosion is over the star is `cleared`**
+and the layout is sized from `laidOut` (`'empty'` for a cleared star), so the
+player's ship goes back to the middle. Arriving at, or loading, a star whose
+ship is already destroyed clears it at once. The explosion (`components/Explosion.tsx`: flash, fireball, shock
 ring, debris, 1.1s) fires on the *transition* to zero, compared against the
 last render in a ref, not on the hull being zero — so loading a save with a
 wreck in it does not blow it up again, and every route to zero (either
@@ -687,9 +689,16 @@ the bolt along whichever axis it travels.
 
 **Both ships scale together** (`artScale`) from whichever runs out first: the
 width the pair shares (`SHIP_SLOT_HEIGHT` — the player's turned systems box —
-plus the other ship's length) or the height the controls leave. Width usually
-decides; the Elder Shrike beside the player's shield is the widest pair and
-comes out around 0.7.
+plus the other ship's length) or the height the controls leave. **A pair is
+then drawn a size down (`PAIR_SHRINK`, 0.84) with a wide `ARENA_GAP` (36)**
+between them — the author found them too big and too close at just-fits.
+
+**Everything aimed or placed on this screen is measured with `measureHere`**,
+which subtracts the screen root's own window position. Shots and explosions
+are drawn inside the screen root but `measureInWindow` reports window
+coordinates; the two only agree while the root sits at the window's top-left
+corner. The author saw the player's bolt start from the wrong place with no
+other ship present — not reproducible here, and this was the likeliest cause.
 
 **Two modes, explorer and combat** (`modeOf(run)`, shown top right by
 `components/ModeBadge.tsx`, with the dev hit moved down a line under it).

@@ -115,7 +115,10 @@ const FOE_STATUS_WIDTH = 132;
 
 /** Kept clear at each side of the ships, and between the two of them. */
 const ARENA_MARGIN = 12;
-const ARENA_GAP = 4;
+const ARENA_GAP = 36;
+
+/** How much smaller both ships are drawn when there are two of them. */
+const PAIR_SHRINK = 0.84;
 
 /** The bottom of the helm: a row of tabs with the jump beneath it. */
 const CONTROL_ROW_HEIGHT = REACTOR_PANEL_HEIGHT + TAB_GAP + JUMP_HEIGHT;
@@ -205,12 +208,16 @@ export default function RunScreen() {
 
   // What is here is only learned by arriving — the sector map shows plain dots.
   //
-  // The layout is sized for whatever the star holds, even once its ship has
-  // been destroyed, so that blowing it up does not jolt the player's ship to a
-  // new size mid-explosion. The destroyed ship is simply no longer drawn.
+  // A destroyed ship keeps its place in the layout while it explodes, so the
+  // player's ship does not jump mid-explosion; once the explosion is over the
+  // star is `cleared` and the layout lets it go, which brings the player's
+  // ship back to the middle. `laidOut` is what the layout is sized for.
   const encounter = run ? encounterAt(run.map, run.position) : 'empty';
-  const waiting = ENCOUNTER_STYLE[encounter];
   const present = run ? shipHere(run) : 'empty';
+  const [cleared, setCleared] = useState<number | null>(null);
+  const laidOut =
+    run && present === 'empty' && cleared === run.position ? 'empty' : encounter;
+  const waiting = ENCOUNTER_STYLE[laidOut];
   const wrecked = !!run && isWrecked(run.hull);
 
   const buttonWidth = useMenuWidth();
@@ -295,9 +302,13 @@ export default function RunScreen() {
     CONTROL_ROW_HEIGHT +
     STACK_GAP * 3;
   const artBudget = height - chromeHeight;
-  const acrossBudget = width - ARENA_MARGIN * 2 - (encounter === 'empty' ? 0 : ARENA_GAP);
+  const paired = laidOut !== 'empty';
+  const acrossBudget = width - ARENA_MARGIN * 2 - (paired ? ARENA_GAP : 0);
   const artScale = Math.max(
-    0.45,
+    0.4,
+    // Two ships share the screen a size down from what would just fit, so
+    // there is clear space between them rather than shield touching wing.
+    (paired ? PAIR_SHRINK : 1) *
     Math.min(
       1,
       // Across: the player's turned systems box plus the other ship's length.
@@ -365,7 +376,7 @@ export default function RunScreen() {
     const node = run.position;
     const weapon = run.mounted;
     const hits = foeHull(run, node) > 0;
-    void Promise.all([measure(shipRef.current), measure(foeRef.current)]).then(([box, foe]) => {
+    void Promise.all([measureHere(shipRef.current), measureHere(foeRef.current)]).then(([box, foe]) => {
       if (!box) return;
       // The systems box is the ship's 200×260 box grown about its centre and
       // then laid on its side, so its on-screen *height* is the upright width.
@@ -406,7 +417,7 @@ export default function RunScreen() {
     const node = current.position;
     // Aim at the shield's rim while there is a shield to hit, else the hull.
     const shielded = shieldLevel(current.shieldCharge) > 0;
-    void Promise.all([measure(foeRef.current), measure(shipRef.current)]).then(([foe, box]) => {
+    void Promise.all([measureHere(foeRef.current), measureHere(shipRef.current)]).then(([foe, box]) => {
       if (!foe || !box) return;
       // The other ship is on its side too; its on-screen height is its
       // upright width, 200 units across.
@@ -458,15 +469,20 @@ export default function RunScreen() {
     const before = seen.current;
     const now = { id: run.id, position: run.position, hull: run.hull, foeGone: foeDestroyed(run) };
     seen.current = now;
-    if (!before || before.id !== now.id) {
-      // Opening a save whose ship is already destroyed goes straight to the
-      // end — there is no explosion to wait for.
-      if (now.hull <= 0) setOver(true);
-      return;
+    if (!before || before.id !== now.id || before.position !== now.position) {
+      // Opening a save, or arriving at a star, where a ship is already
+      // destroyed: there is no explosion to wait for, so the player's ship
+      // takes the middle straight away — and a wrecked save goes straight to
+      // Game Over.
+      if (now.foeGone) setCleared(now.position);
+      if (!before || before.id !== now.id) {
+        if (now.hull <= 0) setOver(true);
+        return;
+      }
     }
 
     const blowUp = (view: View | null) =>
-      void measure(view).then((box) => {
+      void measureHere(view).then((box) => {
         if (!box) return;
         const id = Date.now() + Math.random();
         const at = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
@@ -480,8 +496,30 @@ export default function RunScreen() {
       // Game over comes up once the explosion has had its moment.
       setTimeout(() => setOver(true), EXPLOSION_MS + 150);
     }
-    if (before.position === now.position && !before.foeGone && now.foeGone) blowUp(foeRef.current);
+    if (before.position === now.position && !before.foeGone && now.foeGone) {
+      blowUp(foeRef.current);
+      // Once it has finished blowing up, the player's ship takes the middle.
+      const node = now.position;
+      setTimeout(() => setCleared(node), EXPLOSION_MS);
+    }
   }, [run]);
+
+  /**
+   * A view's box relative to this screen, which is what the shots and the
+   * explosions are positioned against.
+   *
+   * Measuring against the browser window and drawing against the screen only
+   * agrees while the two share a top-left corner. Where they did not — the
+   * page shifted inside whatever is showing it — a bolt started away from the
+   * gun. Measuring the screen too and taking the difference makes that offset
+   * cancel out, whatever caused it.
+   */
+  const rootRef = useRef<View>(null);
+  const measureHere = useCallback(async (view: View | null) => {
+    const [root, box] = await Promise.all([measure(rootRef.current), measure(view)]);
+    if (!box) return null;
+    return root ? { ...box, x: box.x - root.x, y: box.y - root.y } : box;
+  }, []);
 
   /**
    * Leaving a destroyed run, either way, ends it. The run is let go of here
@@ -584,7 +622,7 @@ export default function RunScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <View ref={rootRef} collapsable={false} style={styles.container}>
       <Backdrop width={width} height={height} variant="deep" />
       <StarField width={width} height={height} reduceMotion={settings.reduceMotion} />
 
@@ -684,7 +722,7 @@ export default function RunScreen() {
             </View>
           </FadeInView>
 
-          {encounter === 'empty' ? null : (
+          {laidOut === 'empty' ? null : (
             <FadeInView enabled={!settings.reduceMotion} duration={520} delay={160}>
               <View style={styles.foeColumn}>
                 {/* Who is out here and their hull, over their own ship. Gone
