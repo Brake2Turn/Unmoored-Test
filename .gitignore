@@ -26,3 +26,6 @@ expo-env.d.ts
 # Logs
 npm-debug.*
 yarn-error.*
+
+# Scratch working dir for scripts/drive-encounter.py
+.probe/

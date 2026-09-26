@@ -145,6 +145,22 @@ either by collecting `aria-label`s into `document.title` with `--dump-dom`, or
 by screenshotting. Every control on the helm carries a label that states its
 numbers, so the DOM dump is usually enough and costs no image.
 
+**To land on a *particular* encounter, use `scripts/drive-encounter.py`.**
+
+```bash
+npm run build:web && node scripts/pack-artifact.mjs
+python3 scripts/drive-encounter.py 9 1            # meeting 9, one tap in
+python3 scripts/drive-encounter.py 10 0 out.png   # meeting 10, as a picture
+```
+
+It prints what the box says and whether the portrait decoded, or screenshots
+instead. It exists because the two obvious approaches both fail: a fresh page
+load rolls a fresh map, so reloading until the right encounter turns up never
+converges, and serving `dist/` at the server root hides absolute-path bugs.
+So it serves the packed build at `/app/` with nothing above it, and keeps one
+browser profile in `.probe/` so the *same* saved run is reused and only the
+ship moves. Delete `.probe/` to roll a new map.
+
 **Headless throttles requestAnimationFrame to about 1fps.** Reanimated
 animations therefore do not advance, and a screenshot can show a pre-animation
 state that is not a real bug. Verify layout and content this way; never
@@ -738,7 +754,59 @@ These cost real debugging time. Do not rediscover them.
 - **Tracked capitals are much wider than they look.** The wordmark's advance
   ratio is ~0.83 for the web fallback, not the ~0.62 a mixed-case guess suggests;
   guessing clipped UNMOORED to "NMOORE". Measure in a browser before sizing
-  tracked display text.
+  tracked display text. **The iOS and Android numbers in `DISPLAY_ADVANCE`
+  (0.66, 0.78) have never been measured** — they are reasoned from the
+  condensed faces those platforms resolve, and the game has only ever run as a
+  web build, so nothing has exercised them. Too small overruns the margins, too
+  large shrinks the title for no reason, and neither crashes. First time a
+  phone is in hand, measure them.
+
+## Playing it on an actual phone — settled, don't re-litigate
+
+The author asked about Expo Go in September 2026 and the answer was **stay on
+the artifact link for now**. The reasoning, so it does not have to be worked
+out again:
+
+- **Expo Go cannot open this project at all.** It only runs the newest Expo
+  SDK, which is 57; this is SDK 53. There is no override — either the project
+  moves up four majors or Expo Go refuses it.
+- **That upgrade is not small, and its risk lands where it cannot be tested.**
+  SDK 57 means React Native 0.79 → 0.86 and **Reanimated 3 → 4**, which is a
+  rewrite requiring the new architecture. Reanimated drives every moving thing
+  here — the shield break, the energy cells, the exhaust, the fades, the star
+  field, the carousel — across 7 files and ~110 calls. Motion cannot be checked
+  in this container at all (see the traps above), so the compiler, the property
+  checks and a screenshot would all pass while the animations were broken. The
+  author would be the one to find it, by playing.
+- **The SDK upgrade is only Expo Go's price.** An EAS build runs whatever SDK
+  the project is on, so a development build gives the same live-reload loop
+  with nothing upgraded. For iOS that needs the Apple Developer Program
+  (~$99/yr), which is owed for release anyway; Android needs neither an account
+  nor a fee.
+- **No dev server can run in this container.** `npx expo start` crashes through
+  the agent proxy, and nothing here is reachable from a phone regardless. Any
+  Expo Go route runs on the author's Windows machine.
+
+**What the web link genuinely cannot test**, for when that milestone does
+arrive — these are the places the code deliberately diverges, so a screenshot
+of the web build proves nothing about them:
+
+- **The ship carousel.** Web uses a CSS scroll-snap cast; native uses
+  `snapToInterval`. The snapping fix was only ever exercised on the web path.
+- **`DISPLAY_ADVANCE`** for the wordmark — 0.66 on iOS, unmeasured (above).
+- **The three font stacks.** iOS resolves Avenir Next; web gets `system-ui`.
+- **`adjustsFontSizeToFit`**, native-only; web relies on `titleSizeFor()`.
+- **Haptics.** `lib/settings.tsx` fires a light and a medium tap. Both are
+  silently nothing on web, so they have never once been felt.
+
+Beyond those: Reanimated runs on the UI thread natively and on rAF on web, so
+frame rate on a device is unknown; the notch and home bar take real room; and
+saves go to real storage rather than `localStorage`.
+
+None of that blocks content work — dialogue, encounters, art — which is what
+the link is *better* for: no setup, no build wait, always current, and
+verifiable. Revisit when the question is "does this feel right in the hand,
+does it hold 60fps, does the title fit", not before.
 
 ## Working style that fits this project
 

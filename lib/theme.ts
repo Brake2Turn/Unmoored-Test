@@ -154,6 +154,14 @@ export function useMenuWidth(): number {
  *
  * iOS and Android resolve a genuinely condensed face, so they need less room;
  * the web fallback is not condensed at all.
+ *
+ * **Only the web number has actually been measured.** 0.83 was read off a
+ * browser; 0.66 and 0.78 are reasoned from the condensed faces those platforms
+ * resolve, and no one has yet seen the wordmark on a phone. The game is played
+ * through a web build, so nothing has ever exercised them. If either is too
+ * small the title overruns its margins, and if it is too large the title is
+ * needlessly shrunk — neither crashes, so it will not announce itself. Measure
+ * on a device the first time one is in hand, and delete this paragraph.
  */
 const DISPLAY_ADVANCE = Platform.select({ ios: 0.66, android: 0.78, default: 0.83 }) as number;
 
