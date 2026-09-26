@@ -128,6 +128,7 @@ export function ReactorPanel({
           subsystem={subsystem}
           level={energy[subsystem]}
           charge={chargeOf(subsystem, energy, charges)}
+          layers={subsystem === 'shields' ? { charge: charges.shield, ceiling: energy.shields } : null}
           canAddMore={canAdd(energy, reactor, subsystem)}
           canTakeAway={canRemove(energy, subsystem)}
           onShift={onShift}
@@ -148,10 +149,13 @@ function SubsystemRow({
   onShift,
   animate,
   last,
+  layers,
 }: {
   subsystem: Subsystem;
   level: number;
   charge: number;
+  /** The shield's charge in layers, and how many its bars allow. */
+  layers: { charge: number; ceiling: number } | null;
   canAddMore: boolean;
   canTakeAway: boolean;
   onShift: (subsystem: Subsystem, delta: number) => void;
@@ -183,14 +187,18 @@ function SubsystemRow({
         </View>
 
         {/* How far what it is building has got. */}
-        <View style={[styles.track, !lit && styles.trackStalled]}>
-          <View
-            style={[
-              styles.trackFill,
-              { width: `${charge * 100}%`, backgroundColor: style.accent, opacity: charge >= 1 ? 1 : 0.6 },
-            ]}
-          />
-        </View>
+        {layers ? (
+          <ShieldLayers charge={layers.charge} ceiling={layers.ceiling} accent={style.accent} />
+        ) : (
+          <View style={[styles.track, !lit && styles.trackStalled]}>
+            <View
+              style={[
+                styles.trackFill,
+                { width: `${charge * 100}%`, backgroundColor: style.accent, opacity: charge >= 1 ? 1 : 0.6 },
+              ]}
+            />
+          </View>
+        )}
       </View>
 
       <Text style={[styles.count, { color: lit ? palette.textPrimary : palette.textDisabled }]}>
@@ -211,6 +219,38 @@ function SubsystemRow({
         label={`Put one bar of energy into ${name}, now ${level} of ${SUBSYSTEM_CAPACITY}`}
         onPress={() => onShift(subsystem, 1)}
       />
+    </View>
+  );
+}
+
+/**
+ * The shield's track, cut into one section per layer it could ever hold.
+ *
+ * Every layer takes the same time to charge however much energy is in the
+ * shields (`SHIELD_SECONDS_PER_LEVEL`), so the track is always four sections
+ * long and fills at one steady pace: energy does not make it faster, it lets
+ * it go further. Sections past what the bars allow are drawn hollow — room
+ * the shield could have, but has not been given.
+ */
+function ShieldLayers({ charge, ceiling, accent }: { charge: number; ceiling: number; accent: string }) {
+  return (
+    <View style={styles.layers}>
+      {Array.from({ length: SUBSYSTEM_CAPACITY }, (_, i) => {
+        const allowed = i < ceiling;
+        const fill = allowed ? Math.max(0, Math.min(1, charge - i)) : 0;
+        return (
+          <View key={i} style={[styles.track, styles.layer, !allowed && styles.layerLocked]}>
+            {fill > 0 ? (
+              <View
+                style={[
+                  styles.trackFill,
+                  { width: `${fill * 100}%`, backgroundColor: accent, opacity: fill >= 1 ? 1 : 0.6 },
+                ]}
+              />
+            ) : null}
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -357,6 +397,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   trackStalled: { backgroundColor: 'rgba(255,255,255,0.05)' },
+  layers: { flexDirection: 'row', gap: 3 },
+  layer: { flex: 1 },
+  /** A layer the bars do not allow: an outline, not a groove. */
+  layerLocked: {
+    backgroundColor: 'transparent',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
   trackFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: TRACK_HEIGHT / 2 },
 
   count: {

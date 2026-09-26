@@ -111,7 +111,7 @@ const SHIP_BUTTON_WIDTH = 52;
 
 /** Room under LEAVE for the other ship's name and hull, when one is here. */
 const FOE_STATUS_TOP = 30;
-const FOE_STATUS_WIDTH = 132;
+const FOE_STATUS_WIDTH = 150;
 
 /** Kept clear at each side of the ships, and between the two of them. */
 const ARENA_MARGIN = 12;
@@ -733,7 +733,7 @@ export default function RunScreen() {
                       name={foeName(run) ?? waiting.label}
                       hull={foeHull(run)}
                       max={foeHullMax(run)}
-                      width={Math.min(FOE_STATUS_WIDTH, waiting.height * artScale)}
+                      width={FOE_STATUS_WIDTH}
                     />
                   ) : (
                     <View style={{ height: FOE_STATUS_HEIGHT }} />

@@ -54,13 +54,13 @@ export const palette = {
   /**
    * Reactor energy nothing has claimed.
    *
-   * Yellow rather than the accent: spare power was cyan, which is the colour
-   * of the shields row directly above it and of every other reading in the
-   * app, so the one number that means "unspent" looked like another system
-   * reporting in. Loose current should not match anything it could be put
-   * into.
+   * A light pastel green, the author's choice. It was yellow before that and
+   * cyan before that; cyan was the shields row's colour, so the one number
+   * that means "unspent" looked like another system reporting in. Loose
+   * current should not match anything it could be put into, and green is no
+   * subsystem's.
    */
-  power: '#F2C94C',
+  power: '#A8E6BC',
 
   /**
    * The three reactor subsystems, each its own tint so a glance at the helm

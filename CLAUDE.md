@@ -272,24 +272,22 @@ recognises the player by speaker name rather than by position, so an encounter
 that opens with the pilot (number 9 does) still lands the right face on the
 right side.
 
-**A portrait is the art and nothing else** (`components/PortraitArt.tsx`) — no
-frame, no border, no backing. It had all three while the cast was half drawn,
-to make a placeholder glyph look deliberate; the art is cut out against
-transparency, so once it was real the box only put a window between the
-speaker and the scene.
+**The portrait sits inside the box, in a square on the speaker's side**
+(`FACE`, 76) — the pilot's square on the left, the other party's on the right
+(`boxOther` reverses the row), with the name and the line beside it. The name
+is never cut short; it wraps. There are no progress dots — the author had
+them taken out. The art itself (`components/PortraitArt.tsx`) is still only
+the cut-out bust; the square is the box's, and the straight cut at the foot
+of every bust meets its bottom edge.
 
-**The box is drawn over the portrait's foot.** Every bust ends in a straight
-cut at the bottom of its own square. Framed, that read as a portrait in a
-window; bare, it read as a picture someone had sliced through. So the face is
-painted *before* the box and the box covers its last `FACE - FACE_RISE`, which
-hides the cut and leaves the speaker rising out of the box rather than
-balancing on it. Raise `FACE_RISE` too far and the cut comes back out from
-behind the box — that is the constraint on how large the portrait can go, not
-the screen.
+It was different for a long while: large frameless busts standing on top of
+the box, with the box painted over their foot to hide the cut (`FACE_RISE`).
+The author moved them into the box. Do not bring the frameless version back
+without being asked.
 
 **No art means no portrait, and no room kept for one.** `abandonedShip` has
 none on purpose: nobody is aboard to have a face, and its one line is `…`, so
-the box closes up and the silence is the whole effect. The side still speaks —
+there is no square and the words take the whole box. The side still speaks —
 the name stays left or right as it would have — so a faceless line still says
 who is talking.
 
@@ -517,15 +515,23 @@ name in its colour over two stacked readings — the bars *in* it (animated
 thing in the row because they are what gets pressed. The rows are kept squat
 so the panel costs little more height than the old collapsed tab. The header
 carries the section's mark and REACTOR, and at its right the power nothing
-has claimed, a yellow bolt and a number. The shield's track is measured
-against the ceiling it is powered for, not against four.
+has claimed, a pastel green bolt and a number.
+
+**The shield's track is cut into four sections, one per layer**
+(`ShieldLayers`). Every layer takes the same time to charge however much energy
+is in the shields, so the track is always four long and fills at one steady
+pace: energy does not make it faster, it lets it go further. Sections past what
+the bars allow are drawn hollow. The drive and weapons tracks are single bars.
 
 It was a tab that opened a controls panel over the helm on a scrim. That
 panel, its separate shield-level squares and its tap-to-open are gone; only
 the ship panel opens over the helm now.
 
 **The ship section** (`components/ShipPanel.tsx`) is collapsed to a small
-**white SHIP square between FIRE and JUMP** (`ShipButton`, `SHIP_BUTTON_WIDTH`),
+**SHIP square between FIRE and JUMP** (`ShipButton`, `SHIP_BUTTON_WIDTH`) —
+dark with a white outline and white lettering, drawn like JUMP's fuel reading
+without the orange (it was a solid white block until the author asked for it
+inverted) —
 and opens the same way into the weapon on the hardpoint, the cargo hold and the
 crew berths together. It was a half-width tab beside the reactor drawing all of
 that in miniature; the author moved it into the button row and gave the reactor
@@ -623,7 +629,8 @@ Any ship present can be shot, merchants included — which provokes them.
 
 **Their name floats above their own ship** (`components/FoeStatus.tsx`), with
 their hull as a white line beneath it — the same white line as the player's
-own hull. It is absolutely positioned (`styles.foeStatus`) rather than stacked,
+own hull. The name wraps to a second line rather than being cut short (ILLEGAL
+MERCHANT needs two). It is absolutely positioned (`styles.foeStatus`) rather than stacked,
 so the two ships' centres stay level and bolts fly straight between them. It
 sat top left under LEAVE until the ships were laid side by side. The name is `nameOf(meeting)`, the first speaker who is not the
 pilot, so it matches the dialogue box; the boss has no meeting and shows its
@@ -767,13 +774,11 @@ marks. They were wordless for a long while (the marks were meant to carry it);
 the author's mock-up put the names back, and the author's call wins. Free
 power is still a bolt and a number, not `0 FREE`.
 
-**Unclaimed power is yellow** (`palette.power`), not the accent. It was cyan,
-which is the shields row directly above it and every other live reading in the
-app, so the one figure meaning "not in anything yet" looked like a fourth
-system reporting in. In the opened controls it sits at the *foot* of the three
-rows rather than above them: at the top it read as a heading, as though it were
-the reactor's size rather than its remainder, and at the bottom the bolt falls
-in the same column as the subsystem marks, so spare and spent line up.
+**Unclaimed power is light pastel green** (`palette.power`), the author's
+choice — it was yellow, and cyan before that. Cyan was the shields row's
+colour, so the one figure meaning "not in anything yet" looked like a fourth
+system reporting in; green is no subsystem's. It sits at the right of the
+reactor's header line.
 
 **The opened ship panel repeats its name** in its header: it covers the helm
 on a scrim, so the SHIP button behind it cannot be what says which section

@@ -20,7 +20,9 @@ export function FoeStatus({ name, hull, max, width }: { name: string; hull: numb
       accessibilityLabel={`${name}: hull ${left} of ${max}`}
       style={[styles.box, { width }]}
     >
-      <Text numberOfLines={1} style={styles.name}>
+      {/* Wraps onto a second line rather than being cut short: ILLEGAL
+          MERCHANT does not fit on one at this size. */}
+      <Text numberOfLines={2} style={styles.name}>
         {name.toUpperCase()}
       </Text>
       <View style={styles.track}>
@@ -31,13 +33,14 @@ export function FoeStatus({ name, hull, max, width }: { name: string; hull: numb
 }
 
 const styles = StyleSheet.create({
-  box: { height: FOE_STATUS_HEIGHT, justifyContent: 'center', gap: 6 },
+  box: { minHeight: FOE_STATUS_HEIGHT, justifyContent: 'flex-end', gap: 6 },
   name: {
     fontFamily: fonts.bodyBold,
     fontSize: 11,
     fontWeight: '700',
     color: palette.textPrimary,
     letterSpacing: tracking.caption,
+    textAlign: 'center',
   },
   track: {
     height: 3,

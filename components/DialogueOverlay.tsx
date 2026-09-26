@@ -33,34 +33,17 @@ import { fonts, palette, tracking } from '@/lib/theme';
 const VEIL = 'rgba(214, 224, 244, 0.13)';
 
 /**
- * Portrait size, and how much of it clears the box's top edge.
+ * The portrait's square, inside the box on the speaker's side.
  *
- * The face carries no frame, so it is simply the bust standing on the scene.
- * That is what lets it be this large: a card this wide over the helm would
- * have been a second box arguing with the first, while a cut-out at the same
- * size just reads as someone leaning into frame.
- *
- * **The box is drawn over the portrait's foot, not under it.** Every bust ends
- * in a straight cut at the bottom of its own square — with a frame around it
- * that read as a portrait in a window, but bare it read as a picture someone
- * had sliced through. So the face is painted *first* and the box covers the
- * last `FACE - FACE_RISE` of it, which hides the cut and leaves the speaker
- * rising out of the box instead of balancing on it. Raise `FACE_RISE` too far
- * and the cut comes back out from behind the box.
+ * The busts used to stand on top of the box, frameless and large, with the box
+ * drawn over their foot to hide where each one is cut off. The author moved
+ * them into the box, each in a square of its own: the cut at the bottom of
+ * every bust now simply meets the bottom edge of its square.
  */
-const FACE = 140;
-const FACE_RISE = 96;
+const FACE = 76;
 
-/**
- * Margin from the screen edge to the box, and from the box's edge to the face
- * inside it.
- *
- * The face is positioned against the *holder*, which carries the gutter, so
- * its offset has to include it — at a bare 14 the portrait hung off the left
- * of the card instead of sitting on its corner.
- */
+/** Margin from the screen edge to the box. */
 const GUTTER = 18;
-const FACE_INSET = GUTTER + 10;
 
 /** The box's own inner margin. */
 const BOX_PAD = 18;
@@ -121,39 +104,20 @@ export function DialogueOverlay({
       style={[StyleSheet.absoluteFill, styles.veil]}
     >
       <View style={[styles.holder, { paddingBottom: bottom }]} pointerEvents="none">
-        {/* Drawn before the box, so the box covers where the bust is cut. */}
-        {faced ? (
-          <View
-            style={[
-              styles.face,
-              { top: -FACE_RISE },
-              isPilot ? { left: FACE_INSET } : { right: FACE_INSET },
-            ]}
-          >
-            <PortraitArt entity={face} size={FACE} />
-          </View>
-        ) : null}
+        {/* The face on the speaker's own side — the pilot's on the left, the
+            other party's on the right — and the words beside it. */}
+        <View style={[styles.box, !isPilot && styles.boxOther]}>
+          {faced ? (
+            <View style={styles.face}>
+              <PortraitArt entity={face} size={FACE} />
+            </View>
+          ) : null}
 
-        <View style={styles.box}>
-          <View style={[styles.nameRow, !isPilot && styles.nameRowOther]}>
-            <Text numberOfLines={1} style={styles.name}>
-              {line.speaker}
-            </Text>
-          </View>
-
-          <Text style={styles.text}>{line.text}</Text>
-
-          {/* Which way out, and how far through. */}
-          <View style={styles.footer}>
-            {meeting.lines.map((_, index) => (
-              <View
-                key={index}
-                style={[styles.pip, index === step && styles.pipHere]}
-              />
-            ))}
+          <View style={styles.words}>
+            <Text style={[styles.name, !isPilot && styles.nameOther]}>{line.speaker}</Text>
+            <Text style={styles.text}>{line.text}</Text>
           </View>
         </View>
-
       </View>
     </Pressable>
   );
@@ -166,28 +130,41 @@ const styles = StyleSheet.create({
 
   box: {
     ...CARD,
-    paddingTop: 14,
-    paddingBottom: 14,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+    paddingVertical: 14,
     paddingHorizontal: BOX_PAD,
     minHeight: 112,
   },
+  /** The other party's face sits on the right, so the row runs the other way. */
+  boxOther: { flexDirection: 'row-reverse' },
+
+  face: {
+    width: FACE,
+    height: FACE,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    overflow: 'hidden',
+  },
+
+  words: { flex: 1 },
 
   /**
-   * The name sits under the face, on the same side as it. Nothing overlaps it
-   * any more — the portrait is behind the box, not inside it — so it needs no
-   * clearance, and a faceless speaker's name sits exactly where a faced one's
-   * does.
+   * The name sits at the top of the words, on the speaker's side. It is never
+   * cut short: a long one wraps.
    */
-  nameRow: { flexDirection: 'row', marginBottom: 8 },
-  nameRowOther: { justifyContent: 'flex-end' },
   name: {
     fontFamily: fonts.bodyBold,
     fontSize: 11,
     fontWeight: '700',
     color: palette.player,
     letterSpacing: tracking.caption,
-    marginRight: -tracking.caption,
+    marginBottom: 8,
   },
+  nameOther: { textAlign: 'right' },
 
   text: {
     fontFamily: fonts.body,
@@ -195,15 +172,4 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     color: palette.textPrimary,
   },
-
-  footer: { flexDirection: 'row', alignSelf: 'flex-end', gap: 5, marginTop: 14 },
-  pip: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: 'rgba(255,255,255,0.20)',
-  },
-  pipHere: { backgroundColor: palette.player, width: 14 },
-
-  face: { position: 'absolute' },
 });

@@ -44,8 +44,9 @@ const DROP_SLOP = 8;
 /* ------------------------------------------------------------------- tab -- */
 
 /**
- * The ship section, collapsed: a small white square between FIRE and JUMP
- * that says SHIP and opens the panel. It used to be a tab beside the reactor
+ * The ship section, collapsed: a small square between FIRE and JUMP that
+ * says SHIP and opens the panel. Drawn like the fuel reading on JUMP — dark,
+ * with a white outline and white lettering — rather than a white block. It used to be a tab beside the reactor
  * drawing the hardpoint, hold and berths in miniature; the reactor took that
  * room, and what is aboard is read in the panel instead.
  */
@@ -512,16 +513,18 @@ const styles = StyleSheet.create({
   shipButton: {
     borderRadius: layout.buttonRadius,
     borderCurve: 'continuous',
-    backgroundColor: palette.player,
+    borderWidth: 1.2,
+    borderColor: palette.player,
+    backgroundColor: 'rgba(11,15,30,0.6)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  shipButtonPressed: { opacity: 0.8 },
+  shipButtonPressed: { backgroundColor: 'rgba(255,255,255,0.12)' },
   shipButtonLabel: {
     fontFamily: fonts.bodyBold,
     fontSize: 11,
     fontWeight: '700',
-    color: palette.void,
+    color: palette.player,
     letterSpacing: 1.5,
     marginRight: -1.5,
   },
