@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FuelBadge } from '@/components/FuelBadge';
 import { MenuButton } from '@/components/MenuButton';
 import { BUTTON_TONE } from '@/lib/subsystems';
-import { useHaptics } from '@/lib/settings';
+import { useHaptics, useSettings } from '@/lib/settings';
 import { StarChart } from '@/components/StarChart';
 import { fonts, palette, tracking, useMenuWidth } from '@/lib/theme';
 import {
@@ -38,11 +38,15 @@ const HIT_SIZE = 46;
  */
 const VERT_PAD = 24;
 
+/** The dev-mode row under the header that holds ENCOUNTERS. */
+const DEV_ROW_HEIGHT = 34;
+
 export default function SectorScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const haptics = useHaptics();
+  const { settings } = useSettings();
 
   const [run, setRun] = useState<RunState | null>(null);
   const [target, setTarget] = useState<number | null>(null);
@@ -75,7 +79,10 @@ export default function SectorScreen() {
 
   // The map box keeps its 100×160 proportions and is centred in whatever
   // space is left between the header and the footer.
-  const boardTop = insets.top + 62;
+  // Dev mode adds a row under the header for the encounter tester, and the
+  // chart starts below it rather than behind it.
+  const devRow = settings.devMode ? DEV_ROW_HEIGHT : 0;
+  const boardTop = insets.top + 62 + devRow;
   const boardBottom = insets.bottom + 132;
   const boardW = width - 32;
   const boardH = Math.max(height - boardTop - boardBottom, 120);
@@ -143,6 +150,23 @@ export default function SectorScreen() {
           <FuelBadge remaining={fuel} accent={palette.accent} size="compact" />
         </View>
       </View>
+
+      {settings.devMode ? (
+        <View style={[styles.devRow, { top: insets.top + 50 }]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Developer: open the encounter tester"
+            onPress={() => {
+              haptics.tap();
+              router.push('/encounters');
+            }}
+            hitSlop={8}
+            style={({ pressed }) => [styles.devButton, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={styles.devLabel}>ENCOUNTERS</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       <View style={[styles.board, { top: boardTop, height: boardH }]}>
         <Svg width={boardW} height={boardH}>
@@ -330,6 +354,23 @@ const STAR: Record<StarKind, { radius: number; fill: string; solid: boolean; hal
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: palette.void },
+  devRow: { position: 'absolute', left: 0, right: 0, alignItems: 'center', zIndex: 5 },
+  devButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  devLabel: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 10,
+    fontWeight: '600',
+    color: palette.textPrimary,
+    letterSpacing: tracking.caption,
+    marginRight: -tracking.caption,
+  },
   header: {
     position: 'absolute',
     top: 0,

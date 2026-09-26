@@ -10,6 +10,12 @@ export type Settings = {
   hapticsEnabled: boolean;
   /** Calms the drifting starfield and the entrance animation. */
   reduceMotion: boolean;
+  /**
+   * Developer tools, off for players. On, it shows the dev hit buttons on the
+   * space screen, an ENCOUNTERS button on star select, and the unlock-all
+   * button in Settings.
+   */
+  devMode: boolean;
 };
 
 const DEFAULTS: Settings = {
@@ -17,6 +23,7 @@ const DEFAULTS: Settings = {
   effectsVolume: 0.85,
   hapticsEnabled: true,
   reduceMotion: false,
+  devMode: false,
 };
 
 type SettingsContextValue = {

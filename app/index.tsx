@@ -1,6 +1,6 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -11,8 +11,6 @@ import { TitleBlock } from '@/components/TitleBlock';
 import { useHaptics, useSettings } from '@/lib/settings';
 import { fonts, layout, palette, titleSizeFor, tracking, useMenuWidth } from '@/lib/theme';
 import { loadRun, summarize, type RunState } from '@/lib/runStore';
-import { SHIPS } from '@/lib/ships';
-import { loadUnlocked, unlockAll } from '@/lib/unlocks';
 
 const VERSION = 'V0.1.0 (1)';
 
@@ -24,19 +22,14 @@ export default function StartScreen() {
   const haptics = useHaptics();
 
   const [run, setRun] = useState<RunState | null>(null);
-  const [allUnlocked, setAllUnlocked] = useState(false);
 
-  // Re-read the save every time this screen comes back to the front. The
-  // unlocks are re-read with it, so the dev button tells the truth again after
-  // Reset Progress has wiped them.
+  // Re-read the save every time this screen comes back to the front, so a run
+  // ended or cleared elsewhere stops being offered here.
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
       loadRun().then((value) => {
         if (!cancelled) setRun(value);
-      });
-      loadUnlocked().then((ids) => {
-        if (!cancelled) setAllUnlocked(ids.length >= SHIPS.length);
       });
       return () => {
         cancelled = true;
@@ -65,18 +58,6 @@ export default function StartScreen() {
     haptics.tap();
     router.push('/settings');
   }, [haptics, router]);
-
-  /**
-   * Nothing in the game unlocks a ship yet, so the locked half of the roster
-   * is otherwise impossible to fly. This opens all of it. It writes through
-   * the normal unlock store, so Reset Progress in Settings puts it back.
-   */
-  const onUnlockAll = useCallback(async () => {
-    if (allUnlocked) return;
-    haptics.confirm();
-    await unlockAll();
-    setAllUnlocked(true);
-  }, [allUnlocked, haptics]);
 
   return (
     <View style={styles.container}>
@@ -116,27 +97,6 @@ export default function StartScreen() {
         </View>
       </View>
 
-      {/* Dev only, and dressed like it: quiet, out of the way of the menu. */}
-      <Animated.View
-        entering={animate ? FadeIn.duration(600).delay(1400) : undefined}
-        style={[styles.devRow, { bottom: insets.bottom + 58 }]}
-      >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={
-            allUnlocked ? 'All ships already unlocked' : 'Developer: unlock every ship'
-          }
-          accessibilityState={{ disabled: allUnlocked }}
-          onPress={onUnlockAll}
-          hitSlop={14}
-          style={styles.dev}
-        >
-          <Text style={[styles.devLabel, allUnlocked && { color: palette.accentDim }]}>
-            {allUnlocked ? 'ALL SHIPS UNLOCKED' : 'DEV · UNLOCK ALL SHIPS'}
-          </Text>
-        </Pressable>
-      </Animated.View>
-
       <Animated.Text
         entering={animate ? FadeIn.duration(600).delay(1400) : undefined}
         style={[styles.version, { bottom: insets.bottom + 34 }]}
@@ -152,16 +112,6 @@ const styles = StyleSheet.create({
   content: { flex: 1, justifyContent: 'flex-end' },
   titleArea: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   menu: { alignItems: 'center', gap: layout.buttonSpacing },
-  devRow: { position: 'absolute', alignSelf: 'center' },
-  dev: { paddingVertical: 4, paddingHorizontal: 10 },
-  devLabel: {
-    fontFamily: fonts.body,
-    fontSize: 9,
-    fontWeight: '500',
-    color: palette.textDisabled,
-    letterSpacing: tracking.caption,
-    marginRight: -tracking.caption,
-  },
   version: {
     position: 'absolute',
     alignSelf: 'center',

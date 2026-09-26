@@ -8,7 +8,8 @@ import { useHaptics, useSettings } from '@/lib/settings';
 import { fonts, palette, tracking } from '@/lib/theme';
 import { clearRun, loadRun } from '@/lib/runStore';
 import { STARTER_SHIP_IDS } from '@/lib/ships';
-import { loadUnlocked, resetUnlocks } from '@/lib/unlocks';
+import { SHIPS } from '@/lib/ships';
+import { loadUnlocked, resetUnlocks, unlockAll } from '@/lib/unlocks';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -18,6 +19,7 @@ export default function SettingsScreen() {
   const [hasRun, setHasRun] = useState(false);
   const [hasShips, setHasShips] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [allUnlocked, setAllUnlocked] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -27,7 +29,10 @@ export default function SettingsScreen() {
     // Earned ships are progress too, and they outlive any single run — a
     // roster opened by the dev button has to be clearable with no run going.
     loadUnlocked().then((ids) => {
-      if (!cancelled) setHasShips(ids.length > STARTER_SHIP_IDS.length);
+      if (!cancelled) {
+        setHasShips(ids.length > STARTER_SHIP_IDS.length);
+        setAllUnlocked(ids.length >= SHIPS.length);
+      }
     });
     return () => {
       cancelled = true;
@@ -65,8 +70,22 @@ export default function SettingsScreen() {
     await Promise.all([clearRun(), resetUnlocks()]);
     setHasRun(false);
     setHasShips(false);
+    setAllUnlocked(false);
     setConfirming(false);
   }, [canReset, confirming, haptics]);
+
+  /**
+   * Nothing in the game unlocks a ship yet, so the locked part of the roster
+   * is otherwise impossible to fly. This opens all of it. It writes through
+   * the normal unlock store, so Reset Progress below puts it back.
+   */
+  const onUnlockAll = useCallback(async () => {
+    if (allUnlocked) return;
+    haptics.confirm();
+    await unlockAll();
+    setAllUnlocked(true);
+    setHasShips(true);
+  }, [allUnlocked, haptics]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + 12 }]}>
@@ -114,6 +133,39 @@ export default function SettingsScreen() {
         </View>
         <Text style={styles.footnote}>
           Reduce Motion calms the drifting starfield on the title screen.
+        </Text>
+
+        <Text style={styles.section}>DEVELOPER</Text>
+        <View style={styles.card}>
+          <ToggleRow
+            label="Dev Mode"
+            value={settings.devMode}
+            onChange={(devMode) => update({ devMode })}
+          />
+          {settings.devMode ? (
+            <>
+              <View style={styles.divider} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  allUnlocked ? 'All ships already unlocked' : 'Developer: unlock every ship'
+                }
+                accessibilityState={{ disabled: allUnlocked }}
+                disabled={allUnlocked}
+                onPress={onUnlockAll}
+                style={[styles.row, styles.toggleRow]}
+              >
+                <Text style={[styles.rowLabel, allUnlocked && { color: palette.textMuted }]}>
+                  Unlock All Ships
+                </Text>
+                <Text style={styles.rowValue}>{allUnlocked ? 'DONE' : 'UNLOCK'}</Text>
+              </Pressable>
+            </>
+          ) : null}
+        </View>
+        <Text style={styles.footnote}>
+          Dev Mode adds test tools: hit buttons on the space screen and an
+          Encounters list on the star select screen.
         </Text>
 
         <Text style={styles.section}>PROGRESS</Text>
@@ -183,6 +235,7 @@ function ToggleRow({
     <View style={[styles.row, styles.toggleRow]}>
       <Text style={styles.rowLabel}>{label}</Text>
       <Switch
+        accessibilityLabel={label}
         value={value}
         onValueChange={onChange}
         trackColor={{ false: 'rgba(255,255,255,0.15)', true: palette.accent }}

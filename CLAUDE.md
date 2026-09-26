@@ -425,9 +425,9 @@ progress too.
 are standing, and only once they are down does the hull start losing plates —
 which is the whole reason to spend energy on shields. Whatever starts shooting
 later calls this rather than inventing its own order. A red ship's bolt
-calls it, and so does the **DEV · TAKE A HIT** control opposite LEAVE on the
-helm, there so the shield, its effects and the hull can be watched on
-demand.
+calls it, and so does the **DEV · TAKE A HIT** control under the mode label
+on the helm (dev mode only), there so the shield, its effects and the hull
+can be watched on demand.
 
 ### The hull is not part of the reactor
 
@@ -495,12 +495,11 @@ The gate cannot strand anyone: the smallest reactor is four bars, so a bar can
 always be moved back into the engines, and `verify:energy` holds that every
 ship's opening split already has the engines running.
 
-There is no unlock trigger in the game yet, so the locked half of the roster is
-otherwise unflyable. The title screen carries a quiet **DEV · UNLOCK ALL SHIPS**
-button for that. It writes through the normal unlock store rather than holding a
-flag of its own, so Reset Progress in Settings clears it like anything earned,
-and the title screen re-reads the unlocks on focus so the label tells the truth
-again afterwards.
+There is no unlock trigger in the game yet, so the locked part of the roster is
+otherwise unflyable. **Unlock All Ships** in Settings (dev mode only) opens it.
+It writes through the normal unlock store rather than holding a flag of its
+own, so Reset Progress clears it like anything earned. It used to be a quiet
+button on the title screen; it moved when dev mode arrived.
 
 Engines shipped as **piloting** first, and that name is still on disk in older
 saves. `LEGACY_KEYS` in `lib/energy.ts` carries those bars over — dropping them
@@ -690,6 +689,31 @@ storage as it closes, and would otherwise save the wreck again straight after
 it was cleared. A probe that taps NEW RUN by label must take the *last*
 match — the start screen's NEW RUN is still mounted underneath, and tapping
 it silently tests the wrong button.
+
+### Dev mode
+
+`settings.devMode` (Settings → DEVELOPER → Dev Mode, off by default) is the
+one switch for every test tool, so none of them reach a player:
+
+- **Settings** shows Unlock All Ships under the switch.
+- **Space screen** shows DEV · TAKE A HIT and, beneath it, DEV · HIT THEM
+  (`hitFoe` on the ship here — it can destroy it, and it does not provoke a
+  yellow ship, since only real fire does).
+- **Star select** shows ENCOUNTERS in a row under the header (the chart moves
+  down by `DEV_ROW_HEIGHT`), opening `app/encounters.tsx`: one card per entry
+  in `MEETINGS`, with its portrait (or its ship, for the faceless), plus the
+  boss. Built off the table, so new encounters appear on their own.
+  Pressing one calls `devStageEncounter(run, id | 'boss')` — rewrites the
+  meeting at the ship's star (or the first star that can hold one), moves the
+  ship there and resets it as never visited: dialogue again, ship undamaged
+  and unprovoked, both guns and the drive empty — then `router.dismissTo('/run')`.
+
+**The helm only ticks while focused.** It stays mounted under star select and
+the encounter tester, and its interval used to keep running there, saving its
+own stale copy of the run every two seconds — which overwrote a staged
+encounter, and could undo a jump made while a charge was still building. The
+`focused` flag from `useFocusEffect` gates the interval. Anything else that
+saves from the helm must respect the same rule.
 
 **JUMP is the engines' orange** the way FIRE is the weapons' red: dark while
 the drive charges, bright when it is ready, grey when it cannot (no fuel, cold

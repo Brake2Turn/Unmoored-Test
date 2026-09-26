@@ -165,14 +165,22 @@ export default function RunScreen() {
 
   // Re-read on focus so returning from a jump shows the new position, and
   // write back on the way out so the clocks do not rewind.
+  //
+  // `focused` stops the clocks while another screen is on top. This screen
+  // stays mounted underneath star select and the encounter tester, and a clock
+  // still ticking here would keep saving its own copy of the run over whatever
+  // those screens wrote — a jump, or a staged encounter, undone seconds later.
+  const [focused, setFocused] = useState(false);
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
+      setFocused(true);
       loadRun().then((value) => {
         if (!cancelled && value) setRun(value);
       });
       return () => {
         cancelled = true;
+        setFocused(false);
         if (runRef.current) void saveRun(runRef.current);
       };
     }, []),
@@ -232,6 +240,7 @@ export default function RunScreen() {
    * to count, not on every tick.
    */
   useEffect(() => {
+    if (!focused) return;
     if (!driveBuilding && !weaponBuilding && !shieldBuilding && !foeBuilding) return;
 
     let ticks = 0;
@@ -255,7 +264,7 @@ export default function RunScreen() {
       clearInterval(timer);
       if (runRef.current) void saveRun(runRef.current);
     };
-  }, [driveBuilding, foeBuilding, shieldBuilding, weaponBuilding]);
+  }, [driveBuilding, focused, foeBuilding, shieldBuilding, weaponBuilding]);
 
   /**
    * The two pieces of ship art share whatever the controls leave over.
@@ -470,6 +479,22 @@ export default function RunScreen() {
   );
 
   /**
+   * Dev only: take a plate off the other ship, as if a bolt had landed —
+   * straight through `hitFoe`, so it can be destroyed this way too. It does
+   * not provoke a yellow ship: that only comes from actually firing.
+   */
+  const canHitThem = !!run && !wrecked && foeHull(run) > 0;
+  const onHitThem = useCallback(() => {
+    const current = runRef.current;
+    if (!current) return;
+    const next = hitFoe(current, current.position);
+    if (next === current) return;
+    setRun(next);
+    haptics.tap();
+    void saveRun(next);
+  }, [haptics]);
+
+  /**
    * Dev only: put a hit on the ship so the shield, its effects and the hull
    * can be watched without any combat to do it. Delete this with the button.
    */
@@ -558,22 +583,37 @@ export default function RunScreen() {
         </View>
       ) : null}
 
-      {/* Dev only, under the mode: put a hit on the ship on demand. */}
-      <View style={[styles.devRow, { top: insets.top + FOE_STATUS_TOP }]}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Developer: put a hit on the ship"
-          accessibilityState={{ disabled: !canTakeHit }}
-          disabled={!canTakeHit}
-          onPress={onTakeHit}
-          hitSlop={16}
-          style={styles.leave}
-        >
-          <Text style={[styles.leaveLabel, canTakeHit && { color: palette.danger }]}>
-            DEV · TAKE A HIT
-          </Text>
-        </Pressable>
-      </View>
+      {/* Dev mode only, under the mode: a hit on either ship, on demand. */}
+      {settings.devMode ? (
+        <View style={[styles.devRow, styles.devStack, { top: insets.top + FOE_STATUS_TOP }]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Developer: put a hit on the ship"
+            accessibilityState={{ disabled: !canTakeHit }}
+            disabled={!canTakeHit}
+            onPress={onTakeHit}
+            hitSlop={8}
+            style={styles.leave}
+          >
+            <Text style={[styles.leaveLabel, canTakeHit && { color: palette.danger }]}>
+              DEV · TAKE A HIT
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Developer: put a hit on the other ship"
+            accessibilityState={{ disabled: !canHitThem }}
+            disabled={!canHitThem}
+            onPress={onHitThem}
+            hitSlop={8}
+            style={styles.leave}
+          >
+            <Text style={[styles.leaveLabel, canHitThem && { color: palette.danger }]}>
+              DEV · HIT THEM
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       <View
         style={[
@@ -770,6 +810,7 @@ const styles = StyleSheet.create({
   /** A destroyed ship: still holding its place, no longer drawn. */
   gone: { opacity: 0 },
   devRow: { position: 'absolute', right: 20, zIndex: 5 },
+  devStack: { alignItems: 'flex-end' },
   leave: { paddingVertical: 6, paddingHorizontal: 4 },
   leaveLabel: {
     fontFamily: fonts.body,

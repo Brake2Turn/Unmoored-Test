@@ -24,6 +24,7 @@ import {
   FUEL_PER_RUN,
   encounterAt,
   meetingAt,
+  bossIndex,
   generateMap,
   migrateMap,
   type Encounter,
@@ -617,6 +618,49 @@ export function moveGear(run: RunState, from: Place, to: Place): RunState {
     mounted: next.mounted,
     hold: next.hold,
     weaponCharge: swapped ? 0 : run.weaponCharge,
+  };
+}
+
+/**
+ * Dev mode only: put the ship in front of a chosen encounter, fresh, so it can
+ * be tried out.
+ *
+ * `meetingId` stages that meeting at a star — the one the ship is on if it can
+ * hold one, else the first that can — and `'boss'` moves the ship to the boss.
+ * Either way the star is reset as if never visited: the dialogue plays again,
+ * its ship is undamaged and unprovoked, and both guns and the drive start from
+ * nothing. It rewrites the map for this run, which is fine for a test run and
+ * is why the button only exists in dev mode.
+ */
+export function devStageEncounter(run: RunState, target: number | 'boss'): RunState {
+  const boss = bossIndex(run.map);
+  let node: number;
+  let map = run.map;
+  if (target === 'boss') {
+    node = boss;
+  } else {
+    const canHold = (i: number) => i !== boss && i !== run.map.start;
+    node = canHold(run.position) ? run.position : run.map.nodes.findIndex((_, i) => canHold(i));
+    if (node < 0) return run;
+    map = {
+      ...run.map,
+      nodes: run.map.nodes.map((n, i) => (i === node ? { ...n, meeting: target } : n)),
+    };
+  }
+
+  const key = String(node);
+  const { [key]: _wiped, ...foeDamage } = run.foeDamage;
+  return {
+    ...run,
+    map,
+    position: node,
+    visited: run.visited.includes(node) ? run.visited : [...run.visited, node],
+    spoken: run.spoken.filter((i) => i !== node),
+    provoked: run.provoked.filter((i) => i !== node),
+    foeDamage,
+    foeCharge: 0,
+    jumpCharge: 0,
+    weaponCharge: 0,
   };
 }
 
