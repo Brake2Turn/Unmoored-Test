@@ -2,6 +2,7 @@ import React from 'react';
 import Svg, { Defs, Ellipse, G, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 
 import { ENCOUNTER_STYLE } from '@/lib/encounters';
+import { palette } from '@/lib/theme';
 import { HULL, HULL_DEEP } from '@/components/ships/ShipArt';
 import { WeaponShape, weaponTip } from '@/components/WeaponArt';
 import type { Encounter } from '@/lib/sectorMap';
@@ -10,6 +11,11 @@ type Props = {
   encounter: Encounter;
   width: number;
   height: number;
+  /**
+   * Draw a friendly ship red: the pilot has fired on it and it is fighting
+   * back. Its silhouette stays its own — only its colour and its gun change.
+   */
+  angry?: boolean;
 };
 
 /**
@@ -24,10 +30,16 @@ export const EncounterShip = React.memo(function EncounterShip({
   encounter,
   width,
   height,
+  angry = false,
 }: Props) {
   if (encounter === 'empty') return null;
 
-  const { accent, hostile } = ENCOUNTER_STYLE[encounter];
+  const style = ENCOUNTER_STYLE[encounter];
+  // The silhouette comes off what the ship is; the colour off how it is behaving.
+  const raider = style.hostile;
+  const hostile = raider || angry;
+  const accent = hostile ? palette.danger : style.accent;
+  const mount = raider ? SHRIKE_MOUNT : MERCHANT_MOUNT;
 
   return (
     <Svg width={width} height={height} viewBox="0 0 200 260">
@@ -41,10 +53,10 @@ export const EncounterShip = React.memo(function EncounterShip({
           <Stop offset="1" stopColor={hostile ? HOSTILE_HULL_DEEP : HULL_DEEP} />
         </LinearGradient>
       </Defs>
-      {hostile ? <Shrike accent={accent} /> : <Merchant accent={accent} />}
+      {raider ? <Shrike accent={accent} /> : <Merchant accent={accent} />}
       {hostile ? (
         // The red ships' gun, turned round to point at the player.
-        <G transform={`translate(${FOE_MOUNT.x} ${FOE_MOUNT.y}) rotate(180)`}>
+        <G transform={`translate(${mount.x} ${mount.y}) rotate(180)`}>
           <WeaponShape weaponId={FOE_WEAPON} line={accent} fill="url(#enc-plate)" />
         </G>
       ) : null}
@@ -57,16 +69,24 @@ export const EncounterShip = React.memo(function EncounterShip({
  * mounted on the lower fuselage just behind the nose and pointing down.
  */
 export const FOE_WEAPON = 'weapon1';
-const FOE_MOUNT = { x: 100, y: 200 };
+
+/**
+ * Where each silhouette carries that gun: the Shrike on its lower fuselage
+ * behind the nose, the merchant on the glazed bow it points at the player
+ * with — which it only needs once it has been provoked.
+ */
+const SHRIKE_MOUNT = { x: 100, y: 200 };
+const MERCHANT_MOUNT = { x: 100, y: 224 };
 
 /**
  * Where a red ship's bolt leaves, in its 200×260 box: the weapon's tip,
  * turned round with it, so a tip written as "up 33" comes out 33 lower.
  */
-export const FOE_MUZZLE = (() => {
+export function foeMuzzle(encounter: Encounter): { x: number; y: number } {
+  const mount = ENCOUNTER_STYLE[encounter].hostile ? SHRIKE_MOUNT : MERCHANT_MOUNT;
   const tip = weaponTip(FOE_WEAPON);
-  return { x: FOE_MOUNT.x - tip.x, y: FOE_MOUNT.y - tip.y };
-})();
+  return { x: mount.x - tip.x, y: mount.y - tip.y };
+}
 
 /** Raider plating runs warmer than the player's, so the red reads as its own. */
 const HOSTILE_HULL = '#1E1320';

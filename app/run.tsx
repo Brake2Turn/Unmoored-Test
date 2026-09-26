@@ -17,12 +17,17 @@ import { FadeInView } from '@/components/FadeInView';
 import { STATUS_BAR_HEIGHT, StatusBar } from '@/components/StatusBar';
 import { MenuButton } from '@/components/MenuButton';
 import { StarField } from '@/components/StarField';
-import { EncounterShip, FOE_MUZZLE } from '@/components/ships/EncounterShip';
+import { EncounterShip, foeMuzzle } from '@/components/ships/EncounterShip';
+import { GameOver } from '@/components/GameOver';
+import { ModeBadge } from '@/components/ModeBadge';
 import { SYSTEMS_SPAN, ShipSystems } from '@/components/ships/ShipSystems';
 import { useHaptics, useSettings } from '@/lib/settings';
 import { fonts, layout, palette, tracking, useMenuWidth } from '@/lib/theme';
 import {
   chargeFractions,
+  clearRun,
+  foeLooksHostile,
+  modeOf,
   fireBlocker,
   fireWeapon,
   foeArmed,
@@ -149,6 +154,8 @@ export default function RunScreen() {
   const [shots, setShots] = useState<Shot[]>([]);
   // Ships blowing apart, the player's or the other one's.
   const [blasts, setBlasts] = useState<Blast[]>([]);
+  // The player's ship is gone and the Game Over box is up.
+  const [over, setOver] = useState(false);
   const shipRef = useRef<View>(null);
   const foeRef = useRef<View>(null);
 
@@ -306,13 +313,7 @@ export default function RunScreen() {
    * different problem and the slider would just sit there unexplained.
    */
   const jumpLabel =
-    blocked === 'wrecked'
-      ? 'DESTROYED'
-      : blocked === 'fuel'
-        ? 'OUT OF FUEL'
-        : blocked === 'engines'
-          ? 'NO ENGINES'
-          : 'JUMP';
+    blocked === 'fuel' ? 'OUT OF FUEL' : blocked === 'engines' ? 'NO ENGINES' : 'JUMP';
   const jumpCaption = blocked === 'engines' ? 'POWER THE ENGINES' : undefined;
   /**
    * Fuel rides on the button rather than in a strip of its own, since the only
@@ -379,9 +380,10 @@ export default function RunScreen() {
     const shielded = shieldLevel(current.shieldCharge) > 0;
     void Promise.all([measure(foeRef.current), measure(shipRef.current)]).then(([foe, box]) => {
       if (!foe || !box) return;
+      const muzzle = foeMuzzle(encounterAt(current.map, node));
       const from = {
-        x: foe.x + (FOE_MUZZLE.x / 200) * foe.width,
-        y: foe.y + (FOE_MUZZLE.y / 260) * foe.height,
+        x: foe.x + (muzzle.x / 200) * foe.width,
+        y: foe.y + (muzzle.y / 260) * foe.height,
       };
       const to = { x: from.x, y: box.y + box.height * (shielded ? 0.12 : 0.24) };
       setShots((shots) => [
@@ -424,7 +426,12 @@ export default function RunScreen() {
     const before = seen.current;
     const now = { id: run.id, position: run.position, hull: run.hull, foeGone: foeDestroyed(run) };
     seen.current = now;
-    if (!before || before.id !== now.id) return;
+    if (!before || before.id !== now.id) {
+      // Opening a save whose ship is already destroyed goes straight to the
+      // end — there is no explosion to wait for.
+      if (now.hull <= 0) setOver(true);
+      return;
+    }
 
     const blowUp = (view: View | null) =>
       void measure(view).then((box) => {
@@ -436,9 +443,31 @@ export default function RunScreen() {
         setTimeout(() => setBlasts((current) => current.filter((b) => b.id !== id)), EXPLOSION_MS + 50);
       });
 
-    if (before.hull > 0 && now.hull <= 0) blowUp(shipRef.current);
+    if (before.hull > 0 && now.hull <= 0) {
+      blowUp(shipRef.current);
+      // Game over comes up once the explosion has had its moment.
+      setTimeout(() => setOver(true), EXPLOSION_MS + 150);
+    }
     if (before.position === now.position && !before.foeGone && now.foeGone) blowUp(foeRef.current);
   }, [run]);
+
+  /**
+   * Leaving a destroyed run, either way, ends it. The run is let go of here
+   * first — this screen writes its run back to storage as it closes, and
+   * would otherwise save the wreck again straight after it was cleared.
+   */
+  const endRun = useCallback(
+    async (to: 'new' | 'menu') => {
+      haptics.confirm();
+      runRef.current = null;
+      setRun(null);
+      setOver(false);
+      await clearRun();
+      if (to === 'new') router.replace('/select-ship');
+      else router.back();
+    },
+    [haptics, router],
+  );
 
   /**
    * Dev only: put a hit on the ship so the shield, its effects and the hull
@@ -522,8 +551,15 @@ export default function RunScreen() {
         </View>
       ) : null}
 
-      {/* Dev only, opposite LEAVE: there is nothing to shoot the shield yet. */}
-      <View style={[styles.devRow, { top: insets.top + 2 }]}>
+      {/* Which mode the run is in, opposite LEAVE. */}
+      {run ? (
+        <View style={[styles.devRow, { top: insets.top + 2 }]}>
+          <ModeBadge mode={modeOf(run)} />
+        </View>
+      ) : null}
+
+      {/* Dev only, under the mode: put a hit on the ship on demand. */}
+      <View style={[styles.devRow, { top: insets.top + FOE_STATUS_TOP }]}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Developer: put a hit on the ship"
@@ -558,6 +594,7 @@ export default function RunScreen() {
               >
                 <EncounterShip
                   encounter={encounter}
+                  angry={!!run && foeLooksHostile(run)}
                   width={waiting.width * artScale}
                   height={waiting.height * artScale}
                 />
@@ -583,57 +620,64 @@ export default function RunScreen() {
           </View>
         </FadeInView>
 
-        {/* What this ship has left, on one line. */}
-        <StatusBar hull={run?.hull ?? 0} width={buttonWidth} />
+        {/* The HUD: hull, tabs and the two buttons. Greyed out and dead to
+            touch once the ship is destroyed. */}
+        <View
+          pointerEvents={wrecked ? 'none' : 'auto'}
+          style={[styles.hud, wrecked && styles.hudDead]}
+        >
+          {/* What this ship has left, on one line. */}
+          <StatusBar hull={run?.hull ?? 0} width={buttonWidth} />
 
-        {/* What the ship is, at a glance: its reactor, and its weapon, hold
-            and berths. Each opens over the helm; the jump sits under both. */}
-        <View style={{ width: buttonWidth, gap: TAB_GAP }}>
-          <View style={styles.tabRow}>
-            {run ? (
-              <>
-                <ReactorTab
-                  energy={run.energy}
-                  reactor={reactorOf(run)}
-                  charges={{
-                    shield: run.shieldCharge,
-                    weapon: charge.weapon,
-                    engine: charge.jump,
-                  }}
-                  width={tabWidth}
-                  onPress={onOpenReactor}
-                />
-                <ShipTab
-                  loadout={{ mounted: run.mounted, hold: run.hold }}
-                  width={tabWidth}
-                  onPress={onOpenShip}
-                />
-              </>
-            ) : (
-              <View style={{ height: layout.tabHeight }} />
-            )}
-          </View>
+          {/* What the ship is, at a glance: its reactor, and its weapon, hold
+              and berths. Each opens over the helm; the jump sits under both. */}
+          <View style={{ width: buttonWidth, gap: TAB_GAP }}>
+            <View style={styles.tabRow}>
+              {run ? (
+                <>
+                  <ReactorTab
+                    energy={run.energy}
+                    reactor={reactorOf(run)}
+                    charges={{
+                      shield: run.shieldCharge,
+                      weapon: charge.weapon,
+                      engine: charge.jump,
+                    }}
+                    width={tabWidth}
+                    onPress={onOpenReactor}
+                  />
+                  <ShipTab
+                    loadout={{ mounted: run.mounted, hold: run.hold }}
+                    width={tabWidth}
+                    onPress={onOpenShip}
+                  />
+                </>
+              ) : (
+                <View style={{ height: layout.tabHeight }} />
+              )}
+            </View>
 
-          <View style={styles.actionRow}>
-            <FireButton
-              blocked={fireBlock}
-              weaponName={weaponById(run?.mounted)?.name ?? null}
-              width={FIRE_WIDTH}
-              height={JUMP_HEIGHT}
-              onPress={onFire}
-            />
-            <MenuButton
-              label={jumpLabel}
-              caption={jumpCaption}
-              onPress={onJump}
-              primary={!blocked}
-              disabled={!!blocked}
-              gauge={jumpFuel}
-              tone={BUTTON_TONE.engines}
-              charging={blocked === 'charging'}
-              width={buttonWidth - FIRE_WIDTH - TAB_GAP}
-              height={JUMP_HEIGHT}
-            />
+            <View style={styles.actionRow}>
+              <FireButton
+                blocked={fireBlock}
+                weaponName={weaponById(run?.mounted)?.name ?? null}
+                width={FIRE_WIDTH}
+                height={JUMP_HEIGHT}
+                onPress={onFire}
+              />
+              <MenuButton
+                label={jumpLabel}
+                caption={jumpCaption}
+                onPress={onJump}
+                primary={!blocked}
+                disabled={!!blocked}
+                gauge={jumpFuel}
+                tone={BUTTON_TONE.engines}
+                charging={blocked === 'charging'}
+                width={buttonWidth - FIRE_WIDTH - TAB_GAP}
+                height={JUMP_HEIGHT}
+              />
+            </View>
           </View>
         </View>
       </View>
@@ -650,6 +694,14 @@ export default function RunScreen() {
           onDone={() => onShotDone(shot.id)}
         />
       ))}
+
+      {over ? (
+        <GameOver
+          width={Math.min(300, width - 48)}
+          onNewRun={() => void endRun('new')}
+          onMenu={() => void endRun('menu')}
+        />
+      ) : null}
 
       {blasts.map((blast) => (
         <Explosion key={blast.id} at={blast.at} size={blast.size} animate={!settings.reduceMotion} />
@@ -713,6 +765,8 @@ const styles = StyleSheet.create({
   leaveRow: { position: 'absolute', left: 20, zIndex: 5 },
   foeRow: { position: 'absolute', left: 24, zIndex: 5 },
   actionRow: { flexDirection: 'row', gap: TAB_GAP },
+  hud: { alignItems: 'center', gap: STACK_GAP },
+  hudDead: { opacity: 0.3 },
   /** A destroyed ship: still holding its place, no longer drawn. */
   gone: { opacity: 0 },
   devRow: { position: 'absolute', right: 20, zIndex: 5 },

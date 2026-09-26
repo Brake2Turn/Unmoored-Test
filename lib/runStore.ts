@@ -123,6 +123,12 @@ export type RunState = {
    * (see `foeFires`). Emptied on every jump.
    */
   foeCharge: number;
+  /**
+   * Stars where the pilot opened fire on a ship that was not hostile. That
+   * ship is hostile from then on — it fights back and pins the drive, the
+   * same as a red one — and once damaged it is drawn red. By node index.
+   */
+  provoked: number[];
 };
 
 /**
@@ -227,7 +233,15 @@ export function fireBlocker(run: RunState): FireBlock {
  */
 export function fireWeapon(run: RunState): RunState {
   if (fireBlocker(run)) return run;
-  return { ...run, weaponCharge: 0 };
+  // Firing on a ship that was minding its own business starts a fight.
+  const here = shipHere(run);
+  const provokes =
+    here !== 'empty' && !ENCOUNTER_STYLE[here].hostile && !run.provoked.includes(run.position);
+  return {
+    ...run,
+    weaponCharge: 0,
+    provoked: provokes ? [...run.provoked, run.position] : run.provoked,
+  };
 }
 
 /** Plates on the ship waiting at a star when it is undamaged; 0 for none. */
@@ -277,7 +291,9 @@ export function shipHere(run: RunState): Encounter {
  * you down" cannot come apart.
  */
 export function foeArmed(run: RunState): boolean {
-  return ENCOUNTER_STYLE[shipHere(run)].hostile;
+  const here = shipHere(run);
+  if (here === 'empty') return false;
+  return ENCOUNTER_STYLE[here].hostile || foeProvoked(run);
 }
 
 /**
@@ -298,6 +314,36 @@ export const FOE_JITTER_UNITS = 6;
  * random point just below empty. The run comes back unchanged when there is
  * nothing to fire, so the caller knows not to draw a shot.
  */
+/** The two modes a run can be in. */
+export type Mode = 'explorer' | 'combat';
+
+/**
+ * Explorer mode is the normal one. Combat is on while a live hostile ship is
+ * here — a red one, or one the pilot has fired on — and only once the talking
+ * is over: nobody fights mid-conversation.
+ *
+ * Derived, not stored, so it cannot disagree with the ship on screen. Other
+ * ways into combat (events) will be more clauses here.
+ */
+export function modeOf(run: RunState): Mode {
+  return foeArmed(run) && !pendingMeeting(run) ? 'combat' : 'explorer';
+}
+
+/** The ship here was not hostile until the pilot fired on it. */
+export function foeProvoked(run: RunState, node: number = run.position): boolean {
+  return run.provoked.includes(node);
+}
+
+/**
+ * The ship here is drawn red: a hostile kind, or a friendly one the pilot has
+ * both fired on and actually damaged.
+ */
+export function foeLooksHostile(run: RunState): boolean {
+  const here = shipHere(run);
+  if (here === 'empty') return false;
+  return ENCOUNTER_STYLE[here].hostile || (foeProvoked(run) && (run.foeDamage[String(run.position)] ?? 0) > 0);
+}
+
 export function foeFires(run: RunState): RunState {
   if (!foeArmed(run) || isWrecked(run.hull) || pendingMeeting(run) || run.foeCharge < WEAPON_UNITS) {
     return run;
@@ -332,23 +378,21 @@ export function chargeFractions(run: RunState): { jump: number; weapon: number }
  * same run when nothing has anything left to do, so a caller can stop ticking.
  */
 export function tickRun(run: RunState, seconds: number): RunState {
-  // Nothing builds on a wreck.
-  if (isWrecked(run.hull)) return run;
+  // Nothing builds on a wreck, and nothing on either ship — drive, weapons,
+  // shields — charges until the conversation at this star is over.
+  if (isWrecked(run.hull) || pendingMeeting(run)) return run;
 
-  // A red ship charges its weapon while it is alive and the talking is over:
-  // nobody opens fire in the middle of a conversation.
-  const foeCharge =
-    foeArmed(run) && !pendingMeeting(run)
-      ? Math.min(WEAPON_UNITS, run.foeCharge + seconds * chargeRate(FOE_WEAPON_BARS))
-      : run.foeCharge;
+  const foeCharge = foeArmed(run)
+    ? Math.min(WEAPON_UNITS, run.foeCharge + seconds * chargeRate(FOE_WEAPON_BARS))
+    : run.foeCharge;
   const jumpCharge = Math.min(
     jumpUnitsFor(run),
     run.jumpCharge + seconds * chargeRate(run.energy.engines),
   );
-  const weaponCharge = Math.min(
-    WEAPON_UNITS,
-    run.weaponCharge + seconds * chargeRate(run.energy.weapons),
-  );
+  // A weapon only charges while there is one on the hardpoint.
+  const weaponCharge = run.mounted
+    ? Math.min(WEAPON_UNITS, run.weaponCharge + seconds * chargeRate(run.energy.weapons))
+    : 0;
   const shieldCharge = regenShield(run.shieldCharge, run.energy.shields, seconds);
 
   if (
@@ -410,6 +454,7 @@ function createRun(shipId: string): RunState {
     hold: Array.from({ length: cargoSlots(ship.cargo) }, () => null),
     foeDamage: {},
     foeCharge: 0,
+    provoked: [],
   };
 }
 
@@ -564,7 +609,15 @@ export function moveGear(run: RunState, from: Place, to: Place): RunState {
   const current = { mounted: run.mounted, hold: run.hold };
   const next = moveItem(current, from, to);
   if (next === current) return run;
-  return { ...run, mounted: next.mounted, hold: next.hold };
+  // Taking the weapon off the hardpoint loses its charge, and whatever goes
+  // on in its place starts charging from nothing.
+  const swapped = next.mounted !== run.mounted;
+  return {
+    ...run,
+    mounted: next.mounted,
+    hold: next.hold,
+    weaponCharge: swapped ? 0 : run.weaponCharge,
+  };
 }
 
 /**
@@ -642,6 +695,9 @@ function hydrate(stored: StoredRun): RunState {
     // A save from before weapons fired has hit nothing.
     foeDamage: cleanDamage(stored.foeDamage),
     foeCharge: clampNumber(stored.foeCharge, -FOE_JITTER_UNITS, WEAPON_UNITS, 0),
+    provoked: Array.isArray(stored.provoked)
+      ? [...new Set(stored.provoked.filter((index) => typeof index === 'number'))]
+      : [],
   };
 }
 

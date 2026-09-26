@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Unmoored is a space roguelike for iOS, built with Expo (React Native) and TypeScript.
 It is pre-release: combat is a first placeholder (one bolt each way, see
-"Firing"), and there is no run-end state and no unlock trigger yet.
+"Firing"), the only run end is Game Over, and there is no unlock trigger yet.
 
 The author develops on **Windows and has no Mac**, which is why the project is Expo
 rather than native Swift — Expo builds the iOS binary on hosted machines
@@ -622,9 +622,8 @@ With no ship at the star the bolt flies off the top of the screen.
 
 **The other ship's hull is stored as damage**, `run.foeDamage[node]`, and
 the hull left is derived: `ENCOUNTER_STYLE[kind].hull` minus it (Shrike 6,
-merchant 4, Elder Shrike 12 — placeholders). Nothing happens at zero yet: the
-ship stays and further bolts land without effect. Any ship present can be
-shot, merchants included.
+merchant 4, Elder Shrike 12 — placeholders). At zero it is destroyed (below).
+Any ship present can be shot, merchants included — which provokes them.
 
 **Their name sits top left, under LEAVE** (`components/FoeStatus.tsx`), with
 their hull as a white line beneath it — the same white line as the player's
@@ -640,6 +639,12 @@ of weapons (`FOE_WEAPON_BARS`), about nine seconds to full; `foeFires` then
 resets it to a random point up to `FOE_JITTER_UNITS` *below* empty, so shots
 come every nine to fourteen seconds rather than on a beat. It does not charge
 or fire while the star's dialogue is still open, and `applyJump` empties it.
+A ship does not have to be red to fight. **Firing on a yellow one provokes
+it** (`fireWeapon` adds the star to `run.provoked`): from then on `foeArmed`
+counts it hostile, so it shoots back and pins the drive like a red one, and
+once it has taken damage `foeLooksHostile` draws it red — its own silhouette,
+red colours, and a Weapon 1 on its bow (`MERCHANT_MOUNT`). `foeMuzzle(kind)`
+gives each silhouette's muzzle.
 The helm watches for the charge filling and shoots; the bolt goes through
 `takeHit` on arrival, so shields soak it first, and it aims at the bubble's
 rim while there is a shield and at the hull when there is not.
@@ -649,9 +654,8 @@ from the damage; `shipHere(run)` reads `empty` for a destroyed ship, and
 `foeArmed` / `jumpUnitsFor` go through it, so a destroyed ship stops shooting
 and stops pinning the drive — a hostile star turns ordinary, charge already
 built included. The player at zero hull is `isWrecked`: `jumpBlocker` and
-`fireBlocker` both return `'wrecked'` first, `tickRun` stops, and JUMP reads
-DESTROYED. There is still no run end — the wreck stays in the save and LEAVE
-is the way out.
+`fireBlocker` both return `'wrecked'` first, `tickRun` stops, and Game Over
+comes up (below).
 
 **Destroyed ships keep their place in the layout** and are only made
 invisible (`styles.gone`), and the layout is sized from `encounterAt` rather
@@ -663,9 +667,33 @@ last render in a ref, not on the hull being zero — so loading a save with a
 wreck in it does not blow it up again, and every route to zero (either
 ship's bolts, the dev hit) is caught by one check.
 
+**Two modes, explorer and combat** (`modeOf(run)`, shown top right by
+`components/ModeBadge.tsx`, with the dev hit moved down a line under it).
+Derived, never stored: combat while a live hostile ship is here and the
+star's dialogue is over, explorer otherwise. Future events that start combat
+are more clauses in `modeOf`.
+
+**Nothing charges while a conversation is open** — not the drive, the
+weapon, the shields, nor the other ship's gun: `tickRun` returns the run
+unchanged while `pendingMeeting(run)` is set. **The weapon charges only while
+one is mounted**, and `moveGear` zeroes `weaponCharge` whenever what is on the
+hardpoint changes, so stowing a weapon loses its charge and mounting one
+starts from nothing.
+
+**Game Over** (`components/GameOver.tsx`) comes up `EXPLOSION_MS` after the
+player's hull reaches zero (at once when a save is opened already wrecked).
+The HUD behind it — hull, tabs, FIRE and JUMP — drops to 30% opacity and
+stops taking touches. NEW RUN goes to ship select, MAIN MENU back to the
+start screen, and both `clearRun()` first. **Let go of the run before
+clearing it** (`runRef.current = null`): the helm writes its run back to
+storage as it closes, and would otherwise save the wreck again straight after
+it was cleared. A probe that taps NEW RUN by label must take the *last*
+match — the start screen's NEW RUN is still mounted underneath, and tapping
+it silently tests the wrong button.
+
 **JUMP is the engines' orange** the way FIRE is the weapons' red: dark while
 the drive charges, bright when it is ready, grey when it cannot (no fuel, cold
-engines, destroyed). Both come from `BUTTON_TONE` in `lib/subsystems.ts`;
+engines, destroyed — the label stays JUMP and Game Over says the rest). Both come from `BUTTON_TONE` in `lib/subsystems.ts`;
 `MenuButton` takes a `tone` and a `charging` flag, and uses the tone for its
 fill, its press bloom and the fuel gauge. The star select's JUMP uses it too.
 
