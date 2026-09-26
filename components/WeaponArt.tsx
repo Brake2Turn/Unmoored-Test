@@ -115,7 +115,7 @@ export function WeaponIcon({
   color: string;
 }) {
   // Keeps the line about a pixel and a quarter wide at any size, so the icon
-  // neither vanishes in a tab nor turns heavy in the panel.
+  // neither vanishes in a small slot nor turns heavy on the hardpoint.
   const strokeWidth = Math.max(2, (ICON_BOX / size) * 1.25);
   return (
     <Svg width={size} height={size} viewBox={ICON_VIEW}>

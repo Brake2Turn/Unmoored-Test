@@ -110,11 +110,16 @@ export default function SectorScreen() {
   const onConfirmJump = useCallback(async () => {
     if (target === null || !run || jumping) return;
 
+    // Jump from the run as it is now, not as this screen found it: a bolt
+    // fired just before JUMP was pressed lands a moment later, and the hit it
+    // saved would otherwise be written over by this screen's older copy.
+    const latest = (await loadRun()) ?? run;
+
     // `applyJump` refuses a jump the run cannot make and hands back the same
     // object, so an unchanged run means nothing happened — do not spend the
     // press or navigate away on it.
-    const jumped = applyJump(run, target);
-    if (jumped === run) return;
+    const jumped = applyJump(latest, target);
+    if (jumped === latest) return;
 
     setJumping(true);
     haptics.confirm();

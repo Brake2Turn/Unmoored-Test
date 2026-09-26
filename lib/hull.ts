@@ -19,7 +19,7 @@ export function damagedHull(hull: number): number {
   return Math.max(0, Math.floor(hull) - 1);
 }
 
-/** A ship with no plating left. Nothing reads this yet — there is no run end. */
+/** A ship with no plating left: destroyed, and the run is over. */
 export function isWrecked(hull: number): boolean {
   return !(hull > 0);
 }

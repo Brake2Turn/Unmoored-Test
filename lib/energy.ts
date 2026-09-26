@@ -6,9 +6,9 @@
  * shields is a bar not in weapons. That tension is the whole point of the
  * panel on the helm.
  *
- * **Nothing reads these levels yet.** There is no combat to spend them on.
- * The allocation is real, it is part of the run and it survives a reload —
- * what it *does* arrives with the systems that need it.
+ * What the bars do: shields set how many layers the shield can reach, and
+ * weapons and engines set how fast the gun and the drive charge (see
+ * `chargeRate`). The allocation is part of the run and survives a reload.
  *
  * This file imports nothing, for the same reason `sectorMap.ts` imports
  * nothing: it is pure rules, so `scripts/verify-energy.ts` can run them under
@@ -72,7 +72,10 @@ export function chargeSeconds(bars: number, units: number): number {
 export const JUMP_UNITS = 14;
 export const HOSTILE_JUMP_UNITS = 40;
 
-/** What the weapons have to build. Nothing reads it yet — there is no combat. */
+/**
+ * What a weapon has to build before it can fire — the player's, and a hostile
+ * ship's alike. One shot spends all of it.
+ */
 export const WEAPON_UNITS = 12;
 
 /**

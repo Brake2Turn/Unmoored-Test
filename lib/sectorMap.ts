@@ -6,6 +6,8 @@
  * renderer scales this box to fit whatever space it has.
  */
 
+import { MEETINGS, meetingById, type Meeting } from './dialogue.ts';
+
 export const MAP_W = 100;
 export const MAP_H = 160;
 export const NODE_COUNT = 20;
@@ -26,8 +28,6 @@ export const FUEL_PER_RUN = Math.round(NODE_COUNT * FUEL_COVERAGE);
 
 /** Nodes per band, bottom (the start) to top. Sums to NODE_COUNT. */
 const BANDS = [1, 3, 4, 4, 4, 3, 1] as const;
-
-import { MEETINGS, meetingById, type Meeting } from './dialogue.ts';
 
 const EDGE_PADDING = 11;
 const TOP_MARGIN = 14;
@@ -63,8 +63,9 @@ export type SectorMap = {
   /** Index of the node the ship starts on — always the lone bottom star. */
   start: number;
   /**
-   * Index of the star holding the boss, drawn red. Always in the top band, so
-   * reaching it is the end of the sector. Nothing happens there yet.
+   * Index of the star holding the boss — the Elder Shrike — drawn red from
+   * the start. Always in the top band, so reaching it is the end of the
+   * sector.
    */
   boss: number;
 };
@@ -167,9 +168,10 @@ export function generateMap(): SectorMap {
  * Fills every star with what is waiting there.
  *
  * The start is left empty — you begin docked, nothing has happened yet — and
- * the boss star takes the larger enemy. That leaves 18 of the 20 stars, which
- * divides into three exact sixes: six Shrikes, six merchants, six empty.
- * Shuffling the whole pool means a run's threats land differently every time.
+ * the boss star holds the Elder Shrike, which is no meeting at all. Of the 18
+ * stars left, a third are empty and the rest are dealt from `MEETINGS` (see
+ * `dealMeetings`). Shuffling the whole pool means a run's encounters land
+ * differently every time.
  */
 export function assignMeetings(map: SectorMap): void {
   // Resolved rather than read straight off the map, so a map saved before the
@@ -226,7 +228,6 @@ function dealMeetings(count: number): number[] {
   return out;
 }
 
-/** True once every star knows what is waiting on it. */
 /**
  * Brings a map up to date, whatever shape it was saved in.
  *
@@ -266,6 +267,7 @@ function carryLegacyEncounters(map: SectorMap): boolean {
   return true;
 }
 
+/** True once every star knows what is waiting on it. */
 export function hasMeetings(map: SectorMap): boolean {
   return map.nodes.every((node) => node.meeting !== undefined);
 }

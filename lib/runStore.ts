@@ -68,8 +68,8 @@ export type RunState = {
    */
   jumpCharge: number;
   /**
-   * Units of weapon charge built since arriving. Nothing reads it yet; the
-   * slider under the weapons row is the whole of it so far.
+   * Units of weapon charge built since arriving. The weapon can fire once
+   * this reaches `WEAPON_UNITS`, and firing spends all of it.
    */
   weaponCharge: number;
   /**
@@ -161,8 +161,9 @@ export type JumpBlock = 'wrecked' | 'fuel' | 'engines' | 'charging' | null;
  *
  * Both the helm and the sector map ask this rather than each deciding for
  * itself, so the button that offers the jump and the button that performs it
- * can never disagree. Fuel is reported first: an empty tank is the harder
- * stop, since the engines can be powered again in a moment and fuel cannot.
+ * can never disagree. A destroyed ship is reported before anything else, then
+ * fuel: an empty tank is the harder stop, since the engines can be powered
+ * again in a moment and fuel cannot.
  */
 export function jumpBlocker(run: RunState): JumpBlock {
   // A ship with no hull left goes nowhere, whatever is in the tank.
@@ -286,10 +287,15 @@ export function shipHere(run: RunState): Encounter {
   return foeDestroyed(run) ? 'empty' : encounterAt(run.map, run.position);
 }
 
+/** The ship here was not hostile until the pilot fired on it. */
+export function foeProvoked(run: RunState, node: number = run.position): boolean {
+  return run.provoked.includes(node);
+}
+
 /**
- * A live red ship is here — the kind that shoots back. Hostile is the same
- * flag that makes a star hold the drive longer, so "red", "shoots" and "pins
- * you down" cannot come apart.
+ * A live hostile ship is here — the kind that shoots back: a red one, or one
+ * the pilot has provoked. Hostile is the same flag that makes a star hold the
+ * drive longer, so "red", "shoots" and "pins you down" cannot come apart.
  */
 export function foeArmed(run: RunState): boolean {
   const here = shipHere(run);
@@ -298,23 +304,51 @@ export function foeArmed(run: RunState): boolean {
 }
 
 /**
- * How fast a red ship's weapon charges, as if it had this many bars in its
- * weapons row: two, which fills `WEAPON_UNITS` in about nine seconds.
+ * The ship here is drawn red: a hostile kind, or a friendly one the pilot has
+ * both fired on and actually damaged.
+ */
+export function foeLooksHostile(run: RunState): boolean {
+  const here = shipHere(run);
+  if (here === 'empty') return false;
+  return ENCOUNTER_STYLE[here].hostile || (foeProvoked(run) && (run.foeDamage[String(run.position)] ?? 0) > 0);
+}
+
+/**
+ * What the other party at this star is called: the name they speak under, or
+ * for a ship that says nothing (the boss) the kind of ship it is.
+ */
+export function foeName(run: RunState): string | null {
+  const here = encounterAt(run.map, run.position);
+  if (here === 'empty') return null;
+  const meeting = meetingAt(run.map, run.position);
+  return (meeting && nameOf(meeting)) ?? ENCOUNTER_STYLE[here].label;
+}
+
+/**
+ * How fast a hostile ship's weapon charges, as if it had this many bars in
+ * its weapons row: two, which fills `WEAPON_UNITS` in about nine seconds.
  */
 export const FOE_WEAPON_BARS = 2;
 
 /**
- * After each shot a red ship starts up to this many units *below* empty, so
- * its shots come every nine to fourteen seconds rather than on a steady beat
- * the player could count along to.
+ * After each shot a hostile ship starts up to this many units *below* empty,
+ * so its shots come every nine to fourteen seconds rather than on a steady
+ * beat the player could count along to.
  */
 export const FOE_JITTER_UNITS = 6;
 
 /**
- * The red ship's weapon is charged: it fires, and starts charging again from a
- * random point just below empty. The run comes back unchanged when there is
- * nothing to fire, so the caller knows not to draw a shot.
+ * The hostile ship's weapon is charged: it fires, and starts charging again
+ * from a random point just below empty. The run comes back unchanged when
+ * there is nothing to fire, so the caller knows not to draw a shot.
  */
+export function foeFires(run: RunState): RunState {
+  if (!foeArmed(run) || isWrecked(run.hull) || pendingMeeting(run) || run.foeCharge < WEAPON_UNITS) {
+    return run;
+  }
+  return { ...run, foeCharge: -Math.random() * FOE_JITTER_UNITS };
+}
+
 /** The two modes a run can be in. */
 export type Mode = 'explorer' | 'combat';
 
@@ -330,39 +364,6 @@ export function modeOf(run: RunState): Mode {
   return foeArmed(run) && !pendingMeeting(run) ? 'combat' : 'explorer';
 }
 
-/** The ship here was not hostile until the pilot fired on it. */
-export function foeProvoked(run: RunState, node: number = run.position): boolean {
-  return run.provoked.includes(node);
-}
-
-/**
- * The ship here is drawn red: a hostile kind, or a friendly one the pilot has
- * both fired on and actually damaged.
- */
-export function foeLooksHostile(run: RunState): boolean {
-  const here = shipHere(run);
-  if (here === 'empty') return false;
-  return ENCOUNTER_STYLE[here].hostile || (foeProvoked(run) && (run.foeDamage[String(run.position)] ?? 0) > 0);
-}
-
-export function foeFires(run: RunState): RunState {
-  if (!foeArmed(run) || isWrecked(run.hull) || pendingMeeting(run) || run.foeCharge < WEAPON_UNITS) {
-    return run;
-  }
-  return { ...run, foeCharge: -Math.random() * FOE_JITTER_UNITS };
-}
-
-/**
- * What the other party at this star is called: the name they speak under, or
- * for a ship that says nothing (the boss) the kind of ship it is.
- */
-export function foeName(run: RunState): string | null {
-  const here = encounterAt(run.map, run.position);
-  if (here === 'empty') return null;
-  const meeting = meetingAt(run.map, run.position);
-  return (meeting && nameOf(meeting)) ?? ENCOUNTER_STYLE[here].label;
-}
-
 /** How far each charge has come, 0 to 1, for the sliders on the helm. */
 export function chargeFractions(run: RunState): { jump: number; weapon: number } {
   return {
@@ -373,7 +374,7 @@ export function chargeFractions(run: RunState): { jump: number; weapon: number }
 
 /**
  * Advances everything on a clock: the drive and the weapons build, the shield
- * regenerates.
+ * regenerates, and a hostile ship's gun charges toward its next shot.
  *
  * Driven by the helm, which is the only screen that sits still. Returns the
  * same run when nothing has anything left to do, so a caller can stop ticking.
@@ -585,12 +586,10 @@ export function takeHit(run: RunState): RunState {
 }
 
 /**
- * Takes a level off the shield.
- *
- * The one thing that damages a shield today is the dev control on the helm —
- * there is no combat yet. The rule lives here anyway, so that when something
- * does start shooting it calls this rather than inventing its own idea of what
- * a hit costs. Returns the run unchanged when there is nothing to knock down.
+ * Takes a level off the shield, counting it as a hit so the envelope knows to
+ * play its break. Reached through `takeHit`, which decides whether the shield
+ * or the hull pays. Returns the run unchanged when there is nothing to knock
+ * down.
  */
 export function damageShield(run: RunState): RunState {
   const shieldCharge = damagedShield(run.shieldCharge);
@@ -710,7 +709,7 @@ function hydrate(stored: StoredRun): RunState {
   const ship = shipById(stored.shipId ?? DEFAULT_SHIP_ID);
   const shipId = ship.id;
   const energy = clampEnergy(stored.energy, ship.reactor);
-  return {
+  const run: RunState = {
     id: stored.id ?? `${now}-${Math.random().toString(36).slice(2, 10)}`,
     startedAt: stored.startedAt ?? now,
     lastPlayedAt: stored.lastPlayedAt ?? now,
@@ -729,13 +728,11 @@ function hydrate(stored: StoredRun): RunState {
     // under a run in progress, so the stored allocation is forced back into
     // something this ship can actually power rather than trusted.
     energy,
-    // Saves predate both clocks. A hold longer than the rules allow is capped;
-    // a shield with no stored charge comes back at the level it is powered
-    // for, so a reload does not strip a run of its shields.
-    // The drive charge used to be stored the other way up, as `detain`: units
-    // of hold *left* at a hostile star. A save holding one is turned round
-    // into the charge already built, so a run mid-hold keeps its progress.
-    jumpCharge: legacyJumpCharge(stored, map, position),
+    // Older saves predate the charges. A shield with no stored charge comes
+    // back at the level it is powered for, so a reload does not strip a run
+    // of its shields. The drive charge is capped at what this star asks for
+    // below, once the run is whole.
+    jumpCharge: storedJumpCharge(stored, map, position),
     weaponCharge: clampNumber(stored.weaponCharge, 0, WEAPON_UNITS, 0),
     // A save from before the hull existed comes back intact rather than wrecked.
     hull: clampNumber(stored.hull, 0, HULL_MAX, HULL_MAX),
@@ -763,6 +760,12 @@ function hydrate(stored: StoredRun): RunState {
       ? [...new Set(stored.provoked.filter((index) => typeof index === 'number'))]
       : [],
   };
+  // How long this star holds the drive depends on who is here — a red ship,
+  // a yellow one the pilot provoked, or a wreck — and that is only known once
+  // the damage and the provocations above are read in. Capping earlier, by the
+  // star's colour alone, cut a charge built against a provoked ship back to an
+  // ordinary star's on every reload.
+  return { ...run, jumpCharge: Math.min(run.jumpCharge, jumpUnitsFor(run)) };
 }
 
 /** Only whole, positive hit counts survive a load. */
@@ -775,16 +778,21 @@ function cleanDamage(value: unknown): Record<string, number> {
   return clean;
 }
 
-/** Reads either shape of drive charge off a save, new or old. */
-function legacyJumpCharge(stored: StoredRun, map: SectorMap, position: number): number {
+/**
+ * The drive charge a save holds, in either of the shapes it has been written
+ * in, capped only at the longest build any star can ask for.
+ */
+function storedJumpCharge(stored: StoredRun, map: SectorMap, position: number): number {
+  if (typeof stored.jumpCharge === 'number' && Number.isFinite(stored.jumpCharge)) {
+    return clampNumber(stored.jumpCharge, 0, HOSTILE_JUMP_UNITS, 0);
+  }
+  // It used to be stored the other way up, as `detain`: units of hold *left*
+  // at a hostile star, counting down from the full hold, so what is built is
+  // the rest. Those saves predate provoking and destroying ships, so the
+  // star's own colour is the whole story there.
   const units = ENCOUNTER_STYLE[encounterAt(map, position)].hostile
     ? HOSTILE_JUMP_UNITS
     : JUMP_UNITS;
-
-  if (typeof stored.jumpCharge === 'number' && Number.isFinite(stored.jumpCharge)) {
-    return clampNumber(stored.jumpCharge, 0, units, 0);
-  }
-  // `detain` counted downward from the full hold, so what is built is the rest.
   const held = clampNumber((stored as { detain?: unknown }).detain, 0, units, 0);
   return units - held;
 }

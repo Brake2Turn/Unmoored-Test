@@ -1,270 +1,88 @@
 # Unmoored
 
-A space-themed mobile game, built with Expo (React Native). This repository
-currently contains the **start screen** and the scaffolding around it.
+A space roguelike for iPhone, built with Expo (React Native) and TypeScript.
+It is pre-release: you pick a ship, cross a sector of stars one jump at a time,
+talk to whoever is out there and fight the ones who want a fight.
+
+`CLAUDE.md` is the detailed guide — how every part works, why it is built that
+way, and the traps already paid for. This file is the short version.
 
 ![Start screen, both states](docs/start-screen-states.svg)
 
-## Getting it running on Windows
+## Playing it
 
-You need [Node.js](https://nodejs.org) (LTS) and the **Expo Go** app from the
-iPhone App Store. No Mac, no Xcode.
+The live build is published as a web page you can open in the browser:
+<https://claude.ai/artifact/DUdeLS4PCiguJTRHJw2YuZ>. It is the real game,
+compiled for the web — not a mock-up — and it is updated in place, so the same
+link always has the newest version.
+
+**Expo Go cannot open this project**, and upgrading to make it do so is not a
+small step. Expo Go only runs the newest Expo release (SDK 57); this project is
+on SDK 53, and moving up four releases would rewrite the animation library that
+drives every moving thing in the game. Do not run `npx expo install expo@latest`
+to chase it. When it is time to try the game on a phone, the route is a
+development build (`eas build`), which runs this SDK as it is. The reasoning is
+written out in `CLAUDE.md` under "Playing it on an actual phone".
+
+## Checking it builds
 
 ```powershell
 npm install
-npx expo install --fix
-npx expo start
-```
-
-A QR code appears in the terminal. Open the **Camera** app on your iPhone, point
-it at the code, and tap the banner — the game opens in Expo Go. Your phone and PC
-need to be on the same WiFi network.
-
-Edit any file and save: the screen reloads on your phone in about a second.
-
-### Checking it builds
-
-```powershell
-npm run verify       # typecheck + sector generation properties
+npm run verify       # typecheck, plus the star-map and reactor property checks
 npm run build:web    # full production bundle — catches what the typecheck cannot
 ```
 
 There is no test runner or linter; `npm run verify` is the automated safety net.
-`CLAUDE.md` carries the architecture notes and the platform traps already paid
-for, and `.claude/skills/run-unmoored/` has the verified recipe for running and
-screenshotting the app in a container.
+`.claude/skills/run-unmoored/` has the recipe for running and screenshotting the
+game in a container.
 
-### Previewing in a browser instead
+## What is in it
 
-The same code runs in a desktop browser through `react-native-web`:
+- **Start screen** — NEW RUN, CONTINUE RUN (with the run's sector and fuel), and
+  SETTINGS, over a planet, nebulae and a field of stars.
+- **Ship select** — three ships in a swipeable carousel: the **Drifter** and the
+  **Lance** from the start, and the **Bulwark**, which is locked (Settings →
+  Dev Mode → Unlock All Ships opens it). Each launches with its own weapon, and
+  differs in cargo space and reactor size.
+- **Space screen** — your ship on its side, and whatever is waiting at this star
+  facing it. Below: the hull, the reactor panel (move bars of energy between
+  shields, weapons and engines with − and +), then FIRE, SHIP (the weapon,
+  cargo and crew) and JUMP, with the fuel left on it.
+- **Star select** — twenty stars on a chart. Stars in range are bright; the boss
+  is the red one at the top, always six jumps away. A tank holds ten jumps.
+- **Settings** — sound sliders (there is no sound in the game yet), haptics,
+  Reduce Motion, Dev Mode and Reset Progress.
 
-```powershell
-npx expo start --web
-```
-
-That opens `http://localhost:8081` with the real app in it — handy for quick
-layout work without reaching for your phone. Two caveats: haptics are silently
-ignored (browsers have no Taptic Engine), and the volume sliders are the one
-control whose web rendering differs from the phone. Check anything touch-related
-in Expo Go before trusting it.
-
-Note that `query-string` is an explicit dependency. `expo-router` requires it at
-runtime but does not declare it, and `@react-navigation/native` v7 no longer
-pulls it in — without it the web bundle fails to resolve. Dependency versions
-are pinned to what `expo/bundledNativeModules.json` specifies for the installed
-SDK; `npx expo install --fix` keeps them there.
-
-### If Expo Go says the SDK version doesn't match
-
-Expo Go only runs the current SDK. Upgrade the project to match:
-
-```powershell
-npx expo install expo@latest --fix
-```
-
-That one command realigns every dependency, and is also the fix for any
-"incompatible version" warning during install.
-
-## What the start screen does
-
-Three menu entries:
-
-| Entry | Behaviour |
-| --- | --- |
-| **New Run** | Opens ship select. The run is only created once a ship launches, so backing out leaves an existing save untouched. |
-| **Continue Run** | Enabled only when a save exists. Its caption shows that run's progress (`SECTOR 3 · 12:40 · HULL 84%`); with no save it reads `NO RUN IN PROGRESS` and is greyed out and untappable. |
-| **Settings** | Slides up the settings sheet. |
-
-Supporting details:
-
-- **Parallax starfield** — three depth bands scrolling at different speeds, looping
-  seamlessly, with a subset of stars twinkling out of phase. Animation runs on the
-  UI thread via Reanimated, so it stays smooth.
-- **Backdrop** — gradient sky, two nebula blooms, and a lit planet rising from the
-  lower edge with an atmospheric rim.
-- **Entrance animation** — the title fades in and the menu entries rise in sequence.
-- **Touch feel** — press states with scale and bloom, drag-off cancels, and a light
-  haptic on tap with a firmer one on activation.
-- **Layout** — derived from the real screen size and safe-area insets, so it adapts
-  across devices rather than assuming one screen.
-- **Reduce Motion** — a settings toggle that stills the drift and the entrance.
-
-## Ship select
-
-Pressing New Run opens a horizontal carousel. The centred ship sits at full size
-and full opacity; its neighbours shrink and dim, staying visible at the screen
-edges so the swipe invites itself. Snapping is per-card, and settling on a new
-ship fires a light haptic.
-
-Ships live in `lib/ships.ts` as plain data — name, class, tagline, an accent
-colour that tints the card and stat bars, and three 0–1 stats. The drawing for
-each lives in `components/ships/ShipArt.tsx`, keyed by id. Adding a ship means
-one entry in each file; nothing else needs touching.
-
-Six ships ship today: **Drifter** and **Lance** are available from the first
-launch, and **Bulwark**, **Halo**, **Mantis** and **Vesper** start locked.
-
-### Locking
-
-A ship is locked simply by having an `unlockHint` in `lib/ships.ts`. Locked
-ships still appear in the carousel — seeing what is coming is half the reason
-to keep playing — but they draw in cold grey, carry a padlock, show their
-unlock condition in place of the tagline, and the launch button reads LOCKED
-and does nothing.
-
-Earned ships persist through `lib/unlocks.ts`, which stores the unlocked ids
-in AsyncStorage and always keeps the two starters. **Nothing awards a ship
-yet**, because no run can end — the unlock conditions are written but not
-wired. Once gameplay exists, granting one is a single `unlockShip(id)` call
-and the carousel already reacts. Reset Progress clears earned ships along
-with the run.
-
-## The run state
-
-`lib/runStore.ts` owns the run. `loadRun()` is the only way to get one: it
-reads once, migrates whatever shape it finds, writes the result back, and
-caches it — so every screen sees the same run and older saves are migrated
-exactly once rather than differently per screen. `RunState` therefore has no
-optional gameplay fields, and screens read `run.fuel` without defending
-against absence.
-
-The rules live there too. `applyJump()` spends the fuel and records the hop, so
-what a jump costs is defined in one place rather than in a button handler.
-Anything derivable is derived: the sector number is `sectorOf(run)`, never
-stored, so it cannot drift from the jump count.
+What is at a star is only learned by arriving. Every encounter speaks first —
+the lines are in `lib/dialogue.ts`, the table to edit. Red ships fight: they
+shoot back and hold your drive for longer. Yellow ones trade or talk, unless you
+fire on them. The weapon and the jump drive charge over time, faster with more
+energy in their row; the energy in the shields sets how many layers they can
+build up to. Shields soak hits until they are down; then the hull loses
+plates, and at zero it is Game Over.
 
 ## Project layout
 
 ```
-app/                     Screens (expo-router: one file = one route)
-  _layout.tsx            Navigation stack, providers, status bar
-  index.tsx              The start screen
-  select-ship.tsx        Swipeable ship carousel
-  run.tsx                The helm — ship, empty space, one button
-  sector.tsx             The twenty-star jump map
-  settings.tsx           Settings sheet
-components/
-  FuelBadge.tsx          Ⓕ badge and count, shared by the helm and the map
-  ships/EncounterShip.tsx   Shrike and merchant, drawn at helm size
-  ships/ShipArt.tsx      Vector art for each ship
-  StarField.tsx          Looping parallax star layers
-  Backdrop.tsx           Sky gradient, nebulae, planet
-  MenuButton.tsx         Menu entry with pressed and disabled states
-  TitleBlock.tsx         Wordmark, rule and tagline
-lib/
-  encounters.ts          How each kind of star presents itself
-  sectorMap.ts           Jump-map generation and range maths
-  ships.ts               Ship roster, stats, accents and unlock hints
-  unlocks.ts             Which ships the player has earned
-  theme.ts               Palette, type scale, layout constants
-  runStore.ts            Saves and loads the current run
-  settings.tsx           Player preferences + haptics helper
-assets/
-  icon.png               App icon (1024×1024)
+app/                   The screens — one file each
+  index.tsx            Start screen
+  select-ship.tsx      Ship select
+  run.tsx              Space screen (the code calls it the helm)
+  sector.tsx           Star select (the code calls it the sector map)
+  settings.tsx         Settings
+  encounters.tsx       Dev Mode's encounter tester
+components/            Everything drawn: panels, buttons, effects
+  ships/               The ships, their shields and exhaust
+lib/                   The rules, with no drawing in them
+  runStore.ts          The run: saving, loading and every rule that changes it
+  sectorMap.ts         How each sector's stars are laid out
+  dialogue.ts          Every encounter and what is said
+  energy.ts            Reactor bars and how fast things charge
+  ships.ts, weapons.ts The roster and what each ship carries
+  portraits.ts         Generated from assets/portraits/ — do not edit by hand
+scripts/               Property checks, the publishing step, portrait tools
+assets/portraits/      The character portraits
 ```
-
-There are no image assets beyond the icon — every gradient and glow is drawn with
-SVG or native views, so the art scales to any screen.
-
-## The run
-
-**The helm** (`app/run.tsx`) is the ship adrift in open space. The only control
-is JUMP, and the space above the ship is where whatever is waiting at this star
-appears. A quiet
-LEAVE sits at the top so a player is never stuck with no way back to the title.
-
-**The sector map** (`app/sector.tsx`) is twenty stars scattered across the
-sector. The ship starts on the lone star at the bottom, and the star in the top
-band is the **boss**, drawn red and ringed. Stars within jump range
-are drawn bright and joined to the ship by dashed routes; everything beyond range
-is dim. Tapping a star in range selects it, and JUMP commits the move and returns
-to the helm one sector further along. Visited stars keep a ring.
-
-### How maps are generated
-
-`lib/sectorMap.ts` rolls a fresh map for every run. Coordinates live in a fixed
-100×160 box rather than screen pixels, so a jump that is in range on one phone is
-in range on every phone; the renderer scales that box to fit.
-
-Nodes are laid out in seven bands from bottom to top (1, 3, 4, 4, 4, 3, 1 = 20),
-each band spreading its nodes across evenly sized slots with jitter — scattered
-without ever clumping into a corner. Any node that lands out of reach of every
-node in the band below is then nudged sideways until it is reachable. That
-guarantees a route from the start to the top **by construction**, rather than
-rolling maps until one happens to work.
-
-The jump range of 34 was picked by measurement, not taste: across 5,000 generated
-maps it leaves no node unreachable, always gives the start at least 3 options, and
-averages 4.9 choices per node. A range of 30 strands nodes on 1.4% of maps; 46
-inflates the average to 7.9 choices and makes the decision mushy.
-
-These promises are asserted rather than assumed:
-
-```powershell
-npm run verify:map
-```
-
-`scripts/verify-map.ts` rolls thousands of maps and checks every star is
-reachable, the boss sits in the top band and is never the start, the encounter
-split is exactly six/six/six, and the boss is always within one tank.
-
-### What is on each star
-
-Every star carries an encounter, rolled once with the map. There is exactly one
-enemy type — the **Shrike** — and the boss star holds an **Elder Shrike**, the
-same hull drawn larger.
-
-The start is left empty (you begin docked, nothing has happened) and the boss
-star is spoken for, which leaves **18 stars that divide into three exact
-sixes**: six Shrikes, six merchants, six empty. The pool is shuffled, so threats
-land differently every run. Verified over 5,000 maps — the split is exact every
-time and the per-star enemy rate sits between 0.326 and 0.345 against an
-expected 0.333.
-
-**The map does not show any of this.** Every star is a plain dot; the only thing
-visible ahead of time is the boss, red from the moment you can see it. What is
-actually at a star is learned by jumping there: the ship waiting for you appears
-in the open space above your own at the helm, nose down, facing you. Red is a
-Shrike, gold is a merchant, and an empty star stays empty.
-
-**None of them do anything yet.** They are there to be seen.
-
-### The boss star
-
-One star in the top band is marked as the boss and drawn red at every distance —
-it should be findable without looking for it. `bossIndex()` resolves it, falling
-back to the furthest band for maps saved before bosses existed. Over 5,000
-generated maps the boss is always in the top band, never the starting star, and
-always reachable.
-
-**The boss fight itself does not exist yet.** Jumping to that star currently just
-moves the ship there like any other.
-
-### Fuel
-
-A full tank is **10 jumps** — `Math.round(NODE_COUNT * FUEL_COVERAGE)` with
-coverage at 0.5. One jump costs one fuel wherever it goes, so a tank with no
-backtracking reaches half the sector.
-
-The readout is an **F badge and a count** — `Ⓕ 13` — above JUMP on the helm and
-smaller in the map header. It turns red below a quarter of a tank. At zero,
-nothing on the map is selectable, the range ring fades out and both buttons read
-OUT OF FUEL.
-
-**Every jump costs one fuel, including a hop back to a star already visited.**
-`visited` holds distinct stars only, for drawing the rings; `jumps` counts hops
-and is what the sector number follows. Bouncing between two stars therefore
-drains a tank in 10 jumps while `visited` stays at 2 — verified by driving the
-preview through exactly that.
-
-Measured over 5,000 maps: the boss is **always exactly 6 jumps** from the start,
-because the band spacing (22.7) is more than half the jump range (34), so a jump
-can never skip a band. A tank therefore covers a fixed 6-jump critical path plus
-**4 spare jumps** to spend on detours — that spare budget is the whole decision.
-No map is unwinnable for want of fuel.
-
-**Running dry does not end the run yet.** The ship is simply stuck, and LEAVE is
-the way out. A proper stranded/game-over state is the next thing this needs.
 
 ## Publishing to the App Store
 

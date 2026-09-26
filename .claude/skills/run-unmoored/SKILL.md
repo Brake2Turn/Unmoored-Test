@@ -19,7 +19,7 @@ catches resolution errors `tsc` cannot:
 
 ```bash
 npm install                       # once per container
-npm run verify                    # typecheck + map properties, cheap
+npm run verify                    # typecheck + map and energy properties, cheap
 rm -rf dist && npm run build:web  # writes dist/
 ```
 
@@ -44,8 +44,10 @@ BIN=/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell
 
 ### Clicking through screens
 
-React Native Web renders `Text` as divs, so drive it by visible label. Append
-this to `dist/index.html`, run, then restore the file:
+React Native Web renders `Text` as divs, so drive it by visible label — or,
+better, by `aria-label`: every control on the space screen carries one that
+states its numbers (see `CLAUDE.md`). Append this to `dist/index.html`, run,
+then restore the file:
 
 ```js
 window.__click = function (text) {
@@ -88,8 +90,12 @@ loading screen:
   **before** rewriting, then inject the script. Getting this order wrong 404s the
   bundle and the page sits on LOADING forever.
 
-The working page lives in the scratchpad as `unmoored-app.html`; publish it with
-`root: "dist"` and a `files` map for `bundle/entry.js` and `favicon.ico`.
+The working page is `scripts/artifact-page.html`. After `build:web`, run
+`node scripts/pack-artifact.mjs`: it moves the bundle to `bundle/entry.js`,
+makes Metro's absolute `/assets/...` URLs relative, and prints the `files`
+map. Publish the page with `root: "dist"` and that map to the **one** live
+artifact whose URL is in `CLAUDE.md` — never a new one — and do the checks
+listed there before and after (fetch `main` first; read the bundle back).
 
 **Reproduce path bugs faithfully.** Serving from the server root hides them,
 because the wrong URL resolves too. Serve from a nested directory with nothing

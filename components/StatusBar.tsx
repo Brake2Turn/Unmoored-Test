@@ -14,7 +14,8 @@ type Props = {
 export const STATUS_BAR_HEIGHT = 20;
 
 /**
- * The ship's condition: one white line, the full width of the helm's chrome.
+ * The ship's condition: one line, the full width of the helm's chrome, white
+ * while the hull holds and yellow then red as it empties (`hullColor`).
  *
  * Fuel used to sit at the end of it and has moved into the jump button, which
  * is the only place it is ever consulted — leaving this line to be a line,

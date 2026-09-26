@@ -4,12 +4,12 @@ import Svg, { Circle, Line, Path } from 'react-native-svg';
 import type { Subsystem } from '@/lib/energy';
 
 /**
- * The marks that stand in for the subsystem names.
+ * The marks beside each subsystem's name in the reactor panel.
  *
- * Shared by both states of the reactor panel, which is the point: the compact
- * panel has no room for words, so the icons have to carry the meaning on their
- * own, and they can only do that if they are the same marks the player learned
- * from the expanded controls.
+ * The rows were wordless for a while, with these marks carrying the meaning
+ * alone; the names came back, but the marks stay as the quickest way to tell
+ * the rows apart at a glance. The weapons mark also heads the ship panel's
+ * hardpoint section, so it means the same thing wherever it appears.
  */
 export function SubsystemGlyph({
   subsystem,

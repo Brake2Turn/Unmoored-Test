@@ -18,8 +18,8 @@ type Props = {
   disabled?: boolean;
   width: number;
   /**
-   * Overrides the menu height. The helm's JUMP is a compact control beside
-   * the reactor tab rather than a full menu row, so it asks for less.
+   * Overrides the menu height. The helm's JUMP is a compact control under the
+   * reactor panel rather than a full menu row, so it asks for less.
    */
   height?: number;
   /**
@@ -55,8 +55,9 @@ const GAUGE_W = 56;
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 /**
- * A start-screen menu entry: a translucent capsule with a tracked label, an
- * optional caption, a pressed state and a disabled state.
+ * A menu entry — the start screen's, and every big button since: a
+ * translucent capsule with a tracked label, an optional caption, a pressed
+ * state and a disabled state.
  *
  * `Pressable` handles drag-off cancelling for us — sliding a thumb off the
  * button fires `onPressOut` without `onPress`, matching the native feel.

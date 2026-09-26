@@ -11,9 +11,8 @@ import { fonts, palette } from '@/lib/theme';
 /**
  * The card the reactor and the ship panel are drawn on.
  *
- * Near-opaque on purpose. These sit over the ship rather than in a strip of
- * their own, and a translucent card let the hull and the starfield read
- * through the controls, which made both harder to parse.
+ * Near-opaque on purpose. A translucent card let the hull and the starfield
+ * read through the controls, which made both harder to parse.
  */
 export const CARD: ViewStyle = {
   borderRadius: 12,
@@ -28,8 +27,8 @@ export const CARD: ViewStyle = {
  * then whatever the section counts.
  *
  * The name is repeated rather than dropped because the panel opens *over* the
- * helm on a scrim — the tab that was tapped is dimmed behind it, so the panel
- * has to say what it is on its own.
+ * helm on a scrim — the SHIP button that was tapped is dimmed behind it, so
+ * the panel has to say what it is on its own.
  */
 export function PanelHeader({
   icon,

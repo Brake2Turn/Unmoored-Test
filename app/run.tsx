@@ -69,7 +69,7 @@ const SHIP_HEIGHT = 172;
  * What the ship actually occupies once its shield and exhaust are drawn.
  *
  * The budget below has to reserve the whole systems box, not just the hull,
- * or a wide shield would run into whatever is waiting above.
+ * or a wide shield would run into whatever is waiting beside it.
  */
 const SHIP_SLOT_HEIGHT = SHIP_HEIGHT * SYSTEMS_SPAN;
 
@@ -77,14 +77,14 @@ const SHIP_SLOT_HEIGHT = SHIP_HEIGHT * SYSTEMS_SPAN;
 const STACK_GAP = 16;
 
 /**
- * The jump is a compact control under the tabs now, not a menu row. It is
- * still the full width of the chrome and the tallest thing a thumb needs to
- * find, just no longer a panel in its own right.
+ * The row under the reactor panel — FIRE, the SHIP square and JUMP — is this
+ * tall: compact controls rather than menu rows, but still the tallest things
+ * a thumb needs to find.
  */
 const JUMP_HEIGHT = 52;
 
-/** Between the two tabs, and between the row of them and the jump. */
-const TAB_GAP = 10;
+/** Between the reactor panel and the buttons under it, and between buttons. */
+const CONTROL_GAP = 10;
 
 /**
  * What the helm holds back above the topmost art and below the jump button.
@@ -109,8 +109,10 @@ const FIRE_WIDTH = 84;
 /** The white SHIP square between FIRE and JUMP. */
 const SHIP_BUTTON_WIDTH = 52;
 
-/** Room under LEAVE for the other ship's name and hull, when one is here. */
-const FOE_STATUS_TOP = 30;
+/** The dev buttons start a line below the mode badge, top right. */
+const DEV_ROW_TOP = 30;
+
+/** How wide the other ship's name may run before it wraps. */
 const FOE_STATUS_WIDTH = 150;
 
 /** Kept clear at each side of the ships, and between the two of them. */
@@ -120,22 +122,12 @@ const ARENA_GAP = 36;
 /** How much smaller both ships are drawn when there are two of them. */
 const PAIR_SHRINK = 0.84;
 
-/** The bottom of the helm: a row of tabs with the jump beneath it. */
-const CONTROL_ROW_HEIGHT = REACTOR_PANEL_HEIGHT + TAB_GAP + JUMP_HEIGHT;
+/** The bottom of the helm: the reactor panel, with the row of buttons under it. */
+const CONTROL_ROW_HEIGHT = REACTOR_PANEL_HEIGHT + CONTROL_GAP + JUMP_HEIGHT;
 
 /**
- * Which panel is open over the helm, if any. Only the ship's opens now: the
- * reactor's controls sit on the helm itself, always open.
- */
-type OpenPanel = 'ship';
-
-/** What the scrim says it will close, so the label matches what is on top. */
-const PANEL_LABEL: Record<OpenPanel, string> = {
-  ship: 'the ship',
-};
-
-/**
- * How often the helm advances the hold timer and the shield charge.
+ * How often the helm advances the charges: the drive, the weapons, the shield
+ * and the other ship's gun.
  *
  * Four times a second is smooth enough for a countdown and a fade without
  * writing to storage on every frame — the save is throttled separately below.
@@ -160,9 +152,9 @@ export default function RunScreen() {
   const { settings } = useSettings();
 
   const [run, setRun] = useState<RunState | null>(null);
-  // A panel is only on screen while the player is actually looking at it, and
-  // only ever one: they open in the same place, over the same scrim.
-  const [open, setOpen] = useState<OpenPanel | null>(null);
+  // The ship panel is only on screen while the player is looking at it. The
+  // reactor needs no opening: its controls sit on the helm, always open.
+  const [shipOpen, setShipOpen] = useState(false);
   // Shots in flight. Each carries the star it was fired at, so a bolt still
   // flying when the ship jumps lands on nothing rather than the next ship.
   const [shots, setShots] = useState<Shot[]>([]);
@@ -173,9 +165,22 @@ export default function RunScreen() {
   const shipRef = useRef<View>(null);
   const foeRef = useRef<View>(null);
 
-  // The ticker reads the live run without being rebuilt on every tick.
+  /**
+   * The run as it is right now, for the clocks, the bolts and the buttons.
+   *
+   * Updated the moment a change is made, not when React next draws. Two
+   * timers can fire back to back before a redraw — a bolt landing on the same
+   * beat as a clock tick — and the second used to start from the run as it
+   * was before the first, so its update quietly undid the other: a hit that
+   * landed and did not count. So every change goes through `commit`, and
+   * everything that changes the run starts from here, never from `run`.
+   */
   const runRef = useRef<RunState | null>(null);
-  runRef.current = run;
+  const commit = useCallback((next: RunState | null, save = true) => {
+    runRef.current = next;
+    setRun(next);
+    if (save && next) void saveRun(next);
+  }, []);
 
   // Re-read on focus so returning from a jump shows the new position, and
   // write back on the way out so the clocks do not rewind.
@@ -190,14 +195,14 @@ export default function RunScreen() {
       let cancelled = false;
       setFocused(true);
       loadRun().then((value) => {
-        if (!cancelled && value) setRun(value);
+        if (!cancelled && value) commit(value, false);
       });
       return () => {
         cancelled = true;
         setFocused(false);
         if (runRef.current) void saveRun(runRef.current);
       };
-    }, []),
+    }, [commit]),
   );
 
   const ship = shipById(run?.shipId);
@@ -233,11 +238,8 @@ export default function RunScreen() {
 
   const onDialogueDone = useCallback(() => {
     const current = runRef.current;
-    if (!current) return;
-    const next = markSpoken(current);
-    setRun(next);
-    void saveRun(next);
-  }, []);
+    if (current) commit(markSpoken(current));
+  }, [commit]);
 
   const canTakeHit = !!run && (shieldLevel(run.shieldCharge) > 0 || run.hull > 0);
   const charge = run ? chargeFractions(run) : { jump: 0, weapon: 0 };
@@ -267,11 +269,9 @@ export default function RunScreen() {
       const next = tickRun(current, TICK_MS / 1000);
       if (next === current) return;
 
-      setRun(next);
       ticks += 1;
-      // Persist when a clock finishes, and occasionally along the way, rather
-      // than writing to storage four times a second.
-      if (ticks % SAVE_EVERY_TICKS === 0) void saveRun(next);
+      // Persisted every few ticks rather than four times a second.
+      commit(next, ticks % SAVE_EVERY_TICKS === 0);
     }, TICK_MS);
 
     // The last tick of a clock is the one worth keeping, so write on the way
@@ -280,7 +280,7 @@ export default function RunScreen() {
       clearInterval(timer);
       if (runRef.current) void saveRun(runRef.current);
     };
-  }, [driveBuilding, focused, foeBuilding, shieldBuilding, weaponBuilding]);
+  }, [commit, driveBuilding, focused, foeBuilding, shieldBuilding, weaponBuilding]);
 
   /**
    * The two ships lie on their sides, side by side: the player on the left
@@ -292,10 +292,9 @@ export default function RunScreen() {
    * runs across the screen, so it is the width that usually decides; the
    * Elder Shrike beside the player's shield is the widest pair.
    */
-  const hudTop = HUD_TOP;
   const chromeHeight =
     insets.top +
-    hudTop +
+    HUD_TOP +
     insets.bottom +
     HUD_BOTTOM +
     STATUS_BAR_HEIGHT +
@@ -327,12 +326,12 @@ export default function RunScreen() {
 
   const onOpenShip = useCallback(() => {
     haptics.tap();
-    setOpen('ship');
+    setShipOpen(true);
   }, [haptics]);
 
-  const onClosePanel = useCallback(() => {
+  const onCloseShip = useCallback(() => {
     haptics.tap();
-    setOpen(null);
+    setShipOpen(false);
   }, [haptics]);
 
   const onLeave = useCallback(() => {
@@ -361,28 +360,45 @@ export default function RunScreen() {
   const fireBlock = run ? fireBlocker(run) : 'weapon';
 
   /**
+   * A view's box relative to this screen, which is what the shots and the
+   * explosions are positioned against.
+   *
+   * Measuring against the browser window and drawing against the screen only
+   * agrees while the two share a top-left corner. Where they did not — the
+   * page shifted inside whatever is showing it — a bolt started away from the
+   * gun. Measuring the screen too and taking the difference makes that offset
+   * cancel out, whatever caused it.
+   */
+  const rootRef = useRef<View>(null);
+  const measureHere = useCallback(async (view: View | null) => {
+    const [root, box] = await Promise.all([measure(rootRef.current), measure(view)]);
+    if (!box) return null;
+    return root ? { ...box, x: box.x - root.x, y: box.y - root.y } : box;
+  }, []);
+
+  /**
    * Firing. The charge is spent on the press, so a second press cannot fire
    * twice; the bolt is then aimed from the weapon's tip to the other ship,
    * both measured on screen, and the hull only drops when it arrives.
    */
   const onFire = useCallback(() => {
-    if (!run) return;
-    const next = fireWeapon(run);
-    if (next === run || !run.mounted) return;
-    setRun(next);
+    const current = runRef.current;
+    if (!current?.mounted) return;
+    const next = fireWeapon(current);
+    if (next === current) return;
+    commit(next);
     haptics.confirm();
-    void saveRun(next);
 
-    const node = run.position;
-    const weapon = run.mounted;
-    const hits = foeHull(run, node) > 0;
+    const node = current.position;
+    const weapon = current.mounted;
+    const mount = MOUNTS[current.shipId] ?? MOUNTS.drifter;
+    const hits = foeHull(current, node) > 0;
     void Promise.all([measureHere(shipRef.current), measureHere(foeRef.current)]).then(([box, foe]) => {
       if (!box) return;
       // The systems box is the ship's 200×260 box grown about its centre and
       // then laid on its side, so its on-screen *height* is the upright width.
       // A point in ship units is its offset from the centre, turned.
       const scale = box.height / SYSTEMS_SPAN / 200;
-      const mount = MOUNTS[ship.id] ?? MOUNTS.drifter;
       const tip = weaponTip(weapon);
       const from = sidewaysPoint(
         box,
@@ -398,11 +414,11 @@ export default function RunScreen() {
         { id: Date.now() + Math.random(), by: 'player', node, from, to, hits: hits && !!foe },
       ]);
     });
-  }, [haptics, run, ship.id, width]);
+  }, [commit, haptics, measureHere, width]);
 
   /**
-   * A red ship's weapon has charged: it fires at the player. Nothing but the
-   * clock decides this — no button, no hold, no cargo — so it watches the
+   * A hostile ship's weapon has charged: it fires at the player. Nothing but
+   * the clock decides this — no button, no hold, no cargo — so it watches the
    * charge and shoots the moment it is full, from the muzzle of the Weapon 1
    * on its nose to the player's ship.
    */
@@ -412,7 +428,8 @@ export default function RunScreen() {
     if (!foeReady || !current) return;
     const next = foeFires(current);
     if (next === current) return;
-    setRun(next);
+    // Only the charge resets; the next save along keeps it.
+    commit(next, false);
 
     const node = current.position;
     // Aim at the shield's rim while there is a shield to hit, else the hull.
@@ -425,7 +442,8 @@ export default function RunScreen() {
       const foeScale = foe.height / 200;
       const from = sidewaysPoint(foe, (muzzle.x - 100) * foeScale, (muzzle.y - 130) * foeScale);
       // The player's nose faces it. The shield's rim stands 140 units out
-      // from the ship's centre along its length, the hull's nose about 92.
+      // from the ship's centre along its length (aimed a touch inside it), the
+      // hull's nose about 92.
       const playerScale = box.height / SYSTEMS_SPAN / 200;
       const reach = (shielded ? 136 : 92) * playerScale;
       const to = { x: box.x + box.width / 2 + reach, y: from.y };
@@ -434,10 +452,10 @@ export default function RunScreen() {
         { id: Date.now() + Math.random(), by: 'foe', node, from, to, hits: true },
       ]);
     });
-  }, [foeReady]);
+  }, [commit, foeReady, measureHere]);
 
   /**
-   * A bolt arrives. The player's takes a plate off the other ship; a red
+   * A bolt arrives. The player's takes a plate off the other ship; a hostile
    * ship's goes through `takeHit`, so the shields soak it before the hull
    * does. Either way it only lands if the ship is still at the star it was
    * fired at.
@@ -452,16 +470,19 @@ export default function RunScreen() {
           ? takeHit(current)
           : current;
     if (next === current) return;
-    setRun(next);
+    commit(next);
     haptics.tap();
-    void saveRun(next);
-  }, [haptics]);
+  }, [commit, haptics]);
+
+  const onShotDone = useCallback((id: number) => {
+    setShots((current) => current.filter((shot) => shot.id !== id));
+  }, []);
 
   /**
    * Explosions, played when a hull *reaches* nothing rather than when it is
    * nothing — so loading a save with a wreck in it does not blow it up again,
-   * while every way of getting there (the player's bolts, a red ship's, the
-   * dev hit) is caught by the one check.
+   * while every way of getting there (the player's bolts, a hostile ship's,
+   * the dev hit) is caught by the one check.
    */
   const seen = useRef<{ id: string; position: number; hull: number; foeGone: boolean } | null>(null);
   useEffect(() => {
@@ -502,24 +523,7 @@ export default function RunScreen() {
       const node = now.position;
       setTimeout(() => setCleared(node), EXPLOSION_MS);
     }
-  }, [run]);
-
-  /**
-   * A view's box relative to this screen, which is what the shots and the
-   * explosions are positioned against.
-   *
-   * Measuring against the browser window and drawing against the screen only
-   * agrees while the two share a top-left corner. Where they did not — the
-   * page shifted inside whatever is showing it — a bolt started away from the
-   * gun. Measuring the screen too and taking the difference makes that offset
-   * cancel out, whatever caused it.
-   */
-  const rootRef = useRef<View>(null);
-  const measureHere = useCallback(async (view: View | null) => {
-    const [root, box] = await Promise.all([measure(rootRef.current), measure(view)]);
-    if (!box) return null;
-    return root ? { ...box, x: box.x - root.x, y: box.y - root.y } : box;
-  }, []);
+  }, [measureHere, run]);
 
   /**
    * Leaving a destroyed run, either way, ends it. The run is let go of here
@@ -529,15 +533,49 @@ export default function RunScreen() {
   const endRun = useCallback(
     async (to: 'new' | 'menu') => {
       haptics.confirm();
-      runRef.current = null;
-      setRun(null);
+      commit(null);
       setOver(false);
       await clearRun();
       if (to === 'new') router.replace('/select-ship');
       else router.back();
     },
-    [haptics, router],
+    [commit, haptics, router],
   );
+
+  /**
+   * One change the player asked for, made through a rule that hands the run
+   * back unchanged when it is not allowed — so a press on a greyed-out control
+   * costs nothing: no write, no buzz, no render.
+   */
+  const apply = useCallback(
+    (rule: (current: RunState) => RunState) => {
+      const current = runRef.current;
+      if (!current) return;
+      const next = rule(current);
+      if (next === current) return;
+      commit(next);
+      haptics.tap();
+    },
+    [commit, haptics],
+  );
+
+  /** Moving a bar of energy (`shiftEnergy` refuses an illegal move). */
+  const onShift = useCallback(
+    (subsystem: Subsystem, delta: number) => apply((current) => shiftEnergy(current, subsystem, delta)),
+    [apply],
+  );
+
+  /** Moving the weapon between the hardpoint and the hold (`moveGear` refuses too). */
+  const onMoveGear = useCallback(
+    (from: Place, to: Place) => apply((current) => moveGear(current, from, to)),
+    [apply],
+  );
+
+  /**
+   * Dev only: put a hit on the ship so the shield, its effects and the hull
+   * can be watched on demand.
+   */
+  const onTakeHit = useCallback(() => apply(takeHit), [apply]);
 
   /**
    * Dev only: take a plate off the other ship, as if a bolt had landed —
@@ -545,81 +583,13 @@ export default function RunScreen() {
    * not provoke a yellow ship: that only comes from actually firing.
    */
   const canHitThem = !!run && !wrecked && foeHull(run) > 0;
-  const onHitThem = useCallback(() => {
-    const current = runRef.current;
-    if (!current) return;
-    const next = hitFoe(current, current.position);
-    if (next === current) return;
-    setRun(next);
-    haptics.tap();
-    void saveRun(next);
-  }, [haptics]);
+  const onHitThem = useCallback(() => apply((current) => hitFoe(current, current.position)), [apply]);
 
   /**
    * Dev only: drive, weapon and shields all full this instant, so a jump or a
    * shot can be tried without waiting on the bars.
    */
-  const onRefill = useCallback(() => {
-    const current = runRef.current;
-    if (!current) return;
-    const next = devRefillCharges(current);
-    if (next === current) return;
-    setRun(next);
-    haptics.tap();
-    void saveRun(next);
-  }, [haptics]);
-
-  /**
-   * Dev only: put a hit on the ship so the shield, its effects and the hull
-   * can be watched without any combat to do it. Delete this with the button.
-   */
-
-  const onShotDone = useCallback((id: number) => {
-    setShots((current) => current.filter((shot) => shot.id !== id));
-  }, []);
-
-  const onTakeHit = useCallback(() => {
-    if (!run) return;
-    const next = takeHit(run);
-    if (next === run) return;
-    setRun(next);
-    haptics.tap();
-    void saveRun(next);
-  }, [haptics, run]);
-
-  /**
-   * Moving a bar of energy.
-   *
-   * `shiftEnergy` hands back the same run when the move is not legal, so a
-   * press on a greyed-out control costs nothing: no write, no buzz, no render.
-   */
-  const onShift = useCallback(
-    (subsystem: Subsystem, delta: number) => {
-      if (!run) return;
-      const next = shiftEnergy(run, subsystem, delta);
-      if (next === run) return;
-      setRun(next);
-      haptics.tap();
-      void saveRun(next);
-    },
-    [haptics, run],
-  );
-
-  /**
-   * Moving the weapon between the hardpoint and the hold. Same shape as
-   * `onShift`: the run refuses an illegal move by handing itself back.
-   */
-  const onMoveGear = useCallback(
-    (from: Place, to: Place) => {
-      if (!run) return;
-      const next = moveGear(run, from, to);
-      if (next === run) return;
-      setRun(next);
-      haptics.tap();
-      void saveRun(next);
-    },
-    [haptics, run],
-  );
+  const onRefill = useCallback(() => apply(devRefillCharges), [apply]);
 
   return (
     <View ref={rootRef} collapsable={false} style={styles.container}>
@@ -654,7 +624,7 @@ export default function RunScreen() {
 
       {/* Dev mode only, under the mode: a hit on either ship, on demand. */}
       {settings.devMode ? (
-        <View style={[styles.devRow, styles.devStack, { top: insets.top + FOE_STATUS_TOP }]}>
+        <View style={[styles.devRow, styles.devStack, { top: insets.top + DEV_ROW_TOP }]}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Developer: put a hit on the ship"
@@ -700,7 +670,7 @@ export default function RunScreen() {
       <View
         style={[
           styles.stack,
-          { paddingTop: insets.top + hudTop, paddingBottom: insets.bottom + HUD_BOTTOM },
+          { paddingTop: insets.top + HUD_TOP, paddingBottom: insets.bottom + HUD_BOTTOM },
         ]}
       >
         {/* The two ships, side by side: the player on the left facing right,
@@ -767,8 +737,8 @@ export default function RunScreen() {
           )}
         </View>
 
-        {/* The HUD: hull, tabs and the two buttons. Greyed out and dead to
-            touch once the ship is destroyed. */}
+        {/* The HUD: the hull, the reactor and the three buttons. Greyed out
+            and dead to touch once the ship is destroyed. */}
         <View
           pointerEvents={wrecked ? 'none' : 'auto'}
           style={[styles.hud, wrecked && styles.hudDead]}
@@ -778,7 +748,7 @@ export default function RunScreen() {
 
           {/* The reactor across the full width, its controls right on it, and
               under it FIRE, the SHIP square and JUMP. */}
-          <View style={{ width: buttonWidth, gap: TAB_GAP }}>
+          <View style={{ width: buttonWidth, gap: CONTROL_GAP }}>
             {run ? (
               <ReactorPanel
                 energy={run.energy}
@@ -819,7 +789,7 @@ export default function RunScreen() {
                 gauge={jumpFuel}
                 tone={BUTTON_TONE.engines}
                 charging={blocked === 'charging'}
-                width={buttonWidth - FIRE_WIDTH - SHIP_BUTTON_WIDTH - TAB_GAP * 2}
+                width={buttonWidth - FIRE_WIDTH - SHIP_BUTTON_WIDTH - CONTROL_GAP * 2}
                 height={JUMP_HEIGHT}
               />
             </View>
@@ -852,16 +822,16 @@ export default function RunScreen() {
         <Explosion key={blast.id} at={blast.at} size={blast.size} animate={!settings.reduceMotion} />
       ))}
 
-      {/* A panel opens over the helm rather than living in it, so the room it
-          needs is only taken while it is being used. */}
-      {open && run ? (
+      {/* The ship panel opens over the helm rather than living in it, so the
+          room it needs is only taken while it is being used. */}
+      {shipOpen && run ? (
         <>
           {/* Dims the helm behind the panel, and catches the tap that closes
               it. */}
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Close ${PANEL_LABEL[open]}`}
-            onPress={onClosePanel}
+            accessibilityLabel="Close the ship"
+            onPress={onCloseShip}
             style={[StyleSheet.absoluteFill, styles.scrim]}
           />
           <View
@@ -911,7 +881,7 @@ const styles = StyleSheet.create({
    */
   foeColumn: { alignItems: 'center' },
   foeStatus: { position: 'absolute', bottom: '100%', marginBottom: 10 },
-  actionRow: { flexDirection: 'row', gap: TAB_GAP },
+  actionRow: { flexDirection: 'row', gap: CONTROL_GAP },
   hud: { alignItems: 'center', gap: STACK_GAP },
   hudDead: { opacity: 0.3 },
   /** A destroyed ship: still holding its place, no longer drawn. */

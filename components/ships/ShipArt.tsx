@@ -1,6 +1,7 @@
 import React from 'react';
 import Svg, { Defs, Ellipse, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 
+import { useSvgIds } from '@/components/svgIds';
 import { MountedWeapon } from '@/components/WeaponArt';
 import { palette } from '@/lib/theme';
 
@@ -83,40 +84,48 @@ export const ShipArt = React.memo(function ShipArt({
   const tint = locked ? LOCKED_TINT : palette.player;
   const Art = ART[shipId] ?? Drifter;
   const mount = MOUNTS[shipId] ?? MOUNTS.drifter;
+  const id = useSvgIds();
+  const paint = { line: tint, plate: `url(#${id('plate')})`, glass: `url(#${id('glass')})` };
   return (
     <Svg width={width} height={height} viewBox={`0 0 ${SHIP_BOX_W} ${SHIP_BOX_H}`}>
       <Defs>
-        <LinearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+        <LinearGradient id={id('glass')} x1="0" y1="0" x2="0" y2="1">
           <Stop offset="0" stopColor={tint} stopOpacity={locked ? 0.4 : 0.85} />
           <Stop offset="1" stopColor={tint} stopOpacity={locked ? 0.12 : 0.25} />
         </LinearGradient>
-        <LinearGradient id="plate" x1="0" y1="0" x2="0" y2="1">
+        <LinearGradient id={id('plate')} x1="0" y1="0" x2="0" y2="1">
           <Stop offset="0" stopColor={HULL} />
           <Stop offset="1" stopColor={HULL_DEEP} />
         </LinearGradient>
       </Defs>
-      <Art line={tint} />
+      <Art {...paint} />
       {weapon ? (
-        <MountedWeapon weaponId={weapon} x={mount.x} y={mount.y} line={tint} fill="url(#plate)" />
+        <MountedWeapon weaponId={weapon} x={mount.x} y={mount.y} line={tint} fill={paint.plate} />
       ) : null}
     </Svg>
   );
 });
 
+/**
+ * What the art is drawn in: the colour of every edge and light, and the fills
+ * for plating and glass, which are this drawing's own gradients.
+ */
+type Paint = { line: string; plate: string; glass: string };
+
 /** Survey cutter: twin forward prongs, domed canopy, V-notched hull. */
-function Drifter({ line }: { line: string }) {
+function Drifter({ line, plate, glass }: Paint) {
   return (
     <>
-      <Rect x={48} y={34} width={24} height={92} rx={8} fill="url(#plate)" stroke={line} strokeWidth={2} />
-      <Rect x={128} y={34} width={24} height={92} rx={8} fill="url(#plate)" stroke={line} strokeWidth={2} />
+      <Rect x={48} y={34} width={24} height={92} rx={8} fill={plate} stroke={line} strokeWidth={2} />
+      <Rect x={128} y={34} width={24} height={92} rx={8} fill={plate} stroke={line} strokeWidth={2} />
       <Rect x={53} y={40} width={14} height={20} rx={5} fill={line} opacity={0.8} />
       <Rect x={133} y={40} width={14} height={20} rx={5} fill={line} opacity={0.8} />
 
-      <Path d="M68 124 A32 32 0 0 1 132 124 Z" fill="url(#glass)" stroke={line} strokeWidth={2} />
+      <Path d="M68 124 A32 32 0 0 1 132 124 Z" fill={glass} stroke={line} strokeWidth={2} />
 
       <Path
         d="M52 122 L148 122 L136 198 L100 240 L64 198 Z"
-        fill="url(#plate)"
+        fill={plate}
         stroke={line}
         strokeWidth={2}
         strokeLinejoin="round"
@@ -128,52 +137,52 @@ function Drifter({ line }: { line: string }) {
 }
 
 /** Interceptor: needle nose, swept wings, everything stripped out. */
-function Lance({ line }: { line: string }) {
+function Lance({ line, plate, glass }: Paint) {
   return (
     <>
       <Path
         d="M114 118 L162 196 L138 204 L116 166 Z"
-        fill="url(#plate)"
+        fill={plate}
         stroke={line}
         strokeWidth={2}
         strokeLinejoin="round"
       />
       <Path
         d="M86 118 L38 196 L62 204 L84 166 Z"
-        fill="url(#plate)"
+        fill={plate}
         stroke={line}
         strokeWidth={2}
         strokeLinejoin="round"
       />
       <Path
         d="M100 18 L116 112 L120 198 L100 216 L80 198 L84 112 Z"
-        fill="url(#plate)"
+        fill={plate}
         stroke={line}
         strokeWidth={2}
         strokeLinejoin="round"
       />
-      <Ellipse cx={100} cy={86} rx={13} ry={26} fill="url(#glass)" stroke={line} strokeWidth={1.5} />
+      <Ellipse cx={100} cy={86} rx={13} ry={26} fill={glass} stroke={line} strokeWidth={1.5} />
       <Path d="M92 210 L108 210" stroke={line} strokeWidth={5} strokeLinecap="round" />
     </>
   );
 }
 
 /** Heavy hauler: slab body, external cargo pods, blunt everything. */
-function Bulwark({ line }: { line: string }) {
+function Bulwark({ line, plate, glass }: Paint) {
   return (
     <>
-      <Rect x={28} y={104} width={30} height={94} rx={9} fill="url(#plate)" stroke={line} strokeWidth={2} />
-      <Rect x={142} y={104} width={30} height={94} rx={9} fill="url(#plate)" stroke={line} strokeWidth={2} />
+      <Rect x={28} y={104} width={30} height={94} rx={9} fill={plate} stroke={line} strokeWidth={2} />
+      <Rect x={142} y={104} width={30} height={94} rx={9} fill={plate} stroke={line} strokeWidth={2} />
       <Path d="M33 186 L53 186 M147 186 L167 186" stroke={line} strokeWidth={3} strokeLinecap="round" opacity={0.85} />
 
       <Path
         d="M70 40 L130 40 L142 206 L58 206 Z"
-        fill="url(#plate)"
+        fill={plate}
         stroke={line}
         strokeWidth={2}
         strokeLinejoin="round"
       />
-      <Path d="M80 58 L120 58 L126 92 L74 92 Z" fill="url(#glass)" stroke={line} strokeWidth={1.5} />
+      <Path d="M80 58 L120 58 L126 92 L74 92 Z" fill={glass} stroke={line} strokeWidth={1.5} />
       <Path
         d="M66 120 L134 120 M68 144 L132 144"
         stroke={line}
@@ -186,7 +195,7 @@ function Bulwark({ line }: { line: string }) {
 }
 
 /** One entry per ship id, so the roster and the art can be read side by side. */
-const ART: Record<string, (props: { line: string }) => React.JSX.Element> = {
+const ART: Record<string, (props: Paint) => React.JSX.Element> = {
   drifter: Drifter,
   lance: Lance,
   bulwark: Bulwark,

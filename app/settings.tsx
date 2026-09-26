@@ -7,8 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHaptics, useSettings } from '@/lib/settings';
 import { fonts, palette, tracking } from '@/lib/theme';
 import { clearRun, loadRun } from '@/lib/runStore';
-import { STARTER_SHIP_IDS } from '@/lib/ships';
-import { SHIPS } from '@/lib/ships';
+import { SHIPS, STARTER_SHIP_IDS } from '@/lib/ships';
 import { loadUnlocked, resetUnlocks, unlockAll } from '@/lib/unlocks';
 
 export default function SettingsScreen() {
@@ -164,8 +163,8 @@ export default function SettingsScreen() {
           ) : null}
         </View>
         <Text style={styles.footnote}>
-          Dev Mode adds test tools: hit buttons on the space screen and an
-          Encounters list on the star select screen.
+          Dev Mode adds test tools: hit and refill buttons on the space screen,
+          and an Encounters list on the star select screen.
         </Text>
 
         <Text style={styles.section}>PROGRESS</Text>

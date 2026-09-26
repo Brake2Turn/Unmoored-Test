@@ -11,7 +11,7 @@ type Props = {
   size?: 'regular' | 'compact';
 };
 
-/** Below this share of a tank the badge turns red. */
+/** At or below this share of a tank the badge turns red. */
 const LOW_MARK = 0.25;
 
 const SIZES = {

@@ -380,9 +380,10 @@ somewhere it is not somewhere else. `npm run verify:energy` fails if a ship's
 reactor ever creeps up to `TOTAL_CAPACITY`.
 
 **Two levels are read so far, both on the engines and the shields.**
-`jumpBlocker(run)` (`lib/runStore.ts`) returns `'fuel'`, `'engines'`,
-`'charging'` or null — in that order, because an empty tank is the harder stop
-and cold engines are not building a charge at all — and both the helm and the
+`jumpBlocker(run)` (`lib/runStore.ts`) returns `'wrecked'`, `'fuel'`,
+`'engines'`, `'charging'` or null — in that order, because a destroyed ship
+goes nowhere, an empty tank is the harder stop and cold engines are not
+building a charge at all — and both the helm and the
 sector map ask it rather than each deciding
 for itself, so the button that offers a jump and the button that performs it
 can never disagree. `applyJump` refuses a blocked jump and hands the run
@@ -406,7 +407,10 @@ them in the reactor panel, and neither carries a number — the bar is the reado
   where the ship is standing rather than stored: an ordinary star costs
   `JUMP_UNITS` (14, about 11s at two bars), a hostile one `HOSTILE_JUMP_UNITS`
   (40, about 31s). That is what being pinned down by a Shrike now amounts to —
-  a far longer build, not a separate timer with its own rules.
+  a far longer build, not a separate timer with its own rules. A saved charge
+  is capped by it only once `hydrate` has read the whole run, because who is
+  here (a red ship, a provoked yellow one, a wreck) decides it; capping by the
+  star's colour alone cut a provoked star's charge back to 14 on every reload.
 - **The weapons** (`weaponCharge`) build the same way and reset the same way,
   and firing spends the whole of it (below).
 
@@ -442,8 +446,8 @@ can be watched on demand.
 ### The hull is not part of the reactor
 
 `lib/hull.ts` is a third pure leaf: `HULL_MAX` plates (8), `damagedHull` takes
-one, and nothing puts any back. It is drawn as a plain white line with HULL
-on the left, sharing a row with the fuel badge and **outside the reactor's card
+one, and nothing puts any back. It is drawn as a plain line with HULL on the
+left, on a row of its own above the reactor and **outside the reactor's card
 entirely.** The reactor is a set of choices, rows the player moves energy
 between; the hull is not one of those, and giving it the card and the cell
 treatment would have filed it as another thing to fiddle with.
@@ -560,16 +564,17 @@ crew berths together. It was a half-width tab beside the reactor drawing all of
 that in miniature; the author moved it into the button row and gave the reactor
 the whole width. Cargo and crew were two tabs before that, merged because the
 weapon has to be dragged between the hardpoint and the hold, and a drag cannot
-cross from one panel into another. Everything the tabs open is
-`layout.panelWidth` wide, shared through the theme, so the panels swap without
-the card shifting under the thumb.
-Only ever one is open: the helm holds `open: 'reactor' | 'ship' | null`, not
-a flag each, so two panels cannot stack.
+cross from one panel into another. The opened panel is `layout.panelWidth`
+wide, shared through the theme. It is the only thing that opens over the helm
+now, so the helm holds a plain `shipOpen` flag.
 
 Cargo space is drawn as slots, and how many is `cargoSlots(ship.cargo)`
 (`lib/hold.ts`) — the cargo stat is a 0–1 impression rather than a count, so it
 is scaled to at most `CARGO_SLOTS_MAX` (8) and never rounds down to none.
-Berths are a flat `CREW_SLOTS` (3); ships do not differ on crew yet, and there
+Ship select's CARGO bar counts the same slots, out of `CARGO_SLOTS_MAX` — it
+was a five-segment impression that disagreed with the hold (the Drifter read
+3 of 5 and carried 5 slots). Berths are a flat `CREW_SLOTS` (3); ships do not
+differ on crew yet, and there
 is no crew roster, so the berths are always drawn empty. They are squares the
 size of a cargo slot (they were circles), so the panel reads as one set of
 compartments.
@@ -585,7 +590,8 @@ weapons**, and nothing else yet — there is no trade.
 ### Weapons, the hardpoint and the hold
 
 `lib/weapons.ts` is a leaf holding `WEAPONS`: three placeholders, `WEAPON 1`
-to `3`, each only an id and a name — nothing fires, there is no combat. Each
+to `3`, each an id, a name and one line of description. They look different
+but all fire the same way for now — one bolt per full charge (see "Firing"). Each
 ship launches with one (`Ship.weapon`): Drifter 1, Lance 2, Bulwark 3. The
 roster was cut from six ships to these three at the same time; a save
 launched in a cut ship (Halo, Mantis, Vesper) loads as the Drifter, because
@@ -643,7 +649,7 @@ when it arrives. Arrival is a `setTimeout`, not the end of the animation,
 because Reanimated does not advance in headless and a hit must never wait on
 a frame. Each shot carries the node it was fired at, so a bolt in flight
 when the ship jumps lands on nothing rather than on the next star's ship.
-With no ship at the star the bolt flies off the top of the screen.
+With no ship at the star the bolt flies off the right edge of the screen.
 
 **The other ship's hull is stored as damage**, `run.foeDamage[node]`, and
 the hull left is derived: `ENCOUNTER_STYLE[kind].hull` minus it (Shrike 6,
@@ -657,11 +663,12 @@ MERCHANT needs two). It is absolutely positioned (`styles.foeStatus`) rather tha
 so the two ships' centres stay level and bolts fly straight between them. It
 sat top left under LEAVE until the ships were laid side by side. The name is `nameOf(meeting)`, the first speaker who is not the
 pilot, so it matches the dialogue box; the boss has no meeting and shows its
-kind, ELDER SHRIKE. The art starts below it (`hudTop`) rather than behind it.
+kind, ELDER SHRIKE. The art is scaled with room for it counted in
+(`FOE_STATUS_HEIGHT`), so the name never runs into the top of the screen.
 
 **Red ships shoot back** — every hostile one (Shrike and Elder Shrike, the
 same `hostile` flag that pins the drive). Each carries a copy of Weapon 1,
-drawn on its nose turned to point down (`FOE_WEAPON`, `FOE_MUZZLE` in
+drawn on its nose turned to point down (`FOE_WEAPON` and `foeMuzzle(kind)` in
 `EncounterShip.tsx`). `run.foeCharge` builds in `tickRun` as if from two bars
 of weapons (`FOE_WEAPON_BARS`), about nine seconds to full; `foeFires` then
 resets it to a random point up to `FOE_JITTER_UNITS` *below* empty, so shots
@@ -745,7 +752,7 @@ starts from nothing.
 
 **Game Over** (`components/GameOver.tsx`) comes up `EXPLOSION_MS` after the
 player's hull reaches zero (at once when a save is opened already wrecked).
-The HUD behind it — hull, tabs, FIRE and JUMP — drops to 30% opacity and
+The HUD behind it — hull, reactor, FIRE, SHIP and JUMP — drops to 30% opacity and
 stops taking touches. NEW RUN goes to ship select, MAIN MENU back to the
 start screen, and both `clearRun()` first. **Let go of the run before
 clearing it** (`runRef.current = null`): the helm writes its run back to
@@ -781,6 +788,21 @@ encounter, and could undo a jump made while a charge was still building. The
 `focused` flag from `useFocusEffect` gates the interval. Anything else that
 saves from the helm must respect the same rule.
 
+**Every change to the run on the helm goes through `commit`**, which sets
+`runRef` the moment the change is made and only then asks React to redraw.
+Everything that changes the run — the clock, a bolt landing, the foe firing,
+every button — starts from `runRef.current`, never from the `run` in its
+closure. Two timers can fire back to back before a redraw (a bolt landing on
+the same beat as a tick; on a phone, timers due in the same frame fire
+together), and while the ref was only refreshed on render the second started
+from the run as it was before the first and its update silently undid it: a
+hit that landed and did not count. Nothing assigns `runRef` during render any
+more, because a render can run with an older state than the newest commit.
+
+**Star select jumps from the latest run**, re-read through `loadRun()` at the
+press, not from the copy it opened with. A bolt fired just before JUMP lands a
+moment later and saves its hit; jumping from the older copy wrote over it.
+
 **JUMP is the engines' orange** the way FIRE is the weapons' red: dark while
 the drive charges, bright when it is ready, grey when it cannot (no fuel, cold
 engines, destroyed — the label stays JUMP and Game Over says the rest). Both come from `BUTTON_TONE` in `lib/subsystems.ts`;
@@ -806,15 +828,16 @@ reactor's header line.
 
 **The opened ship panel repeats its name** in its header: it covers the helm
 on a scrim, so the SHIP button behind it cannot be what says which section
-this is. Every mark in the set is an outline, including the bolt — it was the
-one filled glyph, which gave a footnote about spare power more weight than the
-rows above it.
+this is. Every mark in the set is an outline. A filled bolt once marked spare
+power and outweighed the rows above it; it has gone, and the reactor's
+power-station mark (`SubstationGlyph`) took its place.
 
 The hull is one white line above the controls (`components/StatusBar.tsx`),
 the full width of the chrome, with the plates left written at its right end
 as `8/8`. **A hull line changes colour as it empties** — `hullColor(fraction)`
 in `lib/theme.ts`, used by this line and the other ship's (`FoeStatus`)
-alike: white at half or more, a soft yellow under half, red under a quarter.
+alike: white at half or more, a soft yellow under half, red at a quarter or
+less — so a hull is already red at 2 of 8.
 Only the line changes; the number beside it stays white. **Fuel rides on the jump button** — `MenuButton`
 takes a `gauge` of `{ label, value }` and gives it a section of its own at the
 right end, the full height of the button and divided off by a rule — because
@@ -939,6 +962,15 @@ rows.
 
 These cost real debugging time. Do not rediscover them.
 
+- **SVG ids are one namespace on the web.** On a phone every `<Svg>` is a
+  document of its own; in a browser every drawing on every mounted screen
+  shares one page, and `url(#violet)` finds the *first* element with that id —
+  even one on a screen hidden underneath, which the browser then will not
+  paint with. The space screen's nebulae never once drew on the web because of
+  this (the hidden start screen's gradient won), and the three ship cards
+  shared one canopy gradient, so the locked ship's glass lit up white. Every
+  drawing takes its ids from `useSvgIds()` (`components/svgIds.ts`); never
+  write a literal `id="…"` in an SVG.
 - **`query-string` is an explicit dependency.** `expo-router` requires it at
   runtime without declaring it, and `@react-navigation/native` v7 no longer
   supplies it. Without it the web bundle fails to resolve and nothing builds.

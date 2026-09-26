@@ -7,11 +7,9 @@ import { PORTRAIT_URIS } from '@/lib/portraits';
 /**
  * One speaker's face: the supplied art, cut out, and nothing else.
  *
- * **No frame.** The portrait used to sit in a rounded card with a border and a
- * near-opaque backing, which was there to make a drawn placeholder glyph look
- * deliberate. The art is cut out against transparency, so a box around it only
- * put a window between the speaker and the scene — the bust reads better
- * standing straight on the sky.
+ * **No frame of its own.** The bust is drawn bare; whatever places it decides
+ * what it sits in — the dialogue box gives it a square on the speaker's side,
+ * the encounter tester a card.
  *
  * **No art means no portrait.** Every entity that should have a face now has
  * one; `abandonedShip` deliberately does not, because nobody is aboard to have
@@ -36,8 +34,8 @@ function photoFor(entity: EntityId): ImageSourcePropType | undefined {
  * Whether this speaker has a face at all.
  *
  * The overlay asks before it lays the box out, because a portrait is not only
- * drawn — it is also cleared for, above the box and beside the name. Without
- * this the faceless speakers would keep a portrait's worth of empty room.
+ * drawn — it is also given its square beside the words. Without this the
+ * faceless speakers would keep a portrait's worth of empty room.
  */
 export function hasPortrait(entity: EntityId): boolean {
   return photoFor(entity) !== undefined;

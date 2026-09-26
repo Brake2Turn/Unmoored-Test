@@ -10,8 +10,8 @@ import { fonts, layout, palette, tracking } from '@/lib/theme';
 
 /**
  * The ship section: the weapon on the hardpoint, the cargo hold and the crew
- * berths, in the same two states as the reactor — a tab that shows what is
- * where, and a panel that opens over the helm where things can be moved.
+ * berths. Collapsed, it is the SHIP square between FIRE and JUMP; opened, a
+ * panel over the helm where a tap says what a thing is and a drag moves it.
  *
  * Cargo and crew used to be two tabs of their own. They became one because
  * the weapon has to travel between the hardpoint and the hold, and a drag
@@ -46,9 +46,10 @@ const DROP_SLOP = 8;
 /**
  * The ship section, collapsed: a small square between FIRE and JUMP that
  * says SHIP and opens the panel. Drawn like the fuel reading on JUMP — dark,
- * with a white outline and white lettering — rather than a white block. It used to be a tab beside the reactor
- * drawing the hardpoint, hold and berths in miniature; the reactor took that
- * room, and what is aboard is read in the panel instead.
+ * with a white outline and white lettering — rather than a white block. It
+ * used to be a tab beside the reactor drawing the hardpoint, hold and berths
+ * in miniature; the reactor took that room, and what is aboard is read in the
+ * panel instead.
  */
 export function ShipButton({
   loadout,
@@ -504,7 +505,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: CARGO_GAP,
-    // Four across, so the hold wraps the same way the tab's does.
+    // Four across, so the roomiest hold (eight) is two tidy rows.
     width: CARGO_SIZE * 4 + CARGO_GAP * 3,
   },
   crewWrap: { alignItems: 'center' },

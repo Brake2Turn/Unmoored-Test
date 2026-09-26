@@ -3,6 +3,7 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import Svg, { Circle, ClipPath, Defs, Ellipse, G, RadialGradient, Stop } from 'react-native-svg';
 
+import { useSvgIds } from '@/components/svgIds';
 import { palette } from '@/lib/theme';
 
 type Props = {
@@ -85,6 +86,7 @@ export function Backdrop({ width, height, variant = 'title' }: Props) {
   const planetCentreY = height + planetRadius * 0.34;
   const planetCentreX = width / 2;
   const bloomAlpha = deep ? 0.45 : 1;
+  const id = useSvgIds();
 
   /** Planet-local units to screen pixels. */
   const px = (units: number) => units * planetRadius;
@@ -98,39 +100,39 @@ export function Backdrop({ width, height, variant = 'title' }: Props) {
 
       <Svg width={width} height={height} style={StyleSheet.absoluteFill}>
         <Defs>
-          <RadialGradient id="violet" cx="50%" cy="50%" r="50%">
+          <RadialGradient id={id('violet')} cx="50%" cy="50%" r="50%">
             <Stop offset="0" stopColor={palette.nebulaViolet} stopOpacity={0.55 * bloomAlpha} />
             <Stop offset="1" stopColor={palette.nebulaViolet} stopOpacity={0} />
           </RadialGradient>
-          <RadialGradient id="teal" cx="50%" cy="50%" r="50%">
+          <RadialGradient id={id('teal')} cx="50%" cy="50%" r="50%">
             <Stop offset="0" stopColor={palette.nebulaTeal} stopOpacity={0.45 * bloomAlpha} />
             <Stop offset="1" stopColor={palette.nebulaTeal} stopOpacity={0} />
           </RadialGradient>
           {/* Offset centre puts the light source up and to the left. */}
-          <RadialGradient id="planet" cx="31%" cy="19%" r="72%">
+          <RadialGradient id={id('planet')} cx="31%" cy="19%" r="72%">
             <Stop offset="0" stopColor={palette.planetLight} />
             <Stop offset="1" stopColor={palette.planetDark} />
           </RadialGradient>
           {/* Limb darkening: clear through the middle, dusk at the edges. It
               is what stops the disc reading as a flat pasted circle. */}
-          <RadialGradient id="planetLimb" cx="50%" cy="50%" r="50%">
+          <RadialGradient id={id('planetLimb')} cx="50%" cy="50%" r="50%">
             <Stop offset="0.5" stopColor={palette.planetDark} stopOpacity={0} />
             <Stop offset="0.86" stopColor={palette.planetDark} stopOpacity={0.45} />
             <Stop offset="1" stopColor={palette.planetDark} stopOpacity={0.92} />
           </RadialGradient>
           {/* A soft bloom where the sun actually strikes. */}
-          <RadialGradient id="planetSun" cx="31%" cy="19%" r="40%">
+          <RadialGradient id={id('planetSun')} cx="31%" cy="19%" r="40%">
             <Stop offset="0" stopColor={palette.planetHighlight} stopOpacity={0.4} />
             <Stop offset="1" stopColor={palette.planetHighlight} stopOpacity={0} />
           </RadialGradient>
           {/* Markings run past the edge of the sphere and have to be cut to it. */}
-          <ClipPath id="planetEdge">
+          <ClipPath id={id('planetEdge')}>
             <Circle cx={planetCentreX} cy={planetCentreY} r={planetRadius} />
           </ClipPath>
         </Defs>
 
-        <Circle cx={width * 0.22} cy={height * 0.26} r={width * 0.59} fill="url(#violet)" />
-        <Circle cx={width * 0.86} cy={height * 0.62} r={width * 0.47} fill="url(#teal)" />
+        <Circle cx={width * 0.22} cy={height * 0.26} r={width * 0.59} fill={`url(#${id('violet')})`} />
+        <Circle cx={width * 0.86} cy={height * 0.62} r={width * 0.47} fill={`url(#${id('teal')})`} />
 
         {deep ? null : (
           <>
@@ -138,10 +140,10 @@ export function Backdrop({ width, height, variant = 'title' }: Props) {
               cx={planetCentreX}
               cy={planetCentreY}
               r={planetRadius}
-              fill="url(#planet)"
+              fill={`url(#${id('planet')})`}
             />
 
-            <G clipPath="url(#planetEdge)">
+            <G clipPath={`url(#${id('planetEdge')})`}>
               {SURFACE.map((feature, i) => (
                 <Ellipse
                   key={`surface-${i}`}
@@ -196,13 +198,13 @@ export function Backdrop({ width, height, variant = 'title' }: Props) {
               cx={planetCentreX}
               cy={planetCentreY}
               r={planetRadius}
-              fill="url(#planetLimb)"
+              fill={`url(#${id('planetLimb')})`}
             />
             <Circle
               cx={planetCentreX}
               cy={planetCentreY}
               r={planetRadius}
-              fill="url(#planetSun)"
+              fill={`url(#${id('planetSun')})`}
             />
 
             {/* Three fading strokes stand in for a blurred atmospheric rim —

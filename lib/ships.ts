@@ -19,7 +19,7 @@ export type Ship = {
   className: string;
   tagline: string;
   /**
-   * Hold space, 0–1, drawn as a five-segment bar.
+   * Hold space, 0–1, which `cargoSlots` in `lib/hold.ts` turns into slots.
    *
    * The one thing that still varies ship to ship without being energy. Hull
    * and speed used to sit beside it; they are gone, folded into what the

@@ -1,6 +1,7 @@
 import React from 'react';
 import { ClipPath, Defs, G, Line, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 
+import { useSvgIds } from '@/components/svgIds';
 import { palette } from '@/lib/theme';
 
 type Props = {
@@ -73,6 +74,7 @@ function gridLines(origin: number, step: number, limit: number): GridLine[] {
  * silently sat still would be worse than one that was never there.
  */
 export function StarChart({ width, height, offsetX, offsetY, scale }: Props) {
+  const id = useSvgIds();
   const step = MINOR_UNITS * scale;
   const dense = step < MIN_SPACING;
   const cols = dense ? [] : gridLines(offsetX, step, width);
@@ -99,11 +101,11 @@ export function StarChart({ width, height, offsetX, offsetY, scale }: Props) {
   return (
     <>
       <Defs>
-        <ClipPath id="chart-face">
+        <ClipPath id={id('chart-face')}>
           <Rect x={x} y={y} width={w} height={h} rx={RADIUS} />
         </ClipPath>
         {/* Curves the glass: the graticule falls away toward the bezel. */}
-        <RadialGradient id="chart-vignette" cx="50%" cy="50%" r="70%">
+        <RadialGradient id={id('chart-vignette')} cx="50%" cy="50%" r="70%">
           <Stop offset="0.5" stopColor={palette.void} stopOpacity={0} />
           <Stop offset="1" stopColor={palette.void} stopOpacity={0.9} />
         </RadialGradient>
@@ -111,7 +113,7 @@ export function StarChart({ width, height, offsetX, offsetY, scale }: Props) {
 
       <Rect x={x} y={y} width={w} height={h} rx={RADIUS} fill={palette.chartPanel} />
 
-      <G clipPath="url(#chart-face)">
+      <G clipPath={`url(#${id('chart-face')})`}>
         {cols.map(({ at, index }) => (
           <Line
             key={`col-${index}`}
@@ -163,7 +165,7 @@ export function StarChart({ width, height, offsetX, offsetY, scale }: Props) {
           />
         ))}
 
-        <Rect x={0} y={0} width={width} height={height} fill="url(#chart-vignette)" />
+        <Rect x={0} y={0} width={width} height={height} fill={`url(#${id('chart-vignette')})`} />
       </G>
 
       <Rect

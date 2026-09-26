@@ -65,25 +65,13 @@ type Charges = {
 };
 
 /**
- * How full a subsystem's own business is, 0 to 1.
- *
- * The shield is measured against the ceiling it is powered for rather than
- * against four, so a shield at its cap reads full — the bars beside it already
- * say how high that cap is.
+ * How far the weapons or the drive have built, 0 to 1, for the track under
+ * their row. The shields row draws its own track, in layers (`ShieldLayers`).
  */
-function chargeOf(subsystem: Subsystem, energy: EnergyState, charges: Charges): number {
-  if (subsystem === 'shields') {
-    return energy.shields > 0 ? Math.min(1, charges.shield / energy.shields) : 0;
-  }
-  return Math.max(0, Math.min(1, subsystem === 'weapons' ? charges.weapon : charges.engine));
+function chargeOf(subsystem: Subsystem, charges: Charges): number {
+  const built = subsystem === 'weapons' ? charges.weapon : subsystem === 'engines' ? charges.engine : 0;
+  return Math.max(0, Math.min(1, built));
 }
-
-/** Everything a row needs to spell out what it would do, in its label. */
-const NAME: Record<Subsystem, string> = {
-  shields: 'shields',
-  weapons: 'weapons',
-  engines: 'engines',
-};
 
 export function ReactorPanel({
   energy,
@@ -131,7 +119,7 @@ export function ReactorPanel({
           key={subsystem}
           subsystem={subsystem}
           level={energy[subsystem]}
-          charge={chargeOf(subsystem, energy, charges)}
+          charge={chargeOf(subsystem, charges)}
           layers={subsystem === 'shields' ? { charge: charges.shield, ceiling: energy.shields } : null}
           canAddMore={canAdd(energy, reactor, subsystem)}
           canTakeAway={canRemove(energy, subsystem)}
@@ -168,7 +156,6 @@ function SubsystemRow({
 }) {
   const style = SUBSYSTEM_STYLE[subsystem];
   const lit = level > 0;
-  const name = NAME[subsystem];
 
   return (
     <View style={[styles.row, !last && styles.rowRule]}>
@@ -213,14 +200,14 @@ function SubsystemRow({
         symbol="−"
         enabled={canTakeAway}
         accent={style.accent}
-        label={`Take one bar of energy out of ${name}, now ${level} of ${SUBSYSTEM_CAPACITY}`}
+        label={`Take one bar of energy out of ${subsystem}, now ${level} of ${SUBSYSTEM_CAPACITY}`}
         onPress={() => onShift(subsystem, -1)}
       />
       <StepButton
         symbol="+"
         enabled={canAddMore}
         accent={style.accent}
-        label={`Put one bar of energy into ${name}, now ${level} of ${SUBSYSTEM_CAPACITY}`}
+        label={`Put one bar of energy into ${subsystem}, now ${level} of ${SUBSYSTEM_CAPACITY}`}
         onPress={() => onShift(subsystem, 1)}
       />
     </View>

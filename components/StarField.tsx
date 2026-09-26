@@ -26,7 +26,8 @@ type Star = {
   /** Drifts a little way about its own spot and back, while the field is still. */
   wander: { dx: number; dy: number; period: number } | null;
   delay: number;
-  period: number;
+  /** Where this star's twinkle falls in its mood's range of speeds, 0 to 1. */
+  pace: number;
 };
 
 /**
@@ -73,7 +74,7 @@ function makeStars(band: (typeof BANDS)[number], width: number, height: number):
           ? { dx: Math.cos(angle) * reach, dy: Math.sin(angle) * reach, period: 2600 + Math.random() * 3400 }
           : null,
       delay: Math.random() * 2000,
-      period: Math.random(),
+      pace: Math.random(),
     };
   });
 }
@@ -110,7 +111,7 @@ function LivelyStar({ star, still }: { star: Star; still: boolean }) {
       opacity.value = withDelay(
         star.delay,
         withRepeat(
-          withTiming(star.opacity * look.floor, { duration: look.min + star.period * look.spread }),
+          withTiming(star.opacity * look.floor, { duration: look.min + star.pace * look.spread }),
           -1,
           true,
         ),

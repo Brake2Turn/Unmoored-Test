@@ -7,9 +7,10 @@ import { fonts, hullColor, palette, tracking } from '@/lib/theme';
 export const FOE_STATUS_HEIGHT = 26;
 
 /**
- * Who the player is facing, top left of the space screen: their name, and
- * their hull as a white line underneath it — the same white line the player's
- * own hull is drawn as, so the two read as the same kind of thing.
+ * Who the player is facing, floating above their ship: their name, and their
+ * hull as a line underneath it — the same line the player's own hull is drawn
+ * as, turning the same colours (`hullColor`), so the two read as the same
+ * kind of thing.
  */
 export function FoeStatus({ name, hull, max, width }: { name: string; hull: number; max: number; width: number }) {
   const left = Math.max(0, Math.min(max, hull));

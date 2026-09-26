@@ -28,6 +28,7 @@ import { useHaptics } from '@/lib/settings';
 import { fonts, palette, tracking, useMenuWidth } from '@/lib/theme';
 import { SHIPS, STARTER_SHIP_IDS, type Ship } from '@/lib/ships';
 import { TOTAL_CAPACITY } from '@/lib/energy';
+import { CARGO_SLOTS_MAX, cargoSlots } from '@/lib/hold';
 import { loadUnlocked } from '@/lib/unlocks';
 import { weaponById } from '@/lib/weapons';
 import { WeaponIcon } from '@/components/WeaponArt';
@@ -35,9 +36,6 @@ import { startNewRun } from '@/lib/runStore';
 import Svg, { Path, Rect as SvgRect } from 'react-native-svg';
 
 const CARD_GAP = 16;
-
-/** Cargo has no natural unit, so it reads as a five-segment impression. */
-const CARGO_SEGMENTS = 5;
 
 /**
  * Snapping, on web.
@@ -226,10 +224,12 @@ export default function SelectShipScreen() {
         </View>
 
         <View style={styles.stats}>
+          {/* The very slots the hold will have, out of the most any ship has,
+              so the card and the ship panel never disagree. */}
           <StatBar
             label="CARGO"
-            filled={Math.round(selected.cargo * CARGO_SEGMENTS)}
-            total={CARGO_SEGMENTS}
+            filled={cargoSlots(selected.cargo)}
+            total={CARGO_SLOTS_MAX}
             accent={palette.player}
             locked={isLocked}
           />
@@ -343,9 +343,10 @@ const ShipCard = React.memo(function ShipCard({
 /**
  * One labelled bar.
  *
- * `total` varies by row: cargo is a rough five-segment impression, while the
- * reactor is counted in the same whole bars the helm panel spends, so the two
- * rows are honestly different units rather than a shared fiction.
+ * `total` varies by row, because each row counts in its own real unit: cargo
+ * in the slots the ship panel shows, out of the most any hold has, and the
+ * reactor in the same whole bars the helm panel spends, out of what all three
+ * subsystems could hold.
  */
 function StatBar({
   label,

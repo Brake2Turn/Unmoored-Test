@@ -11,9 +11,10 @@ import Animated, {
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
-import Svg, { Defs, Ellipse, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg';
+import Svg, { Defs, Ellipse, Path, RadialGradient, Stop } from 'react-native-svg';
 
 import { SHIP_BOX_H, SHIP_BOX_W, ShipArt, enginesFor, type Engine } from '@/components/ships/ShipArt';
+import { useSvgIds } from '@/components/svgIds';
 import { SUBSYSTEM_STYLE } from '@/lib/subsystems';
 
 type Props = {
@@ -73,8 +74,7 @@ const SHIELD_CY = 130;
  * The bubble is one size at every power level — a shield envelope is a fixed
  * shape, and only how hard it is running changes. It stands well clear of the
  * widest hull ever drawn (the Vesper's sail spanned 144 of the 200, before it
- * was cut from the roster), so the rim never sits
- * on top of the ship.
+ * was cut from the roster), so the rim never sits on top of the ship.
  */
 const SHIELD_RX = 96;
 const SHIELD_RY = 140;
@@ -91,10 +91,10 @@ const SHIELD_STROKE = (level: number) => 0.16 + 0.17 * level;
  * centre. Everything inside it is fully transparent at every level.
  *
  * 0.82 is measured, not chosen: the furthest corner of any hull — the Lance's
- * nose and wingtips, and the Halo's ring when it was in the roster — sits at about 0.80 of these radii, so
- * the colour only begins once the ship has ended. That is what keeps the ship
- * as readable at four bars as at one; more power brightens the rim instead of
- * fogging the hull.
+ * nose and wingtips, and the Halo's ring when it was in the roster — sits at
+ * about 0.80 of these radii, so the colour only begins once the ship has
+ * ended. That is what keeps the ship as readable at four bars as at one; more
+ * power brightens the rim instead of fogging the hull.
  */
 const SHIELD_CLEAR = 0.82;
 
@@ -263,7 +263,7 @@ function round(n: number): number {
  *
  * Both are read straight off the reactor allocation, and both use their
  * subsystem's colour from `SUBSYSTEM_STYLE` — a cyan bubble is the shields
- * row, a violet flame is the engines row. Moving a bar in the panel is meant
+ * row, an orange flame is the engines row. Moving a bar in the panel is meant
  * to be visible on the ship without reading a number: the shield holds its
  * shape and grows brighter, the exhaust grows longer.
  *
@@ -328,6 +328,7 @@ export function ShipSystems({
  * the ellipse's own proportions and needs no separate x and y radii.
  */
 function Shield({ level, width, height }: { level: number; width: number; height: number }) {
+  const id = useSvgIds();
   // A charge this small is a shield on its way up or down, not one worth
   // drawing — without the floor it would flicker on at a hundredth of a bar.
   if (level < 0.05) return null;
@@ -337,7 +338,7 @@ function Shield({ level, width, height }: { level: number; width: number; height
   return (
     <Svg style={StyleSheet.absoluteFill} width={width} height={height} viewBox={VIEW_BOX}>
       <Defs>
-        <RadialGradient id="shieldEnvelope" cx="50%" cy="50%" r="50%">
+        <RadialGradient id={id('shieldEnvelope')} cx="50%" cy="50%" r="50%">
           <Stop offset="0" stopColor={tint} stopOpacity={0} />
           <Stop offset={String(SHIELD_CLEAR)} stopColor={tint} stopOpacity={0} />
           <Stop offset="0.92" stopColor={tint} stopOpacity={0.34} />
@@ -352,7 +353,7 @@ function Shield({ level, width, height }: { level: number; width: number; height
         cy={SHIELD_CY}
         rx={SHIELD_RX}
         ry={SHIELD_RY}
-        fill="url(#shieldEnvelope)"
+        fill={`url(#${id('shieldEnvelope')})`}
         fillOpacity={SHIELD_FILL(level)}
         stroke={tint}
         strokeOpacity={SHIELD_STROKE(level)}
@@ -596,6 +597,7 @@ function SweepSheen({
  * as violent rather than as an expansion.
  */
 function ShieldDissipate({ width, height }: { width: number; height: number }) {
+  const id = useSvgIds();
   const tint = SUBSYSTEM_STYLE.shields.accent;
   const progress = useSharedValue(0);
 
@@ -635,7 +637,7 @@ function ShieldDissipate({ width, height }: { width: number; height: number }) {
       <Animated.View style={[StyleSheet.absoluteFill, flashStyle]}>
         <Svg width={width} height={height} viewBox={VIEW_BOX}>
           <Defs>
-            <RadialGradient id="failFlash" cx="50%" cy="50%" r="50%">
+            <RadialGradient id={id('failFlash')} cx="50%" cy="50%" r="50%">
               <Stop offset="0" stopColor="#FFFFFF" stopOpacity={0.12} />
               <Stop offset="0.66" stopColor={tint} stopOpacity={0.4} />
               <Stop offset="1" stopColor="#FFFFFF" stopOpacity={0.95} />
@@ -646,7 +648,7 @@ function ShieldDissipate({ width, height }: { width: number; height: number }) {
             cy={SHIELD_CY}
             rx={SHIELD_RX}
             ry={SHIELD_RY}
-            fill="url(#failFlash)"
+            fill={`url(#${id('failFlash')})`}
           />
         </Svg>
       </Animated.View>

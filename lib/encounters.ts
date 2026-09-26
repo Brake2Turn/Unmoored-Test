@@ -18,7 +18,7 @@ export const ENCOUNTER_STYLE: Record<
     height: number;
     /**
      * Plates on the ship waiting here, which each hit from the player's weapon
-     * takes one of. Placeholder numbers: nothing happens at zero yet.
+     * takes one of; at zero it is destroyed. Placeholder numbers.
      */
     hull: number;
   }
