@@ -28,6 +28,8 @@ import { fonts, palette, tracking, useMenuWidth } from '@/lib/theme';
 import { SHIPS, STARTER_SHIP_IDS, type Ship } from '@/lib/ships';
 import { TOTAL_CAPACITY } from '@/lib/energy';
 import { loadUnlocked } from '@/lib/unlocks';
+import { weaponById } from '@/lib/weapons';
+import { WeaponIcon } from '@/components/WeaponArt';
 import { startNewRun } from '@/lib/runStore';
 import Svg, { Path, Rect as SvgRect } from 'react-native-svg';
 
@@ -131,6 +133,7 @@ export default function SelectShipScreen() {
 
   const selected = SHIPS[index];
   const isLocked = !unlocked.includes(selected.id);
+  const weapon = weaponById(selected.weapon);
 
   const onLaunch = useCallback(async () => {
     // The button is disabled on a locked ship; this is belt-and-braces.
@@ -201,14 +204,23 @@ export default function SelectShipScreen() {
           <Text style={styles.tagline}>{selected.tagline}</Text>
         )}
 
-        {/* The hardpoint. Nothing fits in it yet — there is no combat and no
-            weapon table — but the space is part of reading a ship. */}
+        {/* The hardpoint, and what each ship launches with on it. The same
+            weapon is drawn on the ship's nose in the card above. */}
         <View style={styles.weaponRow}>
           <Text numberOfLines={1} style={styles.statLabel}>
             WEAPON
           </Text>
-          <View style={[styles.slot, isLocked && styles.slotLocked]}>
-            <Text style={styles.slotLabel}>EMPTY</Text>
+          <View style={[styles.slot, weapon && styles.slotArmed, isLocked && styles.slotLocked]}>
+            {weapon ? (
+              <WeaponIcon
+                weaponId={weapon.id}
+                size={16}
+                color={isLocked ? palette.textDisabled : palette.player}
+              />
+            ) : null}
+            <Text style={[styles.slotLabel, weapon && !isLocked && styles.slotLabelArmed]}>
+              {weapon ? weapon.name : 'EMPTY'}
+            </Text>
           </View>
         </View>
 
@@ -309,6 +321,7 @@ const ShipCard = React.memo(function ShipCard({
           width={cardWidth * 0.74}
           height={cardWidth * 0.97}
           locked={locked}
+          weapon={ship.weapon}
         />
         {locked ? (
           <View style={styles.lockBadge}>
@@ -485,7 +498,10 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
   },
+  slotArmed: { borderStyle: 'solid', borderColor: 'rgba(255,255,255,0.4)' },
   slotLocked: { borderColor: 'rgba(255,255,255,0.08)' },
   slotLabel: {
     fontFamily: fonts.body,
@@ -495,6 +511,7 @@ const styles = StyleSheet.create({
     letterSpacing: tracking.caption,
     marginRight: -tracking.caption,
   },
+  slotLabelArmed: { color: palette.textPrimary },
 
   stats: { width: '100%', maxWidth: 260, gap: 7, marginTop: 11 },
   statRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },

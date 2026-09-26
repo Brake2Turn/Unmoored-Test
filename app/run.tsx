@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Backdrop } from '@/components/Backdrop';
 import { ReactorControls, ReactorTab } from '@/components/ReactorPanel';
-import { CargoDetail, CargoTab, CrewDetail, CrewTab } from '@/components/HoldPanels';
+import { ShipDetail, ShipTab } from '@/components/ShipPanel';
 import { DialogueOverlay } from '@/components/DialogueOverlay';
 import { FadeInView } from '@/components/FadeInView';
 import { STATUS_BAR_HEIGHT, StatusBar } from '@/components/StatusBar';
@@ -20,6 +20,7 @@ import {
   jumpBlocker,
   loadRun,
   markSpoken,
+  moveGear,
   pendingMeeting,
   reactorOf,
   saveRun,
@@ -32,6 +33,7 @@ import { shipById } from '@/lib/ships';
 import { encounterAt } from '@/lib/sectorMap';
 import { ENCOUNTER_STYLE } from '@/lib/encounters';
 import { chargeRate, shieldLevel, type Subsystem } from '@/lib/energy';
+import type { Place } from '@/lib/hold';
 
 /** The player's ship at full size, before the screen decides it has no room. */
 const SHIP_WIDTH = 132;
@@ -55,7 +57,7 @@ const STACK_GAP = 16;
  */
 const JUMP_HEIGHT = 46;
 
-/** Between the three tabs, and between the row of them and the jump. */
+/** Between the two tabs, and between the row of them and the jump. */
 const TAB_GAP = 10;
 
 /**
@@ -79,13 +81,12 @@ const HUD_BOTTOM = 20;
 const CONTROL_ROW_HEIGHT = layout.tabHeight + TAB_GAP + JUMP_HEIGHT;
 
 /** Which panel is open over the helm, if any. */
-type OpenPanel = 'reactor' | 'cargo' | 'crew';
+type OpenPanel = 'reactor' | 'ship';
 
 /** What the scrim says it will close, so the label matches what is on top. */
 const PANEL_LABEL: Record<OpenPanel, string> = {
   reactor: 'the reactor controls',
-  cargo: 'the hold',
-  crew: 'the crew',
+  ship: 'the ship',
 };
 
 /**
@@ -148,8 +149,8 @@ export default function RunScreen() {
   const waiting = ENCOUNTER_STYLE[encounter];
 
   const buttonWidth = useMenuWidth();
-  /** The three tabs are identical, and together they are the chrome's width. */
-  const tabWidth = Math.floor((buttonWidth - TAB_GAP * 2) / 3);
+  /** The two tabs are the same size, and together they are the chrome's width. */
+  const tabWidth = Math.floor((buttonWidth - TAB_GAP) / 2);
 
   /**
    * What this star still has to say, if anything.
@@ -238,14 +239,9 @@ export default function RunScreen() {
     setOpen('reactor');
   }, [haptics]);
 
-  const onOpenCargo = useCallback(() => {
+  const onOpenShip = useCallback(() => {
     haptics.tap();
-    setOpen('cargo');
-  }, [haptics]);
-
-  const onOpenCrew = useCallback(() => {
-    haptics.tap();
-    setOpen('crew');
+    setOpen('ship');
   }, [haptics]);
 
   const onClosePanel = useCallback(() => {
@@ -299,6 +295,22 @@ export default function RunScreen() {
     (subsystem: Subsystem, delta: number) => {
       if (!run) return;
       const next = shiftEnergy(run, subsystem, delta);
+      if (next === run) return;
+      setRun(next);
+      haptics.tap();
+      void saveRun(next);
+    },
+    [haptics, run],
+  );
+
+  /**
+   * Moving the weapon between the hardpoint and the hold. Same shape as
+   * `onShift`: the run refuses an illegal move by handing itself back.
+   */
+  const onMoveGear = useCallback(
+    (from: Place, to: Place) => {
+      if (!run) return;
+      const next = moveGear(run, from, to);
       if (next === run) return;
       setRun(next);
       haptics.tap();
@@ -370,6 +382,7 @@ export default function RunScreen() {
             shields={shieldLevel(run?.shieldCharge ?? 0)}
             shieldHits={run?.shieldHits ?? 0}
             engines={run?.energy.engines ?? 0}
+            weapon={run?.mounted ?? null}
             animate={!settings.reduceMotion}
           />
         </FadeInView>
@@ -377,8 +390,8 @@ export default function RunScreen() {
         {/* What this ship has left, on one line. */}
         <StatusBar hull={run?.hull ?? 0} width={buttonWidth} />
 
-        {/* What the ship is, at a glance: its reactor, its hold, its berths.
-            Each opens over the helm; the jump sits under all three. */}
+        {/* What the ship is, at a glance: its reactor, and its weapon, hold
+            and berths. Each opens over the helm; the jump sits under both. */}
         <View style={{ width: buttonWidth, gap: TAB_GAP }}>
           <View style={styles.tabRow}>
             {run ? (
@@ -394,8 +407,11 @@ export default function RunScreen() {
                   width={tabWidth}
                   onPress={onOpenReactor}
                 />
-                <CargoTab cargo={ship.cargo} width={tabWidth} onPress={onOpenCargo} />
-                <CrewTab width={tabWidth} onPress={onOpenCrew} />
+                <ShipTab
+                  loadout={{ mounted: run.mounted, hold: run.hold }}
+                  width={tabWidth}
+                  onPress={onOpenShip}
+                />
               </>
             ) : (
               <View style={{ height: layout.tabHeight }} />
@@ -448,10 +464,8 @@ export default function RunScreen() {
                 onShift={onShift}
                 animate={!settings.reduceMotion}
               />
-            ) : open === 'cargo' ? (
-              <CargoDetail cargo={ship.cargo} />
             ) : (
-              <CrewDetail />
+              <ShipDetail loadout={{ mounted: run.mounted, hold: run.hold }} onMove={onMoveGear} />
             )}
           </View>
         </>

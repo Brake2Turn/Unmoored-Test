@@ -138,3 +138,31 @@ export function SubstationGlyph({ color, size = 13 }: { color: string; size?: nu
     </Svg>
   );
 }
+
+/**
+ * The ship section's mark: a small rocket with fins and a porthole.
+ *
+ * Not the engines' dart, which is already a ship-shaped mark in the reactor;
+ * this one is rounded and finned so the two cannot be taken for each other.
+ */
+export function ShipGlyph({ color, size = 13 }: { color: string; size?: number }) {
+  return (
+    <Svg width={size} height={size * 1.08} viewBox="0 0 16 17">
+      <Path
+        d="M8 1.2 C10.6 3.6 11.4 7 11.4 10.4 V14.6 H4.6 V10.4 C4.6 7 5.4 3.6 8 1.2 Z"
+        fill="none"
+        stroke={color}
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M4.6 10.6 L1.8 14.6 H4.6 M11.4 10.6 L14.2 14.6 H11.4"
+        fill="none"
+        stroke={color}
+        strokeWidth={1.3}
+        strokeLinejoin="round"
+      />
+      <Circle cx={8} cy={7.4} r={1.6} fill="none" stroke={color} strokeWidth={1.2} />
+    </Svg>
+  );
+}

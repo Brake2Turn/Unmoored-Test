@@ -35,7 +35,18 @@ import {
   type Subsystem,
 } from '../lib/energy.ts';
 import { HULL_MAX, damagedHull, isWrecked } from '../lib/hull.ts';
-import { CARGO_SLOTS_MAX, CREW_SLOTS, cargoSlots } from '../lib/hold.ts';
+import {
+  CARGO_SLOTS_MAX,
+  CREW_SLOTS,
+  cargoSlots,
+  firstEmptySlot,
+  fitHold,
+  itemAt,
+  moveItem,
+  type Loadout,
+  type Place,
+} from '../lib/hold.ts';
+import { WEAPONS, weaponById } from '../lib/weapons.ts';
 
 const RUNS = Number(process.argv[2] ?? 2000);
 const failures: string[] = [];
@@ -308,9 +319,9 @@ check(`it takes ${HULL_MAX} hits to strip the hull`, blows === HULL_MAX);
 check('and it stays stripped', damagedHull(plates) === 0);
 
 // ---------------------------------------------------------------------------
-// The hold and the berths. Nothing fills either yet, so the only rule to hold
-// is that every ship gets a hold with room in it and none gets more than the
-// panel is built to draw.
+// The hold and the berths. Every ship gets a hold with room in it — which is
+// also what guarantees a weapon can always be taken off — and none gets more
+// than the panel is built to draw.
 // ---------------------------------------------------------------------------
 const cargoDeclared = [...shipSource.matchAll(/^\s*cargo:\s*([\d.]+),/gm)].map((m) => Number(m[1]));
 check('found a cargo stat for every ship', cargoDeclared.length === shipCount);
@@ -334,7 +345,63 @@ check('junk cargo still leaves a slot', cargoSlots(NaN) === 1 && cargoSlots(-4) 
 check('absurd cargo does not overflow', cargoSlots(99) === CARGO_SLOTS_MAX);
 check('there are berths to fill', CREW_SLOTS >= 1);
 
+// ---------------------------------------------------------------------------
+// Weapons. Every ship launches with one the table carries, and moving it
+// between the hardpoint and the hold never loses, doubles or swaps anything.
+// ---------------------------------------------------------------------------
+const weaponDeclared = [...shipSource.matchAll(/^\s*weapon:\s*'([^']*)',/gm)].map((m) => m[1]);
+check('found a weapon for every ship', weaponDeclared.length === shipCount);
+for (const id of weaponDeclared) check(`ship weapon ${id} is in the table`, weaponById(id) !== null);
+check('weapon ids are distinct', new Set(WEAPONS.map((w) => w.id)).size === WEAPONS.length);
+
+/** Everything in a loadout, as a sorted list, to compare before and after. */
+const contents = (l: Loadout) =>
+  [l.mounted, ...l.hold].filter((item): item is string => item !== null).sort().join(',');
+
+let gearMoves = 0;
+for (let run = 0; run < RUNS; run += 1) {
+  const slots = 1 + Math.floor(Math.random() * CARGO_SLOTS_MAX);
+  let loadout: Loadout = {
+    mounted: WEAPONS[run % WEAPONS.length].id,
+    hold: Array.from({ length: slots }, () => null),
+  };
+  const before = contents(loadout);
+  const places: Place[] = ['mount', ...Array.from({ length: slots + 1 }, (_, i) => i), -1];
+
+  for (let step = 0; step < 30; step += 1) {
+    const from = places[Math.floor(Math.random() * places.length)];
+    const to = places[Math.floor(Math.random() * places.length)];
+    const next = moveItem(loadout, from, to);
+    if (next !== loadout) {
+      gearMoves += 1;
+      check('a move takes from somewhere full', itemAt(loadout, from) !== null);
+      check('a move lands somewhere empty', itemAt(loadout, to) === null);
+      check('what moved is what arrived', itemAt(next, to) === itemAt(loadout, from));
+      check('the place it left is empty', itemAt(next, from) === null);
+    }
+    check('the hold never changes size', next.hold.length === slots);
+    check('nothing is lost or doubled', contents(next) === before);
+    loadout = next;
+  }
+}
+
+// The one move the player is actually asked to make, and back again.
+const armed: Loadout = { mounted: 'weapon1', hold: [null, null] };
+const stowed = moveItem(armed, 'mount', firstEmptySlot(armed) ?? 0);
+check('a mounted weapon can be stowed', stowed.mounted === null && stowed.hold[0] === 'weapon1');
+check('and mounted again', moveItem(stowed, 0, 'mount').mounted === 'weapon1');
+check('a full hold refuses', moveItem({ mounted: 'weapon1', hold: ['weapon2'] }, 'mount', 0).mounted === 'weapon1');
+check('a full hold has no empty slot', firstEmptySlot({ mounted: null, hold: ['weapon2'] }) === null);
+
+// A save's hold is forced into shape without throwing anything away that fits.
+const known = (id: unknown) => weaponById(id) !== null;
+check('junk hold is empty', fitHold('junk', 3, known).join() === [null, null, null].join());
+check('unknown ids are dropped', fitHold(['nope', 'weapon2'], 2, known)[0] === null);
+check('a shrunk hold keeps what fits', fitHold([null, null, 'weapon3'], 2, known).includes('weapon3'));
+check('a hold is always the size asked', fitHold(['weapon1', 'weapon2', 'weapon3'], 2, known).length === 2);
+
 console.log(`hull plates       ${HULL_MAX}`);
+console.log(`weapons           ${weaponDeclared.join(', ')}  (${gearMoves} gear moves made)`);
 console.log(`cargo slots       ${cargoDeclared.map(cargoSlots).join(', ')} of ${CARGO_SLOTS_MAX}`);
 console.log(`crew berths       ${CREW_SLOTS}`);
 console.log(`hostile hold      ${holdTimes.map((t) => t.toFixed(1)).join('s, ')}s`);

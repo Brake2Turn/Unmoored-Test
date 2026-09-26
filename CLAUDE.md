@@ -11,6 +11,20 @@ The author develops on **Windows and has no Mac**, which is why the project is E
 rather than native Swift — Expo builds the iOS binary on hosted machines
 (`eas build`), so nothing in the workflow requires Apple hardware.
 
+## What the screens are called
+
+The author names the screens this way. Use these names when talking to them;
+the code and the notes below still say "helm" and "sector map" in places.
+
+| Author's name | File | Also called in the notes |
+|---|---|---|
+| **Start screen** | `app/index.tsx` | the title screen |
+| **Ship select** | `app/select-ship.tsx` | the carousel |
+| **Space screen** — the ship against the stars | `app/run.tsx` | the helm |
+| **Star select** — the white dots to jump to | `app/sector.tsx` | the sector map, the chart |
+
+`app/settings.tsx` is the settings screen, reached from the start screen.
+
 ## Where the work goes
 
 **Develop and push on `claude/claude-md-unmoored-info-aliq46`.** Not on the
@@ -498,9 +512,9 @@ The reactor is on the helm only — the sector map is for choosing where to go
 and deliberately carries none of it — and it has two states
 (`components/ReactorPanel.tsx`).
 
-**Collapsed** it is a thumb-sized tab, the left of three across the bottom of
+**Collapsed** it is a thumb-sized tab, the left of two across the bottom of
 the helm. Every tab opens with its own mark and its name on one line
-(`components/PanelChrome.tsx`, shared by all three, along with the header the
+(`components/PanelChrome.tsx`, shared by both, along with the header the
 opened panel carries and the `CARD` both are drawn on — a tab and its panel
 have to look like one section, which is easier to keep true with the two
 headers side by side). The reactor's mark is a power station, *not* the bolt: the bolt
@@ -521,24 +535,69 @@ the room the controls need is only taken while energy is actually being moved.
 The panel used to hold a third of the screen permanently for controls that go
 untouched most of the time.
 
-**The hold and the berths sit beside it** (`components/HoldPanels.tsx`), in
-exactly the same two states, and the three tabs divide the chrome's width
-evenly with the jump button full-width beneath them. Every tab is
+**The Ship tab sits beside it** (`components/ShipPanel.tsx`), in exactly the
+same two states: the weapon on the hardpoint, the cargo hold and the crew
+berths, together. Cargo and crew were two tabs of their own until weapons
+arrived; they were merged because the weapon has to be dragged between the
+hardpoint and the hold, and a drag cannot cross from one panel into another
+when only one is ever open. The two tabs divide the chrome's width evenly
+with the jump button full-width beneath them. Every tab is
 `layout.tabHeight` tall and everything they open is `layout.panelWidth` wide,
 both shared through the theme rather than repeated per component, so the tabs
 sit as one row and the panels swap without the card shifting under the thumb.
-Only ever one is open: the helm holds `open: 'reactor' | 'cargo' | 'crew' |
-null`, not a flag each, so two panels cannot stack.
+Only ever one is open: the helm holds `open: 'reactor' | 'ship' | null`, not
+a flag each, so two panels cannot stack.
 
 Cargo space is drawn as slots, and how many is `cargoSlots(ship.cargo)`
 (`lib/hold.ts`) — the cargo stat is a 0–1 impression rather than a count, so it
 is scaled to at most `CARGO_SLOTS_MAX` (8) and never rounds down to none.
-Berths are a flat `CREW_SLOTS` (3); ships do not differ on crew yet. **Neither
-holds anything.** There is no trade and no crew roster, so every slot is drawn
-empty — but `filled` is threaded through every one of these components, and a
-filled slot is already white, so the thing to change when cargo or crew arrives
-is what the helm passes, not what the panels do. `verify:energy` holds that
-every ship's hold has room in it and that none overflows the panel.
+Berths are a flat `CREW_SLOTS` (3); ships do not differ on crew yet, and there
+is no crew roster, so the berths are always drawn empty. **The hold takes
+weapons**, and nothing else yet — there is no trade.
+
+### Weapons, the hardpoint and the hold
+
+`lib/weapons.ts` is a leaf holding `WEAPONS`: three placeholders, `WEAPON 1`
+to `3`, each only an id and a name — nothing fires, there is no combat. Each
+ship launches with one (`Ship.weapon`): Drifter 1, Lance 2, Bulwark 3. The
+roster was cut from six ships to these three at the same time; a save
+launched in a cut ship (Halo, Mantis, Vesper) loads as the Drifter, because
+`hydrate` resolves `shipId` through `shipById` rather than trusting it.
+
+**Where the weapon is lives on the run**, not the ship: `run.mounted` is the
+weapon on the hardpoint (or null), and `run.hold` is one entry per cargo slot,
+a weapon id or null, always exactly `cargoSlots(ship.cargo)` long. A save
+from before weapons comes back armed with its ship's weapon; one that has
+stowed it keeps `null`, which is why `hydrate` asks whether `mounted` is
+*present* rather than truthy.
+
+**One rule moves things**: `moveItem` in `lib/hold.ts`, wrapped onto the run
+by `moveGear`. It only ever moves into an *empty* place — never a swap, never
+onto something — so a weapon cannot be lost or doubled by dragging it
+somewhere full, and an illegal move returns the same object, like
+`shiftEnergy`. `verify:energy` throws thousands of random moves at it and
+holds that the contents never change, only their places.
+
+**The shape is drawn once and used everywhere** (`components/WeaponArt.tsx`):
+`WeaponShape` goes onto the ship's nose inside `ShipArt`'s own SVG, and
+`WeaponIcon` draws the same shape alone for the hardpoint, the cargo slot and
+the ship select row. Where each hull carries it is `MOUNTS` in `ShipArt.tsx`,
+beside `ENGINES` and read off the paths the same way; none reaches past the
+hull's own furthest point, so `SHIELD_CLEAR` still holds. `ShipArt` draws the
+weapon only when it is given one, which is how stowing it takes it off the
+ship.
+
+**The drag is `PanResponder`**, not a gesture library: it ships with React
+Native, behaves the same with a mouse on web and a finger on a phone, and
+adding react-native-gesture-handler would be a native dependency for one drag.
+Drop targets are measured with `measureInWindow` when a drag starts. Dropping
+anywhere on the hold uses the empty slot under the pointer, or the first empty
+one, so "drag it into cargo" never needs aiming. A tap (under six pixels of
+travel) moves it the obvious way, which is also what makes it testable from a
+script. The dragged icon is drawn at the panel's top level so it passes over
+every slot. Headless Chromium drives it with synthetic `mousedown` /
+`mousemove` / `mouseup` spaced on timers — react-native-web's responder
+listens for those, not for pointer events.
 
 **No words inside the reactor.** Not SHIELDS, WEAPONS, ENGINES, LEVEL, CHARGE
 or DRIVE, in either state. The icons carry it, and they are shared between the
@@ -558,8 +617,8 @@ in the same column as the subsystem marks, so spare and spent line up.
 scrim, so the tab that was tapped is dimmed behind it and cannot be what says
 which section this is.
 
-**The three sections do carry their names**, on the tab header line: REACTOR,
-CARGO, CREW. That is not the same rule bending. A subsystem is met in the
+**The sections do carry their names**, on the tab header line: REACTOR and
+SHIP. That is not the same rule bending. A subsystem is met in the
 controls, where there is room to learn what its mark means; a tab is the first
 thing tapped and nothing teaches it beforehand. Every mark in the set is an
 outline, including the bolt — it was the one filled glyph, which gave a
@@ -645,7 +704,7 @@ Each ship used to carry an `accent` on its table entry that tinted all of
 that, so the *map* changed colour depending on what you had launched in.
 Nothing about a ship actually varies by colour: they differ in silhouette,
 cargo and reactor. The field is gone from `Ship` rather than set to one shared
-value, so the six cannot quietly drift apart again.
+value, so the ships cannot quietly drift apart again.
 
 **White is doing work, not just being neutral.** It is what leaves the two
 colour-coded things on screen free to mean something: a **red** boss star, and
@@ -659,8 +718,8 @@ wordmark's rule, the settings controls and the planet's atmosphere.
 
 Hull and speed used to sit beside cargo on the ship cards. They are gone —
 cargo is the one stat that still varies without being energy. The cards also
-carry an empty **WEAPON** hardpoint above cargo and the reactor; there is no
-weapon table yet, so the slot reads EMPTY and holds the space.
+carry a **WEAPON** row above cargo and the reactor, naming the weapon the ship
+launches with; the same weapon is drawn on the ship in the card.
 
 `lib/energy.ts` imports nothing, for the same reason `sectorMap.ts` imports
 nothing: pure rules run under bare node in the verify script. The labels and
@@ -669,12 +728,12 @@ tints live in `lib/subsystems.ts`, which is to it what `encounters.ts` is to
 
 ### Layer boundaries
 
-`lib/theme.ts`, `lib/dialogue.ts`, `lib/energy.ts`, `lib/hull.ts` and
-`lib/hold.ts` import nothing from the project and are the leaves.
+`lib/theme.ts`, `lib/dialogue.ts`, `lib/energy.ts`, `lib/hull.ts`,
+`lib/hold.ts` and `lib/weapons.ts` import nothing from the project and are the leaves.
 `lib/sectorMap.ts` is nearly one: it imports `dialogue.ts` alone, to deal
 encounters across the stars, and both still run under bare node. `lib/ships.ts`, `lib/encounters.ts` and
 `lib/subsystems.ts` depend on the theme; `lib/runStore.ts` depends on ships,
-the map, the energy and hull rules, and `encounters.ts` — it reads the
+the map, the energy, hull, hold and weapon rules, and `encounters.ts` — it reads the
 `hostile` flag out
 of `ENCOUNTER_STYLE` rather than keeping its own list of which stars mean
 trouble. Keep that direction — the theme

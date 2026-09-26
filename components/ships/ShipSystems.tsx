@@ -35,6 +35,8 @@ type Props = {
   shieldHits: number;
   /** Bars in engines: 0 means cold engines, and each one lengthens the flame. */
   engines: number;
+  /** The weapon on the hardpoint, or null when it is in the hold. */
+  weapon?: string | null;
   /** False holds the flame at a steady length instead of pulsing. */
   animate?: boolean;
 };
@@ -70,7 +72,8 @@ const SHIELD_CY = 130;
 /**
  * The bubble is one size at every power level — a shield envelope is a fixed
  * shape, and only how hard it is running changes. It stands well clear of the
- * widest hull (the Vesper's sail spans 144 of the 200), so the rim never sits
+ * widest hull ever drawn (the Vesper's sail spanned 144 of the 200, before it
+ * was cut from the roster), so the rim never sits
  * on top of the ship.
  */
 const SHIELD_RX = 96;
@@ -88,7 +91,7 @@ const SHIELD_STROKE = (level: number) => 0.16 + 0.17 * level;
  * centre. Everything inside it is fully transparent at every level.
  *
  * 0.82 is measured, not chosen: the furthest corner of any hull — the Lance's
- * nose and wingtips, the Halo's ring — sits at about 0.80 of these radii, so
+ * nose and wingtips, and the Halo's ring when it was in the roster — sits at about 0.80 of these radii, so
  * the colour only begins once the ship has ended. That is what keeps the ship
  * as readable at four bars as at one; more power brightens the rim instead of
  * fogging the hull.
@@ -261,6 +264,7 @@ export function ShipSystems({
   shields,
   shieldHits,
   engines,
+  weapon = null,
   animate = true,
 }: Props) {
   // The hull's exhaust ports, as distinct from the bars powering them.
@@ -279,7 +283,7 @@ export function ShipSystems({
         animate={animate}
       />
 
-      <ShipArt shipId={shipId} width={width} height={height} />
+      <ShipArt shipId={shipId} width={width} height={height} weapon={weapon} />
 
       <Shield level={shields} width={width * SYSTEMS_SPAN} height={height * SYSTEMS_SPAN} />
 

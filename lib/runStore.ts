@@ -17,7 +17,9 @@ import {
 import { ENCOUNTER_STYLE } from '@/lib/encounters';
 import type { Meeting } from '@/lib/dialogue';
 import { HULL_MAX, damagedHull } from '@/lib/hull';
+import { cargoSlots, fitHold, moveItem, type Place } from '@/lib/hold';
 import { DEFAULT_SHIP_ID, shipById } from '@/lib/ships';
+import { weaponById } from '@/lib/weapons';
 import {
   FUEL_PER_RUN,
   encounterAt,
@@ -96,6 +98,17 @@ export type RunState = {
    * counting how many have spoken.
    */
   spoken: number[];
+  /**
+   * The weapon on the ship's hardpoint, by id, or null once it has been
+   * moved into the hold. This is what decides whether a weapon is drawn on
+   * the ship's nose.
+   */
+  mounted: string | null;
+  /**
+   * The cargo slots, one entry per slot the ship's hold has: a weapon id, or
+   * null for an empty slot. Always exactly `cargoSlots(ship.cargo)` long.
+   */
+  hold: (string | null)[];
 };
 
 /**
@@ -230,12 +243,13 @@ let cached: RunState | null | undefined;
 function createRun(shipId: string): RunState {
   const now = Date.now();
   const map = generateMap();
-  const energyAtStart = defaultEnergy(shipById(shipId).reactor);
+  const ship = shipById(shipId);
+  const energyAtStart = defaultEnergy(ship.reactor);
   return {
     id: `${now}-${Math.random().toString(36).slice(2, 10)}`,
     startedAt: now,
     lastPlayedAt: now,
-    shipId,
+    shipId: ship.id,
     map,
     position: map.start,
     visited: [map.start],
@@ -251,6 +265,9 @@ function createRun(shipId: string): RunState {
     // A run opens with its shields already up; the charge time is for changes
     // made in flight, not a penalty for launching.
     shieldCharge: energyAtStart.shields,
+    // Every ship launches armed, with an empty hold.
+    mounted: ship.weapon,
+    hold: Array.from({ length: cargoSlots(ship.cargo) }, () => null),
   };
 }
 
@@ -392,6 +409,21 @@ export function damageShield(run: RunState): RunState {
 }
 
 /**
+ * Moves a weapon between the hardpoint and the hold, or between two cargo
+ * slots.
+ *
+ * The rule itself is `moveItem` in `lib/hold.ts`; this only carries it onto
+ * the run. Like `shiftEnergy`, an illegal move — nothing to move, somewhere
+ * already full — returns the run unchanged by identity.
+ */
+export function moveGear(run: RunState, from: Place, to: Place): RunState {
+  const current = { mounted: run.mounted, hold: run.hold };
+  const next = moveItem(current, from, to);
+  if (next === current) return run;
+  return { ...run, mounted: next.mounted, hold: next.hold };
+}
+
+/**
  * Fills in anything a save predates — a ship, a jump map, a tank of fuel — so
  * an older run opens instead of being thrown away.
  *
@@ -411,8 +443,12 @@ function hydrate(stored: StoredRun): RunState {
     typeof stored.jumps === 'number' ? stored.jumps : Math.max(visited.length - 1, 0);
 
   const now = Date.now();
-  const shipId = stored.shipId ?? DEFAULT_SHIP_ID;
-  const energy = clampEnergy(stored.energy, shipById(shipId).reactor);
+  // Resolved through the table rather than trusted, so a run launched in a
+  // ship that has since been cut from the roster loads as the first ship
+  // everywhere, instead of being the old ship in some places and not others.
+  const ship = shipById(stored.shipId ?? DEFAULT_SHIP_ID);
+  const shipId = ship.id;
+  const energy = clampEnergy(stored.energy, ship.reactor);
   return {
     id: stored.id ?? `${now}-${Math.random().toString(36).slice(2, 10)}`,
     startedAt: stored.startedAt ?? now,
@@ -453,6 +489,12 @@ function hydrate(stored: StoredRun): RunState {
     spoken: Array.isArray(stored.spoken)
       ? [...new Set(stored.spoken.filter((index) => typeof index === 'number'))]
       : [...visited],
+    // A save from before weapons existed comes back armed with its ship's
+    // weapon. One that has deliberately stowed it keeps `null`, which is why
+    // this asks whether the field is there rather than whether it is truthy.
+    mounted:
+      'mounted' in stored ? (weaponById(stored.mounted)?.id ?? null) : ship.weapon,
+    hold: fitHold(stored.hold, cargoSlots(ship.cargo), (id) => weaponById(id) !== null),
   };
 }
 

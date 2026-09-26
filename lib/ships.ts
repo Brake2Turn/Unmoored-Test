@@ -4,6 +4,10 @@
  * Each entry is pure data — the drawing lives in `components/ships/ShipArt.tsx`,
  * keyed by `id`. Adding a ship means adding an entry here and a case there.
  *
+ * Three ships, one per weapon. There were six; the other three (Halo, Mantis,
+ * Vesper) were cut to keep the roster small while weapons are worked out. A
+ * save launched in one of them loads as the first ship instead.
+ *
  * A ship with an `unlockHint` starts locked: it still appears in the carousel,
  * because seeing what is coming is half the reason to keep playing, but it
  * cannot be launched until `lib/unlocks.ts` says otherwise.
@@ -32,6 +36,12 @@ export type Ship = {
    */
   reactor: number;
   /**
+   * The weapon on the hardpoint at launch, by id in `lib/weapons.ts`. Once the
+   * run starts it can be moved into the hold and back; this is only where it
+   * begins.
+   */
+  weapon: string;
+  /**
    * What the player has to do to earn this ship. Present means locked by
    * default; absent means available from the first launch.
    */
@@ -46,6 +56,7 @@ export const SHIPS: Ship[] = [
     tagline: 'Slow, stubborn, and built to come home.',
     cargo: 0.6,
     reactor: 6,
+    weapon: 'weapon1',
   },
   {
     id: 'lance',
@@ -54,6 +65,7 @@ export const SHIPS: Ship[] = [
     tagline: 'Outrun the dark. Nothing spare aboard.',
     cargo: 0.2,
     reactor: 5,
+    weapon: 'weapon2',
   },
   {
     id: 'bulwark',
@@ -62,34 +74,8 @@ export const SHIPS: Ship[] = [
     tagline: 'Carries everything. Hurries for nothing.',
     cargo: 1.0,
     reactor: 7,
+    weapon: 'weapon3',
     unlockHint: 'REACH SECTOR 5',
-  },
-  {
-    id: 'halo',
-    name: 'HALO',
-    className: 'RING TENDER',
-    tagline: 'Built around a hole. Holds what others cannot.',
-    cargo: 0.9,
-    reactor: 6,
-    unlockHint: 'REACH SECTOR 10',
-  },
-  {
-    id: 'mantis',
-    name: 'MANTIS',
-    className: 'SALVAGE CRAFT',
-    tagline: 'Takes what it needs from whatever it finds.',
-    cargo: 0.3,
-    reactor: 7,
-    unlockHint: 'SURVIVE A HULL BREACH',
-  },
-  {
-    id: 'vesper',
-    name: 'VESPER',
-    className: 'SAIL CLIPPER',
-    tagline: 'Rides the solar wind. Nothing else to give.',
-    cargo: 0.5,
-    reactor: 4,
-    unlockHint: 'FINISH A RUN UNDER 10:00',
   },
 ];
 

@@ -1,6 +1,7 @@
 import React from 'react';
-import Svg, { Circle, Defs, Ellipse, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import Svg, { Defs, Ellipse, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 
+import { MountedWeapon } from '@/components/WeaponArt';
 import { palette } from '@/lib/theme';
 
 type Props = {
@@ -9,6 +10,11 @@ type Props = {
   height: number;
   /** Draws the ship in cold grey instead of in the usual white. */
   locked?: boolean;
+  /**
+   * The weapon on the hardpoint, drawn on the nose. Null or absent draws the
+   * bare hull — which is what a ship looks like once its weapon is in the hold.
+   */
+  weapon?: string | null;
 };
 
 /** Every edge and light on a locked ship drops to this. */
@@ -40,9 +46,22 @@ export const ENGINES: Record<string, Engine[]> = {
     { x: 84, y: 216, width: 20 },
     { x: 116, y: 216, width: 20 },
   ],
-  halo: [{ x: 100, y: 220, width: 16 }],
-  mantis: [{ x: 100, y: 214, width: 20 }],
-  vesper: [{ x: 100, y: 228, width: 14 }],
+};
+
+/**
+ * Where each hull carries its weapon, in the same 200×260 box: the base of the
+ * weapon, with the barrel pointing forward from there.
+ *
+ * Read off the paths below the same way `ENGINES` is. Each sits on the front
+ * of the hull — between the Drifter's prongs on top of its canopy, just ahead
+ * of the Lance's cockpit, on the Bulwark's blunt bow — and none reaches past
+ * the ship's own furthest point, so the shield's clear zone (`SHIELD_CLEAR`)
+ * still clears every armed ship.
+ */
+export const MOUNTS: Record<string, { x: number; y: number }> = {
+  drifter: { x: 100, y: 94 },
+  lance: { x: 100, y: 64 },
+  bulwark: { x: 100, y: 46 },
 };
 
 /** Same fallback as the art: an unknown ship gets the Drifter's. */
@@ -59,9 +78,11 @@ export const ShipArt = React.memo(function ShipArt({
   width,
   height,
   locked = false,
+  weapon = null,
 }: Props) {
   const tint = locked ? LOCKED_TINT : palette.player;
   const Art = ART[shipId] ?? Drifter;
+  const mount = MOUNTS[shipId] ?? MOUNTS.drifter;
   return (
     <Svg width={width} height={height} viewBox={`0 0 ${SHIP_BOX_W} ${SHIP_BOX_H}`}>
       <Defs>
@@ -75,6 +96,9 @@ export const ShipArt = React.memo(function ShipArt({
         </LinearGradient>
       </Defs>
       <Art line={tint} />
+      {weapon ? (
+        <MountedWeapon weaponId={weapon} x={mount.x} y={mount.y} line={tint} fill="url(#plate)" />
+      ) : null}
     </Svg>
   );
 });
@@ -161,91 +185,9 @@ function Bulwark({ line }: { line: string }) {
   );
 }
 
-/** Ring tender: the hull is a torus, the cargo rides inside the hole. */
-function Halo({ line }: { line: string }) {
-  return (
-    <>
-      <Rect x={92} y={34} width={16} height={190} rx={7} fill="url(#plate)" stroke={line} strokeWidth={2} />
-      <Circle cx={100} cy={132} r={62} fill="none" stroke="url(#plate)" strokeWidth={26} />
-      <Circle cx={100} cy={132} r={75} fill="none" stroke={line} strokeWidth={2} />
-      <Circle cx={100} cy={132} r={49} fill="none" stroke={line} strokeWidth={2} strokeOpacity={0.6} />
-      <Path
-        d="M100 57 L100 70 M175 132 L162 132 M100 207 L100 194 M25 132 L38 132"
-        stroke={line}
-        strokeWidth={3}
-        strokeLinecap="round"
-        opacity={0.8}
-      />
-      <Circle cx={100} cy={56} r={13} fill="url(#glass)" stroke={line} strokeWidth={1.5} />
-      <Path d="M92 220 L108 220" stroke={line} strokeWidth={4} strokeLinecap="round" opacity={0.9} />
-    </>
-  );
-}
-
-/** Salvage craft: a narrow body between two forward grappling claws. */
-function Mantis({ line }: { line: string }) {
-  return (
-    <>
-      <Path
-        d="M84 98 C 50 112 38 154 52 192 L68 184 C 58 154 66 124 88 116 Z"
-        fill="url(#plate)"
-        stroke={line}
-        strokeWidth={2}
-        strokeLinejoin="round"
-      />
-      <Path
-        d="M116 98 C 150 112 162 154 148 192 L132 184 C 142 154 134 124 112 116 Z"
-        fill="url(#plate)"
-        stroke={line}
-        strokeWidth={2}
-        strokeLinejoin="round"
-      />
-      <Path
-        d="M100 30 L118 88 L112 206 L88 206 L82 88 Z"
-        fill="url(#plate)"
-        stroke={line}
-        strokeWidth={2}
-        strokeLinejoin="round"
-      />
-      <Ellipse cx={100} cy={74} rx={12} ry={22} fill="url(#glass)" stroke={line} strokeWidth={1.5} />
-      <Path d="M52 192 L46 202 M148 192 L154 202" stroke={line} strokeWidth={3} strokeLinecap="round" />
-      <Path d="M90 214 L110 214" stroke={line} strokeWidth={4} strokeLinecap="round" opacity={0.9} />
-    </>
-  );
-}
-
-/** Sail clipper: an enormous solar sail dragging a very small boat. */
-function Vesper({ line }: { line: string }) {
-  return (
-    <>
-      <Path
-        d="M100 22 L172 178 L28 178 Z"
-        fill={line}
-        fillOpacity={0.09}
-        stroke={line}
-        strokeWidth={2}
-        strokeLinejoin="round"
-      />
-      <Path
-        d="M100 22 L100 178 M100 22 L64 178 M100 22 L136 178"
-        stroke={line}
-        strokeWidth={1.5}
-        strokeOpacity={0.4}
-      />
-      <Path d="M56 150 L144 150" stroke={line} strokeWidth={1.5} strokeOpacity={0.3} />
-      <Rect x={90} y={168} width={20} height={56} rx={9} fill="url(#plate)" stroke={line} strokeWidth={2} />
-      <Circle cx={100} cy={184} r={7} fill="url(#glass)" stroke={line} strokeWidth={1.2} />
-      <Path d="M93 228 L107 228" stroke={line} strokeWidth={4} strokeLinecap="round" opacity={0.9} />
-    </>
-  );
-}
-
 /** One entry per ship id, so the roster and the art can be read side by side. */
 const ART: Record<string, (props: { line: string }) => React.JSX.Element> = {
   drifter: Drifter,
   lance: Lance,
   bulwark: Bulwark,
-  halo: Halo,
-  mantis: Mantis,
-  vesper: Vesper,
 };
