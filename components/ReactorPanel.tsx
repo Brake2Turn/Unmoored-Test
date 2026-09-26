@@ -9,7 +9,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { ReactorGlyph, SubstationGlyph, SubsystemGlyph } from '@/components/SubsystemGlyph';
+import { SubstationGlyph, SubsystemGlyph, SubsystemsGlyph } from '@/components/SubsystemGlyph';
 import { CARD } from '@/components/PanelChrome';
 import {
   SUBSYSTEMS,
@@ -110,13 +110,17 @@ export function ReactorPanel({
       }
       style={[styles.panel, { width, height: REACTOR_PANEL_HEIGHT }]}
     >
-      {/* The section's name, and the power nothing has claimed yet — yellow,
-          the one reading that is not a subsystem. */}
+      {/* The section is the SUBSYSTEMS; the REACTOR is what feeds them, so
+          its mark, its name and the power it has left unclaimed sit at the
+          right, in the reactor's green. */}
       <View style={styles.header}>
-        <SubstationGlyph color={palette.textMuted} size={12} />
-        <Text style={styles.title}>REACTOR</Text>
+        <SubsystemsGlyph color={palette.textMuted} size={12} />
+        <Text style={styles.title}>SUBSYSTEMS</Text>
         <View style={styles.headerRule} />
-        <ReactorGlyph color={free > 0 ? palette.power : palette.textDisabled} size={12} />
+        <SubstationGlyph color={free > 0 ? palette.power : palette.textDisabled} size={12} />
+        <Text style={[styles.title, { color: free > 0 ? palette.power : palette.textDisabled }]}>
+          REACTOR
+        </Text>
         <Text style={[styles.free, { color: free > 0 ? palette.power : palette.textDisabled }]}>
           {free}
         </Text>

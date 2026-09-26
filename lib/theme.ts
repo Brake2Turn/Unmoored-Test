@@ -54,13 +54,13 @@ export const palette = {
   /**
    * Reactor energy nothing has claimed.
    *
-   * A light pastel green, the author's choice. It was yellow before that and
-   * cyan before that; cyan was the shields row's colour, so the one number
-   * that means "unspent" looked like another system reporting in. Loose
-   * current should not match anything it could be put into, and green is no
-   * subsystem's.
+   * The reactor's green: vivid, as saturated as the three subsystem colours
+   * beside it, the author's choice. It was a pale pastel green, yellow before
+   * that, and cyan before that; cyan was the shields row's colour, so the one
+   * number that means "unspent" looked like another system reporting in.
+   * Green is no subsystem's.
    */
-  power: '#A8E6BC',
+  power: '#3FE07A',
 
   /**
    * The three reactor subsystems, each its own tint so a glance at the helm

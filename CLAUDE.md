@@ -337,7 +337,7 @@ is pixel-art *styled* rather than a true integer upscale and has nothing to
 snap to.
 
 **The map is an instrument, not a window.** The title screen and the helm look
-*out* — gradient sky, nebulae, a drifting `StarField`. The sector map does not:
+*out* — gradient sky, nebulae, a `StarField`. The sector map does not:
 it is a chart on a piloting console (`components/StarChart.tsx`), with a lit
 display a shade off the housing, the sector's own graticule, graduations down
 two edges, a bezel with corner brackets and a vignette curving the glass. The
@@ -352,7 +352,13 @@ own `<Svg>` for that reason: a separate layer behind it would mean two
 transforms to keep in step, and they would part company the first time the
 board was resized.
 
-Nothing on it moves. A radar sweep would say "console" louder than any of it,
+**The `StarField` stays put** (title screen and helm alike): stars twinkle and
+some wander a point or two about their own spot and back (`BANDS[].wander`,
+`reach`), each on its own slow loop. It used to slide down the screen in three
+parallax layers; the author asked for stars that stay where they are. Reduce
+Motion holds every star still.
+
+Nothing on the chart moves. A radar sweep would say "console" louder than any of it,
 but motion cannot be checked in this container at all, and a scanner that
 silently sat still would be worse than one that was never there.
 
@@ -513,9 +519,13 @@ name in its colour over two stacked readings — the bars *in* it (animated
 `EnergyCell`s) and a hairline track for how far what it is building has got
 — then `n/4`, then − and + buttons (`STEP_W` × `STEP_H`, 44×34), the biggest
 thing in the row because they are what gets pressed. The rows are kept squat
-so the panel costs little more height than the old collapsed tab. The header
-carries the section's mark and REACTOR, and at its right the power nothing
-has claimed, a pastel green bolt and a number.
+so the panel costs little more height than the old collapsed tab. **The
+header says SUBSYSTEMS** beside its own mark (`SubsystemsGlyph`, three sliders
+at different levels), and at its right the reactor: its power-station mark
+(`SubstationGlyph`), the word REACTOR and the energy nothing has claimed, all
+in the reactor's green (grey at zero). The author renamed it that way — the
+panel is the subsystems; the reactor is what feeds them. The bolt glyph that
+used to mark spare energy is gone.
 
 **The shield's track is cut into four sections, one per layer**
 (`ShieldLayers`). Every layer takes the same time to charge however much energy
@@ -771,11 +781,12 @@ did not work.
 
 **The reactor rows are named** — SHIELDS, WEAPONS, ENGINES, beside their
 marks. They were wordless for a long while (the marks were meant to carry it);
-the author's mock-up put the names back, and the author's call wins. Free
-power is still a bolt and a number, not `0 FREE`.
+the author's mock-up put the names back, and the author's call wins. Spare
+energy reads REACTOR and a number, not `0 FREE`.
 
-**Unclaimed power is light pastel green** (`palette.power`), the author's
-choice — it was yellow, and cyan before that. Cyan was the shields row's
+**Unclaimed power is the reactor's vivid green** (`palette.power`, `#3FE07A`),
+as saturated as the three subsystem colours — the author's choice after a pale
+pastel green, yellow, and cyan before that. Cyan was the shields row's
 colour, so the one figure meaning "not in anything yet" looked like a fourth
 system reporting in; green is no subsystem's. It sits at the right of the
 reactor's header line.

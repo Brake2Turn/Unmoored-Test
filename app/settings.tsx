@@ -132,7 +132,7 @@ export default function SettingsScreen() {
           />
         </View>
         <Text style={styles.footnote}>
-          Reduce Motion calms the drifting starfield on the title screen.
+          Reduce Motion holds the stars still: no twinkling, no drifting.
         </Text>
 
         <Text style={styles.section}>DEVELOPER</Text>

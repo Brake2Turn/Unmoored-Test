@@ -19,18 +19,26 @@ type Star = {
   opacity: number;
   color: string;
   twinkle: boolean;
+  /** Drifts a little way about its own spot and back, rather than across. */
+  wander: { dx: number; dy: number; period: number } | null;
   delay: number;
   period: number;
 };
 
 /**
- * Depth bands: far stars are small, dim and slow; near stars are larger,
- * brighter and drift noticeably faster. `speed` is points per second.
+ * Depth bands: far stars are small and dim, near ones larger and brighter.
+ *
+ * Nothing flows across the screen any more. The field used to slide down
+ * past the ship in three layers at different speeds; the author asked for
+ * stars that stay where they are and twinkle or shift slightly in place. So
+ * each band now says how many of its stars twinkle and how many wander, and
+ * how far a wanderer strays (`reach`, in points) — the near band furthest,
+ * which keeps a little of the depth the drift used to give.
  */
 const BANDS = [
-  { count: 70, min: 1.0, max: 2.0, minA: 0.25, maxA: 0.5, speed: 4, twinkle: 0.1 },
-  { count: 40, min: 1.8, max: 3.2, minA: 0.45, maxA: 0.75, speed: 9, twinkle: 0.25 },
-  { count: 18, min: 3.0, max: 5.0, minA: 0.7, maxA: 1.0, speed: 17, twinkle: 0.45 },
+  { count: 70, min: 1.0, max: 2.0, minA: 0.25, maxA: 0.5, twinkle: 0.35, wander: 0.15, reach: 1 },
+  { count: 40, min: 1.8, max: 3.2, minA: 0.45, maxA: 0.75, twinkle: 0.5, wander: 0.3, reach: 1.8 },
+  { count: 18, min: 3.0, max: 5.0, minA: 0.7, maxA: 1.0, twinkle: 0.6, wander: 0.45, reach: 2.6 },
 ] as const;
 
 function tint() {
@@ -41,16 +49,24 @@ function tint() {
 }
 
 function makeStars(band: (typeof BANDS)[number], width: number, height: number): Star[] {
-  return Array.from({ length: band.count }, () => ({
-    x: Math.random() * width,
-    y: Math.random() * height,
-    size: band.min + Math.random() * (band.max - band.min),
-    opacity: band.minA + Math.random() * (band.maxA - band.minA),
-    color: tint(),
-    twinkle: Math.random() < band.twinkle,
-    delay: Math.random() * 2500,
-    period: 1400 + Math.random() * 2200,
-  }));
+  return Array.from({ length: band.count }, () => {
+    const angle = Math.random() * Math.PI * 2;
+    const reach = band.reach * (0.5 + Math.random() * 0.5);
+    return {
+      x: Math.random() * width,
+      y: Math.random() * height,
+      size: band.min + Math.random() * (band.max - band.min),
+      opacity: band.minA + Math.random() * (band.maxA - band.minA),
+      color: tint(),
+      twinkle: Math.random() < band.twinkle,
+      wander:
+        Math.random() < band.wander
+          ? { dx: Math.cos(angle) * reach, dy: Math.sin(angle) * reach, period: 2600 + Math.random() * 3400 }
+          : null,
+      delay: Math.random() * 2500,
+      period: 1400 + Math.random() * 2200,
+    };
+  });
 }
 
 function dotStyle(star: Star) {
@@ -66,56 +82,55 @@ function dotStyle(star: Star) {
   };
 }
 
-function TwinklingStar({ star }: { star: Star }) {
+/**
+ * A star that twinkles, wanders about its spot, or both. Each runs on its own
+ * slow loop out and back, so nothing ever leaves where it was put.
+ */
+function LivelyStar({ star }: { star: Star }) {
   const opacity = useSharedValue(star.opacity);
+  const drift = useSharedValue(0);
 
   useEffect(() => {
-    opacity.value = withDelay(
-      star.delay,
-      withRepeat(withTiming(star.opacity * 0.35, { duration: star.period }), -1, true),
-    );
-    return () => cancelAnimation(opacity);
-  }, [opacity, star.delay, star.opacity, star.period]);
+    if (star.twinkle) {
+      opacity.value = withDelay(
+        star.delay,
+        withRepeat(withTiming(star.opacity * 0.3, { duration: star.period }), -1, true),
+      );
+    }
+    if (star.wander) {
+      drift.value = withDelay(
+        star.delay,
+        withRepeat(
+          withTiming(1, { duration: star.wander.period, easing: Easing.inOut(Easing.sin) }),
+          -1,
+          true,
+        ),
+      );
+    }
+    return () => {
+      cancelAnimation(opacity);
+      cancelAnimation(drift);
+    };
+  }, [drift, opacity, star]);
 
-  const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
+  const style = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [
+      { translateX: (star.wander?.dx ?? 0) * drift.value },
+      { translateY: (star.wander?.dy ?? 0) * drift.value },
+    ],
+  }));
 
   // Opacity comes from the animation, not the base style.
   return <Animated.View style={[dotStyle(star), { opacity: undefined }, style]} />;
 }
 
-/** Static dot. Also the resting look of a twinkling star when motion is off. */
+/** Static dot. Also the resting look of every star when motion is off. */
 function StaticStar({ star }: { star: Star }) {
   return <View style={dotStyle(star)} />;
 }
 
-const Tile = React.memo(function Tile({
-  stars,
-  offsetY,
-  reduceMotion,
-}: {
-  stars: Star[];
-  offsetY: number;
-  reduceMotion: boolean;
-}) {
-  return (
-    <View style={[StyleSheet.absoluteFill, { transform: [{ translateY: offsetY }] }]}>
-      {stars.map((star, index) =>
-        star.twinkle && !reduceMotion ? (
-          <TwinklingStar key={index} star={star} />
-        ) : (
-          <StaticStar key={index} star={star} />
-        ),
-      )}
-    </View>
-  );
-});
-
-/**
- * One depth band. The tile of stars is drawn twice — once at y=0 and once a
- * full screen above — and the pair slides down together. When it has travelled
- * exactly one screen height the animation restarts, and because the upper tile
- * is now where the lower one began, the loop is seamless.
- */
+/** One depth band, laid once across the screen and left there. */
 function Layer({
   band,
   width,
@@ -128,33 +143,17 @@ function Layer({
   reduceMotion: boolean;
 }) {
   const stars = useMemo(() => makeStars(band, width, height), [band, width, height]);
-  const translateY = useSharedValue(0);
-
-  useEffect(() => {
-    if (reduceMotion || height <= 0) {
-      cancelAnimation(translateY);
-      translateY.value = 0;
-      return;
-    }
-    translateY.value = 0;
-    translateY.value = withRepeat(
-      withTiming(height, {
-        duration: (height / band.speed) * 1000,
-        easing: Easing.linear,
-      }),
-      -1,
-      false,
-    );
-    return () => cancelAnimation(translateY);
-  }, [translateY, height, band.speed, reduceMotion]);
-
-  const style = useAnimatedStyle(() => ({ transform: [{ translateY: translateY.value }] }));
 
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, style]}>
-      <Tile stars={stars} offsetY={0} reduceMotion={reduceMotion} />
-      <Tile stars={stars} offsetY={-height} reduceMotion={reduceMotion} />
-    </Animated.View>
+    <View style={StyleSheet.absoluteFill}>
+      {stars.map((star, index) =>
+        (star.twinkle || star.wander) && !reduceMotion ? (
+          <LivelyStar key={index} star={star} />
+        ) : (
+          <StaticStar key={index} star={star} />
+        ),
+      )}
+    </View>
   );
 }
 

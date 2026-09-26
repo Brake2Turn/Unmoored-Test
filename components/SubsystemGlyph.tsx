@@ -95,35 +95,10 @@ export function CrewGlyph({ color, size = 13 }: { color: string; size?: number }
 }
 
 /**
- * A bolt, for the power nothing has claimed.
- *
- * Drawn as an outline like every other mark here. It was a solid shape, which
- * made it the one filled glyph in the set and gave it a weight the others do
- * not have — it read as the loudest thing in the tab rather than as a quiet
- * footnote about spare power.
- */
-export function ReactorGlyph({ color, size = 13 }: { color: string; size?: number }) {
-  return (
-    <Svg width={size} height={size * 1.08} viewBox="0 0 16 17">
-      <Path
-        d="M9.4 0.8 L3.2 9.6 H7.2 L6.6 16.2 L12.8 7.2 H8.8 Z"
-        fill="none"
-        stroke={color}
-        strokeWidth={1.5}
-        strokeLinejoin="round"
-      />
-    </Svg>
-  );
-}
-
-/**
- * The reactor tab's own mark: a power station, waisted like a cooling tower.
- *
- * Deliberately not the bolt. The bolt means *unclaimed* power and already
- * appears inside this tab next to the number, so it cannot also stand for the
- * tab as a whole — the section and one reading inside it would look like the
- * same thing. Straight edges rather than curves because this is drawn at
- * eleven pixels, where a curve turns to mush.
+ * The reactor's mark: a power station, waisted like a cooling tower. It sits
+ * with the word REACTOR and the energy nothing has claimed, at the right of
+ * the subsystems header. Straight edges rather than curves because it is
+ * drawn at twelve pixels, where a curve turns to mush.
  */
 export function SubstationGlyph({ color, size = 13 }: { color: string; size?: number }) {
   return (
@@ -163,6 +138,29 @@ export function ShipGlyph({ color, size = 13 }: { color: string; size?: number }
         strokeLinejoin="round"
       />
       <Circle cx={8} cy={7.4} r={1.6} fill="none" stroke={color} strokeWidth={1.2} />
+    </Svg>
+  );
+}
+
+/**
+ * The subsystems section's mark: three sliders, each set to a different level
+ * — power shared out across rows, which is what the section is for. It took
+ * over the section's name from REACTOR, whose power-station mark now labels
+ * the spare energy instead.
+ */
+export function SubsystemsGlyph({ color, size = 13 }: { color: string; size?: number }) {
+  return (
+    <Svg width={size} height={size * 1.08} viewBox="0 0 16 17">
+      <Path
+        d="M1.5 3.5 H14.5 M1.5 8.5 H14.5 M1.5 13.5 H14.5"
+        stroke={color}
+        strokeWidth={1.3}
+        strokeLinecap="round"
+        strokeOpacity={0.55}
+      />
+      <Circle cx={10.5} cy={3.5} r={1.9} fill="none" stroke={color} strokeWidth={1.5} />
+      <Circle cx={5} cy={8.5} r={1.9} fill="none" stroke={color} strokeWidth={1.5} />
+      <Circle cx={8.5} cy={13.5} r={1.9} fill="none" stroke={color} strokeWidth={1.5} />
     </Svg>
   );
 }
