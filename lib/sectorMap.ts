@@ -52,10 +52,9 @@ export type MapNode = {
    * Which entry of `MEETINGS` is waiting here, or null for an empty star.
    *
    * The id rather than the encounter's contents, so rewriting a line in the
-   * table changes what an in-progress run says. Absent on maps saved before
-   * meetings existed — see `assignMeetings`.
+   * table changes what an in-progress run says. Dealt by `assignMeetings`.
    */
-  meeting?: number | null;
+  meeting: number | null;
 };
 
 export type SectorMap = {
@@ -119,6 +118,7 @@ export function generateMap(): SectorMap {
         x: clamp(centre + jitterX, EDGE_PADDING, MAP_W - EDGE_PADDING),
         y: clamp(baseY + jitterY, TOP_MARGIN, MAP_H - BOTTOM_MARGIN),
         band,
+        meeting: null,
       });
     }
 
@@ -174,9 +174,7 @@ export function generateMap(): SectorMap {
  * differently every time.
  */
 export function assignMeetings(map: SectorMap): void {
-  // Resolved rather than read straight off the map, so a map saved before the
-  // boss field existed still gets one.
-  const boss = bossIndex(map);
+  const boss = map.boss;
 
   const free: number[] = [];
   for (let i = 0; i < map.nodes.length; i++) {
@@ -195,11 +193,7 @@ export function assignMeetings(map: SectorMap): void {
   });
 
   map.nodes[map.start].meeting = null;
-  if (map.nodes[boss]) {
-    map.nodes[boss].meeting = null;
-    // Record it, so a migrated map stops re-deriving the boss on every render.
-    map.boss = boss;
-  }
+  map.nodes[boss].meeting = null;
 }
 
 /**
@@ -229,47 +223,35 @@ function dealMeetings(count: number): number[] {
 }
 
 /**
- * Brings a map up to date, whatever shape it was saved in.
- *
- * A map saved before meetings existed carried a coarse `encounter` string per
- * star instead. Those are converted rather than reshuffled: a star the player
- * has already stood on keeps the hull colour it had, and only gains words.
- * A map from before either simply gets dealt.
+ * True when every star says what is waiting on it — a whole map, as this game
+ * writes them. A loaded save is only trusted with its map once this holds.
  */
-export function migrateMap(map: SectorMap): void {
-  if (hasMeetings(map)) return;
-  if (carryLegacyEncounters(map)) return;
-  assignMeetings(map);
+export function hasMeetings(map: SectorMap): boolean {
+  return map.nodes.every((node) => node.meeting === null || typeof node.meeting === 'number');
 }
 
 /**
- * Converts the old per-star `encounter` strings into meetings, in place.
- *
- * Returns false — leaving the map untouched — unless every star carries one,
- * so a half-written save is dealt fresh rather than half converted.
+ * Whether something read off disk is a whole map as this game writes them:
+ * placed stars, each saying what waits there, and a start and a boss that are
+ * real stars. A save whose map fails this is from an older game.
  */
-function carryLegacyEncounters(map: SectorMap): boolean {
-  type Legacy = { encounter?: string };
-  const legacy = map.nodes.map((node) => (node as MapNode & Legacy).encounter);
-  if (legacy.some((kind) => typeof kind !== 'string')) return false;
-
-  const red = MEETINGS.filter((meeting) => meeting.hull === 'red');
-  const yellow = MEETINGS.filter((meeting) => meeting.hull === 'yellow');
-
-  map.nodes.forEach((node, index) => {
-    const pool = legacy[index] === 'enemy' ? red : legacy[index] === 'merchant' ? yellow : [];
-    node.meeting = pool.length ? pool[Math.floor(Math.random() * pool.length)].id : null;
-  });
-
-  map.boss = bossIndex(map);
-  map.nodes[map.start].meeting = null;
-  if (map.nodes[map.boss]) map.nodes[map.boss].meeting = null;
-  return true;
-}
-
-/** True once every star knows what is waiting on it. */
-export function hasMeetings(map: SectorMap): boolean {
-  return map.nodes.every((node) => node.meeting !== undefined);
+export function isSectorMap(value: unknown): value is SectorMap {
+  if (!value || typeof value !== 'object') return false;
+  const { nodes, start, boss } = value as Partial<SectorMap>;
+  if (!Array.isArray(nodes) || nodes.length === 0) return false;
+  const isIndex = (i: unknown) => Number.isInteger(i) && (i as number) >= 0 && (i as number) < nodes.length;
+  return (
+    isIndex(start) &&
+    isIndex(boss) &&
+    nodes.every(
+      (node) =>
+        !!node &&
+        Number.isFinite(node.x) &&
+        Number.isFinite(node.y) &&
+        Number.isInteger(node.band) &&
+        (node.meeting === null || Number.isInteger(node.meeting)),
+    )
+  );
 }
 
 /**
@@ -306,18 +288,9 @@ function shuffle<T>(items: T[]): void {
   }
 }
 
-/**
- * Which star holds the boss, tolerating maps saved before bosses existed by
- * falling back to the furthest band.
- */
+/** Which star holds the boss. */
 export function bossIndex(map: SectorMap): number {
-  if (typeof map.boss === 'number' && map.nodes[map.boss]) return map.boss;
-
-  let best = 0;
-  for (let i = 1; i < map.nodes.length; i++) {
-    if (map.nodes[i].band > map.nodes[best].band) best = i;
-  }
-  return best;
+  return map.boss;
 }
 
 /**

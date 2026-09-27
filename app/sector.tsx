@@ -10,14 +10,8 @@ import { BUTTON_TONE } from '@/lib/subsystems';
 import { useHaptics, useSettings } from '@/lib/settings';
 import { StarChart } from '@/components/StarChart';
 import { fonts, palette, tracking, useMenuWidth } from '@/lib/theme';
-import {
-  applyJump,
-  jumpBlocker,
-  loadRun,
-  saveRun,
-  sectorOf,
-  type RunState,
-} from '@/lib/runStore';
+import { applyJump, jumpBlocker, sectorOf, type RunState } from '@/lib/run';
+import { loadRun, saveRun } from '@/lib/runStore';
 import {
   JUMP_RANGE,
   MAP_H,

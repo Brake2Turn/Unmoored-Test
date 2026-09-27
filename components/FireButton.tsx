@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 
-import type { FireBlock } from '@/lib/runStore';
+import type { FireBlock } from '@/lib/run';
 import { BUTTON_TONE } from '@/lib/subsystems';
 import { fonts, layout, palette, tracking } from '@/lib/theme';
 

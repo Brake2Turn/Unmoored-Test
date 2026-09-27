@@ -131,17 +131,6 @@ export function regenShield(charge: number, target: number, seconds: number): nu
   return Math.min(safeTarget, safeCharge + Math.max(0, seconds) * SHIELD_REGEN_PER_SECOND);
 }
 
-/**
- * Names a subsystem used to be saved under.
- *
- * Engines shipped as "piloting" first. A save written under the old name has
- * to keep its bars — and now that the engines must be running to jump at all,
- * silently dropping them would leave a loaded run unable to move.
- */
-const LEGACY_KEYS: Partial<Record<Subsystem, string>> = {
-  engines: 'piloting',
-};
-
 /** Bars the reactor is currently carrying. */
 export function spentEnergy(energy: EnergyState): number {
   return SUBSYSTEMS.reduce((total, subsystem) => total + energy[subsystem], 0);
@@ -214,10 +203,10 @@ export function defaultEnergy(reactor: number): EnergyState {
 /**
  * Forces whatever a save holds into a legal allocation.
  *
- * Saves predate this system entirely, and a run can also be reloaded after the
- * ship table changed under it, so nothing here is taken on trust: unknown
- * shapes fall back to the default split, and an allocation larger than the
- * reactor is shed from the last subsystem backwards.
+ * A run can be reloaded after the ship table changed under it, and a save is
+ * only ever as good as the disk it came off, so nothing here is taken on
+ * trust: unknown shapes fall back to the default split, and an allocation
+ * larger than the reactor is shed from the last subsystem backwards.
  */
 export function clampEnergy(value: unknown, reactor: number): EnergyState {
   if (typeof value !== 'object' || value === null) return defaultEnergy(reactor);
@@ -227,17 +216,14 @@ export function clampEnergy(value: unknown, reactor: number): EnergyState {
   let sawOne = false;
 
   for (const subsystem of SUBSYSTEMS) {
-    const legacy = LEGACY_KEYS[subsystem];
-    const raw =
-      source[subsystem] ??
-      (legacy ? (source as Record<string, unknown>)[legacy] : undefined);
+    const raw = source[subsystem];
     if (typeof raw === 'number' && Number.isFinite(raw)) {
       energy[subsystem] = Math.max(0, Math.min(SUBSYSTEM_CAPACITY, Math.floor(raw)));
       sawOne = true;
     }
   }
 
-  // Nothing recognisable in there — treat it as a save from before the reactor.
+  // Nothing recognisable in there: start from the default split.
   if (!sawOne) return defaultEnergy(reactor);
 
   const budget = reactorBudget(reactor);

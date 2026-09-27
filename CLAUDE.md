@@ -113,10 +113,11 @@ Never tell the author the live game is up to date without having done step 4.
 
 ```bash
 npm install
-npm run verify        # typecheck + map and energy property checks — run this before claiming anything works
+npm run verify        # typecheck + map, energy and run property checks — run this before claiming anything works
 npm run typecheck     # tsc --noEmit on its own
 npm run verify:map    # sector generation properties, 2000 maps (pass a count: ... verify:map 5000)
 npm run verify:energy # reactor properties: legal allocations, moves, and junk saves
+npm run verify:run    # run rules: firing, provoking, hits, the clock, jumping, loading saves
 npm run build:web     # full production web bundle into dist/ — catches what tsc cannot
 npm run web           # dev server at localhost:8081
 ```
@@ -142,20 +143,23 @@ cd dist && python3 -m http.server 8099 --bind 127.0.0.1
   --screenshot=out.png "http://127.0.0.1:8099/"
 ```
 
-**To land on a screen other than the title, seed a save and drive the UI.**
-Write a scratch page into `dist/` that sets the run in `localStorage` before the
-bundle loads, then clicks its way in by `aria-label`. Two details make it work:
+**To land on a screen other than the title, launch a run and drive the UI.**
+Write a scratch page into `dist/` that clicks its way in by `aria-label`. A
+save is only kept when it is a whole run this game wrote (see "The run is the
+state"), so a hand-written `{ id, shipId }` is thrown away and the start
+screen offers nothing to continue. Instead, press NEW RUN then LAUNCH in a
+first page load with a kept browser profile (`--user-data-dir`), and on later
+loads edit *that* saved run in `localStorage` before the bundle boots —
+change its position, charges, hull, whatever the test needs — then press
+CONTINUE RUN. `scripts/drive-encounter.py` does exactly this. One more detail:
 
 ```js
 // Read the query string BEFORE the rewrite, which wipes it.
 var Q = new URLSearchParams(location.search);
 history.replaceState(null, '', '/');          // or expo-router 404s the page
-localStorage.setItem('unmoored.currentRun', JSON.stringify({ id: 'probe', shipId: 'bulwark' }));
 ```
 
-`hydrate()` fills in everything else, so an `id` and a `shipId` are a whole
-run — no need to hand-roll a map. Then click `Continue`, space the later steps
-out on `setTimeout` (see the two-taps trap below), and read the result back
+Space the later steps out on `setTimeout` (see the two-taps trap below), and read the result back
 either by collecting `aria-label`s into `document.title` with `--dump-dom`, or
 by screenshotting. Every control on the helm carries a label that states its
 numbers, so the DOM dump is usually enough and costs no image.
@@ -185,17 +189,38 @@ conclude anything about motion from it.
 
 ### The run is the state
 
-`lib/runStore.ts` owns everything about a run. `loadRun()` is the **only** way to
-get one: it reads AsyncStorage once, migrates whatever shape it finds, writes
-the migrated shape back, and caches it in memory. That is why `RunState` has no
-optional gameplay fields and why screens read `run.fuel` without `??` guards.
+A run is two files. **`lib/run.ts` is the rules**: `RunState`, and every
+change that can happen to one — jumping, moving energy, firing, provoking,
+hits either way, the other ship's gun, the clock — each taking a run and
+handing back a new one, or the same one when the change is not allowed.
+**`lib/runStore.ts` is the storage**: `loadRun`, `saveRun`, `startNewRun`,
+`clearRun`, and nothing else. They were one 800-line file until the author
+had it split so the rules could be checked on their own: `run.ts` imports
+only rule leaves, by relative path, and `npm run verify:run` plays it under
+bare node — firing, provoking, destroying, being hit, the clock pausing for
+dialogue, jumping, and thousands of saves pushed through junk.
+
+`loadRun()` is the **only** way a screen gets a run: it reads AsyncStorage
+once, checks what it finds (`hydrateRun`), writes the checked shape back, and
+caches it in memory. That is why `RunState` has no optional gameplay fields
+and why screens read `run.fuel` without `??` guards.
+
+**Old saves are dropped, not converted.** The author chose this: every
+conversion from earlier shapes (maps from before dialogue, engines saved as
+"piloting", the drive charge stored upside down as `detain`, saves with no
+map at all) was deleted. A save whose map is not whole (`isSectorMap`: placed
+stars, every one saying what waits there, a real start and boss) is cleared
+and the start screen offers nothing to continue. Within a current save
+nothing is trusted either — every number is clamped and every list filtered
+to real stars — so a damaged save still opens as a legal run.
 
 Consequences worth preserving:
 
-- **Migration is private.** `hydrate()` is not exported. If a new field is added,
-  it gets a clause there — and because `RunState` is fully required, the compiler
-  will point at it.
-- **Rules live in the store, not in screens.** `applyJump()` spends the fuel and
+- **A new field gets a clause in `hydrateRun`** with a sensible default for
+  saves written before it — because `RunState` is fully required, the
+  compiler will point at it. That default *is* a conversion, and a cheap one;
+  what was deleted was converting whole old shapes.
+- **Rules live in `run.ts`, not in screens.** `applyJump()` spends the fuel and
   records the hop. A press handler should call it, not reimplement it.
 - **Derived values are derived.** `sectorOf(run)` is `jumps + 1`; the sector
   number is never stored. Anything computable from another field should follow
@@ -254,7 +279,7 @@ Three things follow from treating it that way:
 meeting rather than stored beside it: a red hull means combat, a yellow one a
 trader or a conversation. That is what keeps the ship on screen and the words
 in the box from ever disagreeing, and it means `hostile` — the long jump
-charge — still comes off `ENCOUNTER_STYLE` exactly as before. Combat is the
+charge — still comes off `ENCOUNTER_RULES` (the rule half of `ENCOUNTER_STYLE`). Combat is the
 only kind that pins you down.
 
 **An encounter speaks once per run**, on arrival. `run.spoken` records *which*
@@ -380,7 +405,7 @@ somewhere it is not somewhere else. `npm run verify:energy` fails if a ship's
 reactor ever creeps up to `TOTAL_CAPACITY`.
 
 **Two levels are read so far, both on the engines and the shields.**
-`jumpBlocker(run)` (`lib/runStore.ts`) returns `'wrecked'`, `'fuel'`,
+`jumpBlocker(run)` (`lib/run.ts`) returns `'wrecked'`, `'fuel'`,
 `'engines'`, `'charging'` or null — in that order, because a destroyed ship
 goes nowhere, an empty tank is the harder stop and cold engines are not
 building a charge at all — and both the helm and the
@@ -408,7 +433,7 @@ them in the reactor panel, and neither carries a number — the bar is the reado
   `JUMP_UNITS` (14, about 11s at two bars), a hostile one `HOSTILE_JUMP_UNITS`
   (40, about 31s). That is what being pinned down by a Shrike now amounts to —
   a far longer build, not a separate timer with its own rules. A saved charge
-  is capped by it only once `hydrate` has read the whole run, because who is
+  is capped by it only once `hydrateRun` has read the whole run, because who is
   here (a red ship, a provoked yellow one, a wreck) decides it; capping by the
   star's colour alone cut a provoked star's charge back to 14 on every reload.
 - **The weapons** (`weaponCharge`) build the same way and reset the same way,
@@ -517,11 +542,6 @@ It writes through the normal unlock store rather than holding a flag of its
 own, so Reset Progress clears it like anything earned. It used to be a quiet
 button on the title screen; it moved when dev mode arrived.
 
-Engines shipped as **piloting** first, and that name is still on disk in older
-saves. `LEGACY_KEYS` in `lib/energy.ts` carries those bars over — dropping them
-would have loaded a run that could not move. If a subsystem is ever renamed
-again, it gets an entry there and a check in `verify:energy`.
-
 ### The reactor is always open
 
 The reactor is on the helm only — the sector map is for choosing where to go
@@ -594,15 +614,13 @@ to `3`, each an id, a name and one line of description. They look different
 but all fire the same way for now — one bolt per full charge (see "Firing"). Each
 ship launches with one (`Ship.weapon`): Drifter 1, Lance 2, Bulwark 3. The
 roster was cut from six ships to these three at the same time; a save
-launched in a cut ship (Halo, Mantis, Vesper) loads as the Drifter, because
-`hydrate` resolves `shipId` through `shipById` rather than trusting it.
+naming a ship the roster no longer has flies as the Drifter, because
+`hydrateRun` resolves `shipId` through `shipById` rather than trusting it.
 
 **Where the weapon is lives on the run**, not the ship: `run.mounted` is the
 weapon on the hardpoint (or null), and `run.hold` is one entry per cargo slot,
-a weapon id or null, always exactly `cargoSlots(ship.cargo)` long. A save
-from before weapons comes back armed with its ship's weapon; one that has
-stowed it keeps `null`, which is why `hydrate` asks whether `mounted` is
-*present* rather than truthy.
+a weapon id or null, always exactly `cargoSlots(ship.cargo)` long. A null
+`mounted` is a real answer — the weapon is in the hold — and loads as null.
 
 **One rule moves things**: `moveItem` in `lib/hold.ts`, wrapped onto the run
 by `moveGear`. It only ever moves into an *empty* place — never a swap, never
@@ -652,14 +670,14 @@ when the ship jumps lands on nothing rather than on the next star's ship.
 With no ship at the star the bolt flies off the right edge of the screen.
 
 **The other ship's hull is stored as damage**, `run.foeDamage[node]`, and
-the hull left is derived: `ENCOUNTER_STYLE[kind].hull` minus it (Shrike 6,
+the hull left is derived: `ENCOUNTER_RULES[kind].hull` minus it (Shrike 6,
 merchant 4, Elder Shrike 12 — placeholders). At zero it is destroyed (below).
 Any ship present can be shot, merchants included — which provokes them.
 
 **Their name floats above their own ship** (`components/FoeStatus.tsx`), with
 their hull as a white line beneath it — the same white line as the player's
 own hull. The name wraps to a second line rather than being cut short (ILLEGAL
-MERCHANT needs two). It is absolutely positioned (`styles.foeStatus`) rather than stacked,
+MERCHANT needs two). It is absolutely positioned (`styles.foeStatus` in `components/space/Arena.tsx`) rather than stacked,
 so the two ships' centres stay level and bolts fly straight between them. It
 sat top left under LEAVE until the ships were laid side by side. The name is `nameOf(meeting)`, the first speaker who is not the
 pilot, so it matches the dialogue box; the boss has no meeting and shows its
@@ -755,11 +773,14 @@ player's hull reaches zero (at once when a save is opened already wrecked).
 The HUD behind it — hull, reactor, FIRE, SHIP and JUMP — drops to 30% opacity and
 stops taking touches. NEW RUN goes to ship select, MAIN MENU back to the
 start screen, and both `clearRun()` first. **Let go of the run before
-clearing it** (`runRef.current = null`): the helm writes its run back to
+clearing it** (`commit(null)`): the helm writes its run back to
 storage as it closes, and would otherwise save the wreck again straight after
 it was cleared. A probe that taps NEW RUN by label must take the *last*
 match — the start screen's NEW RUN is still mounted underneath, and tapping
-it silently tests the wrong button.
+it silently tests the wrong button. **LEAVE goes dead once the ship is
+destroyed** (dimmed and disabled from the moment the hull hits zero, through
+the explosion and Game Over): the author asked for it, since leaving there
+slipped past Game Over and kept the wreck as a run to continue.
 
 ### Dev mode
 
@@ -781,7 +802,16 @@ one switch for every test tool, so none of them reach a player:
   ship there and resets it as never visited: dialogue again, ship undamaged
   and unprovoked, both guns and the drive empty — then `router.dismissTo('/run')`.
 
-**The helm only ticks while focused.** It stays mounted under star select and
+**The space screen is assembled from `components/space/`.** `app/run.tsx`
+only puts the pieces together: `useLiveRun` (the run, `runRef`, `commit`,
+`apply`, loading on focus and saving on the way out), `useRunClock` (the
+charging clock), `useCombat` (both ships' shots, hits landing, explosions,
+Game Over's timing, and `measureHere`), `Arena` (the two ships), `Controls`
+(hull, reactor, FIRE, SHIP, JUMP), `DevControls`, and `layout` (every size
+they share, and `artScaleFor`). It was one 930-line file until the author had
+it split. Files there are not routes — anything under `app/` would be.
+
+**The helm only ticks while focused** (`useRunClock`). It stays mounted under star select and
 the encounter tester, and its interval used to keep running there, saving its
 own stale copy of the run every two seconds — which overwrote a staged
 encounter, and could undo a jump made while a charge was still building. The
@@ -945,11 +975,15 @@ tints live in `lib/subsystems.ts`, which is to it what `encounters.ts` is to
 `lib/hold.ts` and `lib/weapons.ts` import nothing from the project and are the leaves.
 `lib/sectorMap.ts` is nearly one: it imports `dialogue.ts` alone, to deal
 encounters across the stars, and both still run under bare node. `lib/ships.ts`, `lib/encounters.ts` and
-`lib/subsystems.ts` depend on the theme; `lib/runStore.ts` depends on ships,
-the map, the energy, hull, hold and weapon rules, and `encounters.ts` — it reads the
-`hostile` flag out
-of `ENCOUNTER_STYLE` rather than keeping its own list of which stars mean
-trouble. Keep that direction — the theme
+`lib/subsystems.ts` depend on the theme. `lib/encounterRules.ts` is a leaf
+too (it imports only a type from `sectorMap`): the rule half of each kind of
+star — its name, `hostile`, its hull — which `encounters.ts` spreads into
+`ENCOUNTER_STYLE` with the colours and sizes. `lib/run.ts` depends on the
+leaves alone — ships, the map, energy, hull, hold, weapons, dialogue and
+`encounterRules` — by relative path, so it runs under bare node; it reads the
+`hostile` flag out of `ENCOUNTER_RULES` rather than keeping its own list of
+which stars mean trouble. `lib/runStore.ts` depends on `run.ts` and storage,
+and on nothing that draws. Keep that direction — the theme
 briefly imported a helper from `sectorMap` and it was the wrong way round.
 
 Presentation belongs in a table, not in a screen. `ENCOUNTER_STYLE`

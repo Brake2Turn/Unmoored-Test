@@ -22,8 +22,8 @@ Three things make this work, and each one cost a wrong answer first:
 
 2. **It keeps one browser profile** (`.probe/chrome-profile`). A fresh page
    load rolls a fresh map, so reloading in the hope of meeting a particular
-   encounter never converges. Instead the first run rolls a map and records
-   which node holds which meeting; every later run reuses that saved run from
+   encounter never converges. Instead the first run launches a real run
+   through NEW RUN and LAUNCH and records which node holds which meeting; every later run reuses that saved run from
    localStorage and only moves the ship. Delete `.probe/` to roll a new map.
 
 3. **Taps are spaced out.** Two presses in one JavaScript turn are one press —
@@ -52,15 +52,28 @@ BIN = "/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell
 PORT = "8099"
 KEY = "unmoored.currentRun"
 
-# Rolls a map and reports which node holds which meeting.
+# Starts a real run through the menus — NEW RUN, then LAUNCH — and reports
+# which node holds which meeting. A save is only kept when it is a whole run
+# this game wrote, so a hand-written `{ id, shipId }` no longer becomes one.
 SURVEY = """
 <script>
-localStorage.setItem('__KEY__', JSON.stringify({ id: 'probe', shipId: 'bulwark', spoken: [] }));
+localStorage.removeItem('__KEY__');
+function press(re) {
+  var all = [].slice.call(document.querySelectorAll('[aria-label]'))
+    .filter(function (e) { return re.test(e.getAttribute('aria-label')); });
+  var el = all[all.length - 1];
+  if (!el) return;
+  el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+  el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+  el.click();
+}
+setTimeout(function () { press(/^NEW RUN/); }, 1500);
+setTimeout(function () { press(/^LAUNCH/); }, 3500);
 setTimeout(function () {
   var run = JSON.parse(localStorage.getItem('__KEY__') || '{}');
   var nodes = (run.map && run.map.nodes) || [];
   document.title = JSON.stringify(nodes.map(function (n, i) { return [i, n.meeting]; }));
-}, 2200);
+}, 6000);
 </script>
 """
 

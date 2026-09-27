@@ -8,7 +8,8 @@ import { EncounterShip } from '@/components/ships/EncounterShip';
 import { Sideways } from '@/components/ships/Sideways';
 import { MEETINGS, nameOf, type Meeting } from '@/lib/dialogue';
 import { ENCOUNTER_STYLE } from '@/lib/encounters';
-import { devStageEncounter, loadRun, saveRun } from '@/lib/runStore';
+import { devStageEncounter } from '@/lib/run';
+import { loadRun, saveRun } from '@/lib/runStore';
 import { useHaptics } from '@/lib/settings';
 import { fonts, palette, tracking } from '@/lib/theme';
 

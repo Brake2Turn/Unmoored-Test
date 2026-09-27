@@ -1,30 +1,21 @@
 import { palette } from '@/lib/theme';
+import { ENCOUNTER_RULES } from '@/lib/encounterRules';
 import type { Encounter } from '@/lib/sectorMap';
 
 /**
- * How each kind of star presents itself.
+ * How each kind of star presents itself: its rules (`ENCOUNTER_RULES` — name,
+ * whether it fights, its hull) plus its colour and the size its ship is drawn.
  *
- * One table, because "the boss is red, larger and labelled BOSS" was
+ * One table, because "the boss is red, larger and labelled ELDER SHRIKE" was
  * previously spelled out separately in the sector map, the helm and the ship
  * art — three places to find when a fourth encounter type arrives.
  */
 export const ENCOUNTER_STYLE: Record<
   Encounter,
-  {
-    label: string;
-    accent: string;
-    hostile: boolean;
-    width: number;
-    height: number;
-    /**
-     * Plates on the ship waiting here, which each hit from the player's weapon
-     * takes one of; at zero it is destroyed. Placeholder numbers.
-     */
-    hull: number;
-  }
+  (typeof ENCOUNTER_RULES)[Encounter] & { accent: string; width: number; height: number }
 > = {
-  empty: { label: 'EMPTY', accent: palette.textPrimary, hostile: false, width: 0, height: 0, hull: 0 },
-  enemy: { label: 'SHRIKE', accent: palette.danger, hostile: true, width: 132, height: 172, hull: 6 },
-  merchant: { label: 'MERCHANT', accent: palette.trade, hostile: false, width: 132, height: 172, hull: 4 },
-  boss: { label: 'ELDER SHRIKE', accent: palette.danger, hostile: true, width: 188, height: 244, hull: 12 },
+  empty: { ...ENCOUNTER_RULES.empty, accent: palette.textPrimary, width: 0, height: 0 },
+  enemy: { ...ENCOUNTER_RULES.enemy, accent: palette.danger, width: 132, height: 172 },
+  merchant: { ...ENCOUNTER_RULES.merchant, accent: palette.trade, width: 132, height: 172 },
+  boss: { ...ENCOUNTER_RULES.boss, accent: palette.danger, width: 188, height: 244 },
 };

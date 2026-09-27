@@ -10,7 +10,8 @@ import { StarField } from '@/components/StarField';
 import { TitleBlock } from '@/components/TitleBlock';
 import { useHaptics, useSettings } from '@/lib/settings';
 import { fonts, layout, palette, titleSizeFor, tracking, useMenuWidth } from '@/lib/theme';
-import { loadRun, summarize, type RunState } from '@/lib/runStore';
+import { summarize, type RunState } from '@/lib/run';
+import { loadRun } from '@/lib/runStore';
 
 const VERSION = 'V0.1.0 (1)';
 

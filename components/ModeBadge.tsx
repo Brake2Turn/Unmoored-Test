@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import type { Mode } from '@/lib/runStore';
+import type { Mode } from '@/lib/run';
 import { fonts, palette, tracking } from '@/lib/theme';
 
 /**

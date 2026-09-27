@@ -175,19 +175,6 @@ check(
   spentEnergy(clampEnergy({ shields: 0, weapons: 0, engines: 0 }, 6)) === 0,
 );
 
-// Engines shipped as "piloting". A save under the old name must keep its bars:
-// losing them would leave a loaded run unable to jump at all.
-const legacy = clampEnergy({ shields: 1, weapons: 2, piloting: 3 }, 6);
-check('a save written as "piloting" becomes engines', legacy.engines === 3);
-check('the rest of a legacy save is untouched', legacy.shields === 1 && legacy.weapons === 2);
-checkLegal('legacy save', legacy, 6);
-
-// The new name wins if a save somehow carries both.
-check(
-  'a save carrying both names prefers engines',
-  clampEnergy({ engines: 1, piloting: 4 }, 6).engines === 1,
-);
-
 // Every ship must start able to move, or a new run would open stranded.
 for (const reactor of declared) {
   check(`reactor ${reactor} starts with engines running`, defaultEnergy(reactor).engines >= 1);

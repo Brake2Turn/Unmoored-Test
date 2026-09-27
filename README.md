@@ -28,7 +28,7 @@ written out in `CLAUDE.md` under "Playing it on an actual phone".
 
 ```powershell
 npm install
-npm run verify       # typecheck, plus the star-map and reactor property checks
+npm run verify       # typecheck, plus the star-map, reactor and combat checks
 npm run build:web    # full production bundle — catches what the typecheck cannot
 ```
 
@@ -72,9 +72,11 @@ app/                   The screens — one file each
   settings.tsx         Settings
   encounters.tsx       Dev Mode's encounter tester
 components/            Everything drawn: panels, buttons, effects
+  space/               The space screen's pieces: the ships, the controls, combat
   ships/               The ships, their shields and exhaust
 lib/                   The rules, with no drawing in them
-  runStore.ts          The run: saving, loading and every rule that changes it
+  run.ts               The rules of a run: jumping, energy, firing, hits
+  runStore.ts          Saving and loading the run in progress
   sectorMap.ts         How each sector's stars are laid out
   dialogue.ts          Every encounter and what is said
   energy.ts            Reactor bars and how fast things charge
