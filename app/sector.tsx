@@ -306,7 +306,7 @@ export default function SectorScreen() {
             : blocked === 'charging'
             ? 'THE DRIVE IS STILL BUILDING'
             : blocked === 'engines'
-            ? 'ENGINES COLD — POWER THEM AT THE HELM'
+            ? 'WREN DRIVE COLD — POWER IT ON THE SPACE SCREEN'
             : target === null
             ? `${inRange.size} STARS IN RANGE`
             : `${target === boss ? 'BOSS · ' : ''}RANGE ${Math.round(
@@ -322,7 +322,7 @@ export default function SectorScreen() {
               : blocked === 'charging'
                 ? 'DRIVE CHARGING'
                 : blocked
-                  ? 'ENGINES OFFLINE'
+                  ? 'WREN DRIVE OFFLINE'
                   : target === null
                   ? 'SELECT A STAR'
                   : 'JUMP'

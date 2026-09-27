@@ -8,10 +8,12 @@ import type { Subsystem } from '@/lib/energy';
  * the tint were otherwise going to be spelled out once in the helm panel and
  * again in anything that reports on power later.
  */
-export const SUBSYSTEM_STYLE: Record<Subsystem, { label: string; accent: string }> = {
-  shields: { label: 'SHIELDS', accent: palette.shields },
-  weapons: { label: 'WEAPONS', accent: palette.weapons },
-  engines: { label: 'ENGINES', accent: palette.engines },
+export const SUBSYSTEM_STYLE: Record<Subsystem, { label: string; name: string; accent: string }> = {
+  shields: { label: 'SHIELDS', name: 'the shields', accent: palette.shields },
+  weapons: { label: 'WEAPONS', name: 'the weapons', accent: palette.weapons },
+  // Still `engines` in the code and in saves; the player knows it as the Wren
+  // Drive. It charges the jump, and it makes the ship sway — harder to hit.
+  engines: { label: 'WREN DRIVE', name: 'the Wren Drive', accent: palette.engines },
 };
 
 /**

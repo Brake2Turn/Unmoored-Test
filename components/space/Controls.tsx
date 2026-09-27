@@ -51,12 +51,12 @@ export function Controls({
    * The button says what it does and nothing more.
    *
    * While the drive is still building it is simply closed — the track under
-   * the engines row is the readout, rather than a countdown printed over the
-   * button. Cold engines still get their own words, because that is a
+   * the Wren Drive row is the readout, rather than a countdown printed over the
+   * button. A cold Wren Drive still gets its own words, because that is a
    * different problem and the track would just sit there unexplained.
    */
-  const jumpLabel = blocked === 'fuel' ? 'OUT OF FUEL' : blocked === 'engines' ? 'NO ENGINES' : 'JUMP';
-  const jumpCaption = blocked === 'engines' ? 'POWER THE ENGINES' : undefined;
+  const jumpLabel = blocked === 'fuel' ? 'OUT OF FUEL' : blocked === 'engines' ? 'NO WREN DRIVE' : 'JUMP';
+  const jumpCaption = blocked === 'engines' ? 'POWER THE WREN DRIVE' : undefined;
   /**
    * Fuel rides on the button rather than in a strip of its own, since the only
    * question it answers is whether to jump. It is left off when the label is

@@ -94,7 +94,7 @@ export function ReactorPanel({
     <View
       accessibilityLabel={
         `Reactor: shields ${energy.shields}, weapons ${energy.weapons}, ` +
-        `engines ${energy.engines}, ${free} free`
+        `Wren Drive ${energy.engines}, ${free} free`
       }
       style={[styles.panel, { width, height: REACTOR_PANEL_HEIGHT }]}
     >
@@ -200,14 +200,14 @@ function SubsystemRow({
         symbol="−"
         enabled={canTakeAway}
         accent={style.accent}
-        label={`Take one bar of energy out of ${subsystem}, now ${level} of ${SUBSYSTEM_CAPACITY}`}
+        label={`Take one bar of energy out of ${style.name}, now ${level} of ${SUBSYSTEM_CAPACITY}`}
         onPress={() => onShift(subsystem, -1)}
       />
       <StepButton
         symbol="+"
         enabled={canAddMore}
         accent={style.accent}
-        label={`Put one bar of energy into ${subsystem}, now ${level} of ${SUBSYSTEM_CAPACITY}`}
+        label={`Put one bar of energy into ${style.name}, now ${level} of ${SUBSYSTEM_CAPACITY}`}
         onPress={() => onShift(subsystem, 1)}
       />
     </View>

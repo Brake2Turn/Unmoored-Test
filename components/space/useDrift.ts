@@ -2,17 +2,29 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Easing, cancelAnimation, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 
 import { EXPLOSION_MS } from '@/components/Explosion';
+import { SUBSYSTEM_CAPACITY } from '@/lib/energy';
+import type { Side } from '@/lib/run';
 
 /**
- * How far either ship drifts above or below its resting line in combat, in
- * points. The ships are sized with this much room kept free (`artScaleFor`),
- * so a drifting shield never runs into the controls or the name.
+ * How far a ship sways above or below its resting line in combat, per bar in
+ * its Wren Drive, in points. No bars, no sway.
  */
-export const DRIFT = 24;
+const DRIFT_PER_BAR = 8;
 
-/** How long one drift takes, from one height to the next. */
-const DRIFT_MIN_MS = 1500;
-const DRIFT_SPREAD_MS = 1300;
+/**
+ * The furthest any ship sways: a full Wren Drive. The ships are sized with
+ * this much room kept free above and below (`artScaleFor`), so a swaying
+ * shield never runs into the controls or the name.
+ */
+export const DRIFT = DRIFT_PER_BAR * SUBSYSTEM_CAPACITY;
+
+/**
+ * How long one sway takes, from one height to the next: quicker with every
+ * bar, so a hot Wren Drive jinks rather than bobs.
+ */
+const DRIFT_SLOW_MS = 2600;
+const DRIFT_FASTER_PER_BAR_MS = 300;
+const DRIFT_SPREAD_MS = 900;
 
 /** How long the shooter takes to come level with its target before a shot. */
 const ALIGN_MS = 320;
@@ -22,8 +34,6 @@ const HOLD_MS = 480;
 
 /** Coming back to the resting line when the fight is over. */
 const SETTLE_MS = 600;
-
-export type Side = 'player' | 'foe';
 
 export type Drift = {
   /** How far each ship is drawn above (−) or below (+) its resting line. */
@@ -41,7 +51,8 @@ export type Drift = {
 };
 
 /**
- * The ships' drift in combat: each rises and falls on its own slow course, and
+ * The ships' sway in combat: each rises and falls on its own course, harder and
+ * quicker the more is in its Wren Drive, and
  * before either fires, the shooter glides level with the other ship's centre
  * so the bolt flies straight across and lands in the middle of it.
  *
@@ -53,7 +64,12 @@ export type Drift = {
  * by a timer rather than by the animation ending, so a shot never waits on a
  * frame that is not drawn.
  */
-export function useDrift(active: boolean, position: number | null): Drift {
+export function useDrift(
+  active: boolean,
+  position: number | null,
+  /** Bars in each ship's Wren Drive, which set how hard it sways. */
+  wren: Record<Side, number>,
+): Drift {
   const player = useSharedValue(0);
   const foe = useSharedValue(0);
   const values = { player, foe };
@@ -65,6 +81,9 @@ export function useDrift(active: boolean, position: number | null): Drift {
   const line = useRef<{ dy: number; readyAt: number; holdUntil: number } | null>(null);
   const activeRef = useRef(active);
   activeRef.current = active;
+  // Read on every sway, so moving a bar mid-fight changes the next one.
+  const wrenRef = useRef(wren);
+  wrenRef.current = wren;
 
   const moveTo = useCallback(
     (side: Side, dy: number, duration: number) => {
@@ -108,17 +127,20 @@ export function useDrift(active: boolean, position: number | null): Drift {
         return;
       }
       line.current = null;
-      // Somewhere else on the band, never just a twitch from where it is.
+      // Somewhere else on its band, never just a twitch from where it is. A
+      // ship with nothing in its Wren Drive has no band, and holds the line.
+      const bars = Math.max(0, Math.min(SUBSYSTEM_CAPACITY, wrenRef.current[side]));
+      const reach = bars * DRIFT_PER_BAR;
       const from = target.current[side];
-      let next = (Math.random() * 2 - 1) * DRIFT;
-      if (Math.abs(next - from) < DRIFT * 0.5) next = from > 0 ? -Math.abs(next) : Math.abs(next);
-      const duration = DRIFT_MIN_MS + Math.random() * DRIFT_SPREAD_MS;
+      let next = (Math.random() * 2 - 1) * reach;
+      if (Math.abs(next - from) < reach * 0.5) next = from > 0 ? -Math.abs(next) : Math.abs(next);
+      const duration = DRIFT_SLOW_MS - bars * DRIFT_FASTER_PER_BAR_MS + Math.random() * DRIFT_SPREAD_MS;
       moveTo(side, next, duration);
       timers.push(setTimeout(() => wander(side), duration));
     };
     // Out of step with each other from the start, so they never bob in time.
     timers.push(setTimeout(() => wander('player'), 150));
-    timers.push(setTimeout(() => wander('foe'), 150 + DRIFT_MIN_MS / 2));
+    timers.push(setTimeout(() => wander('foe'), 150 + DRIFT_SLOW_MS / 3));
     return () => timers.forEach(clearTimeout);
   }, [active, moveTo]);
 

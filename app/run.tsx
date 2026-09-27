@@ -8,6 +8,7 @@ import { DialogueOverlay } from '@/components/DialogueOverlay';
 import { Explosion } from '@/components/Explosion';
 import { GameOver } from '@/components/GameOver';
 import { LaserShot } from '@/components/LaserShot';
+import { MissPop } from '@/components/MissPop';
 import { ModeBadge } from '@/components/ModeBadge';
 import { ShipDetail } from '@/components/ShipPanel';
 import { StarField } from '@/components/StarField';
@@ -22,7 +23,7 @@ import {
   STACK_GAP,
   artScaleFor,
 } from '@/components/space/layout';
-import { useCombat } from '@/components/space/useCombat';
+import { MISS_MS, useCombat } from '@/components/space/useCombat';
 import { useDrift } from '@/components/space/useDrift';
 import { useLiveRun } from '@/components/space/useLiveRun';
 import { useRunClock } from '@/components/space/useRunClock';
@@ -30,7 +31,16 @@ import { ENCOUNTER_STYLE } from '@/lib/encounters';
 import type { Subsystem } from '@/lib/energy';
 import type { Place } from '@/lib/hold';
 import { isWrecked } from '@/lib/hull';
-import { jumpBlocker, markSpoken, modeOf, moveGear, pendingMeeting, shiftEnergy, shipHere } from '@/lib/run';
+import {
+  jumpBlocker,
+  markSpoken,
+  modeOf,
+  moveGear,
+  pendingMeeting,
+  shiftEnergy,
+  shipHere,
+  wrenBars,
+} from '@/lib/run';
 import { clearRun } from '@/lib/runStore';
 import { encounterAt } from '@/lib/sectorMap';
 import { useHaptics, useSettings } from '@/lib/settings';
@@ -65,7 +75,10 @@ export default function RunScreen() {
   useRunClock(live);
   // In a fight both ships drift up and down, and line up before each shot.
   const drifting = animate && !!run && modeOf(run) === 'combat' && !isWrecked(run.hull);
-  const drift = useDrift(drifting, run?.position ?? null);
+  const drift = useDrift(drifting, run?.position ?? null, {
+    player: run ? wrenBars(run, 'player') : 0,
+    foe: run ? wrenBars(run, 'foe') : 0,
+  });
   const combat = useCombat(live, drift, width);
 
   // The ship panel is only on screen while the player is looking at it.
@@ -211,6 +224,11 @@ export default function RunScreen() {
           onImpact={() => combat.onImpact(shot)}
           onDone={() => combat.onShotDone(shot.id)}
         />
+      ))}
+
+      {/* MISS over whichever ship a bolt just went past. */}
+      {combat.misses.map((miss) => (
+        <MissPop key={miss.id} at={miss.at} animate={animate} duration={MISS_MS} />
       ))}
 
       {combat.over ? (

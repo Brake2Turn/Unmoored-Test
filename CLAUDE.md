@@ -756,9 +756,31 @@ coordinates; the two only agree while the root sits at the window's top-left
 corner. The author saw the player's bolt start from the wrong place with no
 other ship present — not reproducible here, and this was the likeliest cause.
 
-**In combat both ships drift up and down, and line up before every shot**
-(`components/space/useDrift.ts`, the author's request). Each rises and falls
-on its own slow course, `DRIFT` (24pt) either side of its resting line; before
+**The engines are the Wren Drive.** The author renamed the subsystem: every
+word the player sees says WREN DRIVE (`SUBSYSTEM_STYLE.engines`), but the key
+is still `engines` in the code and in saves — renaming it would have broken
+every save for no gain. It still charges the jump, and it is now also the
+dodge: **each bar makes shots at that ship 10% likelier to miss**
+(`MISS_PER_WREN_BAR`, `missChance`, `shotMisses` in `lib/run.ts`). The player's
+bars are whatever the reactor gives it; the other ship's are fixed by kind
+(`ENCOUNTER_RULES[kind].wren`: Shrike 2, merchant 1, Elder Shrike 3 —
+placeholders), and a destroyed ship has none. The author chose "shots *at*
+it miss" over "its own shots miss"; the Wren Drive costs nothing in aim.
+
+**A miss is rolled as the bolt leaves**, after the line-up, against the
+target's bars. A missing bolt flies at a slight slant just over or under the
+target — past the shield's rim for the player with shields up, past the hull
+otherwise — and on off the screen (`pastTarget` in `useCombat`; `LaserShot`
+tilts the bolt to its slant), and nothing is hit. **MISS** pops up over the
+target as the bolt goes by (`components/MissPop.tsx`, up `MISS_MS`, first
+frame already whole). `verify:run` holds the percentages bar by bar and over
+twenty thousand rolls.
+
+**In combat both ships sway up and down, and line up before every shot**
+(`components/space/useDrift.ts`, the author's request). How hard is the
+Wren Drive: `DRIFT_PER_BAR` (8pt) either side of the resting line per bar,
+and quicker the more bars — **no bars, no sway**. Each ship sways on its own
+course, up to `DRIFT` (a full drive, 32pt); before
 a bolt leaves, the shooter glides level with the other ship's centre
 (`lineUp`, `ALIGN_MS` 320ms) and both hold that line until the bolt has
 landed (`HOLD_MS`), then wander off again. A second shot during a hold fires

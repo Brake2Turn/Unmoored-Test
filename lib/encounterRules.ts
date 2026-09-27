@@ -21,10 +21,16 @@ export const ENCOUNTER_RULES: Record<
      * takes one of; at zero it is destroyed. Placeholder numbers.
      */
     hull: number;
+    /**
+     * Bars in its Wren Drive, which it has no reactor to move: how hard it
+     * sways in a fight, and so how often the player's shots miss it (see
+     * `missChance`). Placeholder numbers.
+     */
+    wren: number;
   }
 > = {
-  empty: { label: 'EMPTY', hostile: false, hull: 0 },
-  enemy: { label: 'SHRIKE', hostile: true, hull: 6 },
-  merchant: { label: 'MERCHANT', hostile: false, hull: 4 },
-  boss: { label: 'ELDER SHRIKE', hostile: true, hull: 12 },
+  empty: { label: 'EMPTY', hostile: false, hull: 0, wren: 0 },
+  enemy: { label: 'SHRIKE', hostile: true, hull: 6, wren: 2 },
+  merchant: { label: 'MERCHANT', hostile: false, hull: 4, wren: 1 },
+  boss: { label: 'ELDER SHRIKE', hostile: true, hull: 12, wren: 3 },
 };

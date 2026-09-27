@@ -27,7 +27,7 @@ export type Point = { x: number; y: number };
  */
 
 /** How long the bolt takes to cross, in ms. Fast: this is a laser. */
-const FLIGHT_MS = 200;
+export const FLIGHT_MS = 200;
 /** How long the sparks hang in the air. */
 const SPARK_MS = 480;
 
@@ -94,10 +94,15 @@ function Bolt({ from, to, animate }: { from: Point; to: Point; animate: boolean 
     if (animate) progress.value = withTiming(1, { duration: FLIGHT_MS, easing: Easing.linear });
   }, [animate, progress]);
 
+  // A shot that misses leaves at a slight slant, to pass over or under its
+  // target; the bolt tilts to match so it flies nose first.
+  const tilt = to.x === from.x ? 0 : Math.atan((to.y - from.y) / (to.x - from.x));
+
   const style = useAnimatedStyle(() => ({
     transform: [
       { translateX: (to.x - from.x) * progress.value },
       { translateY: (to.y - from.y) * progress.value },
+      { rotate: `${tilt}rad` },
     ],
   }));
 

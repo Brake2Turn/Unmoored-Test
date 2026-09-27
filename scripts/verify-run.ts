@@ -27,6 +27,10 @@ import {
   jumpBlocker,
   jumpUnitsFor,
   markSpoken,
+  missChance,
+  MISS_PER_WREN_BAR,
+  shotMisses,
+  wrenBars,
   modeOf,
   moveGear,
   pendingMeeting,
@@ -156,6 +160,23 @@ let long = at(1);
 for (let i = 0; i < 400; i++) long = tickRun(long, 0.25);
 check('charges stop when full', long.jumpCharge === HOSTILE_JUMP_UNITS && long.weaponCharge === WEAPON_UNITS && long.foeCharge === WEAPON_UNITS);
 check('full reads as full', chargeFractions(long).jump === 1 && chargeFractions(long).weapon === 1);
+
+// Wren Drive: dodging ---------------------------------------------------------
+for (let bars = 0; bars <= 4; bars++) {
+  const swaying = at(1, { energy: { shields: 0, weapons: 1, engines: bars } });
+  check(`${bars} bars of Wren Drive: ${bars * 10}% of shots at the player miss`, Math.abs(missChance(swaying, 'player') - bars * MISS_PER_WREN_BAR) < 1e-9);
+}
+const still = at(1, { energy: { shields: 2, weapons: 2, engines: 0 } });
+check('no Wren Drive, nothing misses the player', !shotMisses(still, 'player', 0));
+check('a shot at a Shrike misses 20%', Math.abs(missChance(raider, 'foe') - 0.2) < 1e-9);
+check('a shot at a merchant misses 10%', Math.abs(missChance(trader, 'foe') - 0.1) < 1e-9);
+check('a shot at the Elder Shrike misses 30%', Math.abs(missChance(at(4), 'foe') - 0.3) < 1e-9);
+check('a destroyed ship has no Wren Drive', wrenBars(wreck, 'foe') === 0);
+check('a roll under the chance misses, over it hits', shotMisses(raider, 'foe', 0.19) && !shotMisses(raider, 'foe', 0.2));
+let missed = 0;
+const swaying4 = at(1, { energy: { shields: 0, weapons: 0, engines: 4 } });
+for (let i = 0; i < 20000; i++) if (shotMisses(swaying4, 'player', Math.random())) missed++;
+check('four bars miss about four shots in ten', Math.abs(missed / 20000 - 0.4) < 0.02);
 
 // Gear ----------------------------------------------------------------------
 const stowed = moveGear(at(1, { weaponCharge: 7 }), 'mount', 0);

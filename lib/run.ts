@@ -350,6 +350,37 @@ export function foeFires(run: RunState): RunState {
   return { ...run, foeCharge: -Math.random() * FOE_JITTER_UNITS };
 }
 
+/**
+ * Each bar in a ship's Wren Drive makes shots at it this much likelier to
+ * miss: it sways harder and is harder to hit. Four bars, 40%.
+ */
+export const MISS_PER_WREN_BAR = 0.1;
+
+export type Side = 'player' | 'foe';
+
+/**
+ * Bars in a ship's Wren Drive — the subsystem the code still calls
+ * `engines`, which also charges the jump drive. The player's is whatever the
+ * reactor puts there; the ship at the star has a fixed number for its kind
+ * (`ENCOUNTER_RULES`), and none once it is destroyed.
+ */
+export function wrenBars(run: RunState, side: Side): number {
+  return side === 'player' ? run.energy.engines : ENCOUNTER_RULES[shipHere(run)].wren;
+}
+
+/** The chance, 0 to 1, that a shot at `target` misses it. */
+export function missChance(run: RunState, target: Side): number {
+  return Math.max(0, Math.min(1, wrenBars(run, target) * MISS_PER_WREN_BAR));
+}
+
+/**
+ * Whether one shot at `target` misses, given a roll from 0 up to 1. The roll
+ * is passed in rather than drawn here so the rule can be checked exactly.
+ */
+export function shotMisses(run: RunState, target: Side, roll: number): boolean {
+  return roll < missChance(run, target);
+}
+
 /** The two modes a run can be in. */
 export type Mode = 'explorer' | 'combat';
 

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import type { View } from 'react-native';
 
 import { EXPLOSION_MS } from '@/components/Explosion';
-import type { Point } from '@/components/LaserShot';
+import { FLIGHT_MS, type Point } from '@/components/LaserShot';
 import { WEAPON_UNITS, shieldLevel } from '@/lib/energy';
 import { MOUNTS } from '@/components/ships/ShipArt';
 import { SYSTEMS_SPAN } from '@/components/ships/ShipSystems';
@@ -19,6 +19,7 @@ import {
   foeHull,
   hitFoe,
   pendingMeeting,
+  shotMisses,
   takeHit,
 } from '@/lib/run';
 import { encounterAt } from '@/lib/sectorMap';
@@ -37,6 +38,29 @@ export type Shot = {
 
 /** One explosion on screen: where, and how big the ship was. */
 export type Blast = { id: number; at: Point; size: number };
+
+/** A MISS pop-up, over the ship a bolt just went past. */
+export type Miss = { id: number; at: Point };
+
+/** How long a MISS stays up. */
+export const MISS_MS = 900;
+
+/**
+ * Where a missing bolt goes: from `from`, past the target's centre at `pass`
+ * by `clear` points above or below it (whichever `roll` picks), and on off the
+ * edge of the screen at `edgeX`. Returns the far end, and where the bolt is
+ * as it goes by, for the MISS pop-up.
+ */
+function pastTarget(from: Point, pass: Point, clear: number, edgeX: number, roll: number) {
+  const side = roll < 0.5 ? -1 : 1;
+  const by = { x: pass.x, y: pass.y + side * clear };
+  const slope = (by.y - from.y) / (by.x - from.x || 1);
+  const to = { x: edgeX, y: from.y + slope * (edgeX - from.x) };
+  // The bolt crosses the whole distance in one flight, so it passes the
+  // target this far into it.
+  const passesAt = FLIGHT_MS * Math.abs((by.x - from.x) / (to.x - from.x || 1));
+  return { to, by, passesAt };
+}
 
 type Box = { x: number; y: number; width: number; height: number };
 
@@ -63,6 +87,7 @@ export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width:
   // Bolts in flight, and ships blowing apart, the player's or the other one's.
   const [shots, setShots] = useState<Shot[]>([]);
   const [blasts, setBlasts] = useState<Blast[]>([]);
+  const [misses, setMisses] = useState<Miss[]>([]);
   // The player's ship is gone and the Game Over box is up.
   const [over, setOver] = useState(false);
   // The star whose destroyed ship has finished exploding, so the layout can
@@ -79,6 +104,15 @@ export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width:
    * gun. Measuring the screen too and taking the difference makes that offset
    * cancel out, whatever caused it.
    */
+  /** Puts MISS up over a ship as the bolt goes by, and takes it down again. */
+  const showMiss = useCallback((at: Point, after: number) => {
+    const id = Date.now() + Math.random();
+    setTimeout(() => {
+      setMisses((current) => [...current, { id, at }]);
+      setTimeout(() => setMisses((current) => current.filter((m) => m.id !== id)), MISS_MS);
+    }, after);
+  }, []);
+
   const measureHere = useCallback(async (view: View | null) => {
     const [root, box] = await Promise.all([measure(rootRef.current), measure(view)]);
     if (!box) return null;
@@ -103,7 +137,10 @@ export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width:
     const mount = MOUNTS[current.shipId] ?? MOUNTS.drifter;
     const aim = async (dy: number) => {
       const now = runRef.current;
-      const hits = !!now && now.position === node && foeHull(now, node) > 0;
+      const there = !!now && now.position === node && foeHull(now, node) > 0;
+      // Whether it misses is rolled as it leaves, against the other ship's
+      // Wren Drive: the harder a ship sways, the harder it is to hit.
+      const misses = there && shotMisses(now, 'foe', Math.random());
       // The boxes measured are the ships' resting places; `dy` is how far
       // off that line both are drawn now.
       const [rest, foe] = await Promise.all([measureHere(shipRef.current), measureHere(foeRef.current)]);
@@ -115,16 +152,24 @@ export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width:
       const scale = box.height / SYSTEMS_SPAN / 200;
       const tip = weaponTip(weapon);
       const from = sidewaysPoint(box, (mount.x + tip.x - 100) * scale, (mount.y + tip.y - 130) * scale);
-      // Straight across to the other ship's middle, or off the right edge.
-      const to = foe && hits ? { x: foe.x + foe.width * 0.45, y: from.y } : { x: width + 40, y: from.y };
-      setShots((current) => [
-        ...current,
-        { id: Date.now() + Math.random(), by: 'player', node, from, to, hits: hits && !!foe },
-      ]);
+      // Straight across to the other ship's middle; or, on a miss, just over
+      // or under its hull and on off the right edge; or, with nobody there,
+      // straight off the edge.
+      let to = { x: width + 40, y: from.y };
+      const hits = there && !!foe && !misses;
+      if (foe && there && !hits) {
+        const pass = { x: foe.x + foe.width / 2, y: foe.y + dy + foe.height / 2 };
+        const past = pastTarget(from, pass, foe.height * 0.55, width + 40, Math.random());
+        to = past.to;
+        showMiss(pass, past.passesAt);
+      } else if (foe && hits) {
+        to = { x: foe.x + foe.width * 0.45, y: from.y };
+      }
+      setShots((current) => [...current, { id: Date.now() + Math.random(), by: 'player', node, from, to, hits }]);
     };
     // Come level with the other ship's centre first, then let go.
     drift.lineUp('player', (dy) => void aim(dy));
-  }, [commit, drift, haptics, measureHere, runRef, width]);
+  }, [commit, drift, haptics, measureHere, runRef, showMiss, width]);
 
   /**
    * A hostile ship's weapon has charged: it fires at the player. Nothing but
@@ -159,11 +204,21 @@ export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width:
       // hull's nose about 92.
       const playerScale = box.height / SYSTEMS_SPAN / 200;
       const reach = (shielded ? 136 : 92) * playerScale;
+      // Rolled against the player's own Wren Drive: the more in it, the more
+      // often a shot goes by — just over or under the shield (or the hull,
+      // with no shield up) and on off the left edge.
+      if (now && shotMisses(now, 'player', Math.random())) {
+        const pass = { x: box.x + box.width / 2, y: box.y + dy + box.height / 2 };
+        const past = pastTarget(from, pass, (shielded ? 104 : 70) * playerScale, -40, Math.random());
+        showMiss(pass, past.passesAt);
+        setShots((shots) => [...shots, { id: Date.now() + Math.random(), by: 'foe', node, from, to: past.to, hits: false }]);
+        return;
+      }
       const to = { x: box.x + box.width / 2 + reach, y: from.y };
       setShots((shots) => [...shots, { id: Date.now() + Math.random(), by: 'foe', node, from, to, hits: true }]);
     };
     drift.lineUp('foe', (dy) => void aim(dy));
-  }, [commit, drift, foeReady, measureHere, runRef]);
+  }, [commit, drift, foeReady, measureHere, runRef, showMiss]);
 
   /**
    * A bolt arrives. The player's takes a plate off the other ship; a hostile
@@ -240,7 +295,7 @@ export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width:
     }
   }, [drift, measureHere, run]);
 
-  return { rootRef, shipRef, foeRef, shots, blasts, over, setOver, cleared, onFire, onImpact, onShotDone };
+  return { rootRef, shipRef, foeRef, shots, blasts, misses, over, setOver, cleared, onFire, onImpact, onShotDone };
 }
 
 /** A view's box in window coordinates, or null when it is not mounted. */
