@@ -180,9 +180,10 @@ So it serves the packed build at `/app/` with nothing above it, and keeps one
 browser profile in `.probe/` so the *same* saved run is reused and only the
 ship moves. Delete `.probe/` to roll a new map.
 
-**Headless throttles requestAnimationFrame to about 1fps.** Reanimated
-animations therefore do not advance, and a screenshot can show a pre-animation
-state that is not a real bug. Verify layout and content this way; never
+**Reanimated animations do not advance in headless.** `requestAnimationFrame`
+fires only about four times a second there, and a `withTiming` stays pinned at
+its start regardless (see the traps below). A screenshot can therefore show a
+pre-animation state that is not a real bug. Verify layout and content this way; never
 conclude anything about motion from it.
 
 ## Architecture

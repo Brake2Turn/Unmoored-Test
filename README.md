@@ -116,6 +116,6 @@ Still placeholders before you ship:
 
 ## History
 
-The start screen was first built as a native Swift + SpriteKit app. That version
-is preserved in git history at commit `bc42c4d` if it is ever useful — it was
-replaced because building it requires a Mac.
+The start screen was first built as a native Swift + SpriteKit app, replaced
+because building it requires a Mac. That version is no longer in this
+repository's history — the history was restarted from a later snapshot.

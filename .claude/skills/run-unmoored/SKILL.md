@@ -19,7 +19,7 @@ catches resolution errors `tsc` cannot:
 
 ```bash
 npm install                       # once per container
-npm run verify                    # typecheck + map and energy properties, cheap
+npm run verify                    # typecheck + map, energy and run properties, cheap
 rm -rf dist && npm run build:web  # writes dist/
 ```
 
@@ -71,8 +71,8 @@ than a screenshot when the answer is a number or a string.
 
 ### What this cannot tell you
 
-`requestAnimationFrame` is throttled to roughly **1fps** here, so Reanimated
-animations do not advance and star opacities stay frozen. Layout and content are
+`requestAnimationFrame` fires only about four times a second here, and
+Reanimated animations do not advance at all and star opacities stay frozen. Layout and content are
 trustworthy; motion is not. Never report an animation as broken — or working —
 from a headless run.
 
