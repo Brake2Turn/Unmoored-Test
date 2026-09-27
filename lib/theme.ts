@@ -170,12 +170,12 @@ export function titleSizeFor(width: number, word = 'UNMOORED'): number {
 
 /**
  * The colour of a hull line — the player's and any other ship's alike — for
- * how much of it is left, 0 to 1: white while it is at least half, a soft
- * yellow below half, and red at a quarter or less. One rule, so the two lines on
+ * how much of it is left, 0 to 1: white above half, a soft yellow at half or
+ * less, and red at a quarter or less. One rule, so the two lines on
  * screen can never disagree about what "badly damaged" looks like.
  */
 export function hullColor(fraction: number): string {
   if (fraction <= 0.25) return palette.danger;
-  if (fraction < 0.5) return '#F4D774';
+  if (fraction <= 0.5) return '#F4D774';
   return '#FFFFFF';
 }

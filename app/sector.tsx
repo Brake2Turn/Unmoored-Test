@@ -4,7 +4,6 @@ import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-na
 import Svg, { Circle, Line } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { FuelBadge } from '@/components/FuelBadge';
 import { MenuButton } from '@/components/MenuButton';
 import { BUTTON_TONE } from '@/lib/subsystems';
 import { useHaptics, useSettings } from '@/lib/settings';
@@ -62,8 +61,8 @@ export default function SectorScreen() {
   const visited = useMemo(() => new Set(run?.visited ?? []), [run?.visited]);
   const fuel = run?.fuel ?? 0;
   const dry = fuel <= 0;
-  // The helm will not open this screen with the engines cold, but a run
-  // loaded straight into the map still has to be told why it cannot move.
+  // The space screen only opens this one with a jump ready, but whatever
+  // stops a jump is said in the same words as there, in the same order.
   const blocked = run ? jumpBlocker(run) : 'fuel';
 
   const inRange = useMemo(
@@ -137,7 +136,7 @@ export default function SectorScreen() {
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Back to the helm"
+          accessibilityLabel="Back to the space screen"
           onPress={() => router.back()}
           hitSlop={14}
           style={styles.back}
@@ -145,9 +144,9 @@ export default function SectorScreen() {
           <Text style={styles.backLabel}>BACK</Text>
         </Pressable>
         <Text style={styles.heading}>SECTOR {run ? sectorOf(run) : 1}</Text>
-        <View style={[styles.back, styles.fuelSlot]}>
-          <FuelBadge remaining={fuel} accent={palette.accent} size="compact" />
-        </View>
+        {/* Balances BACK, so the heading stays centred. Fuel is on JUMP, as
+            it is on the space screen. */}
+        <View style={styles.back} />
       </View>
 
       {settings.devMode ? (
@@ -299,34 +298,33 @@ export default function SectorScreen() {
             (target === boss || !!blocked) && { color: palette.danger },
           ]}
         >
-          {dry
-            ? 'NO FUEL — THE SHIP IS ADRIFT'
-            : blocked === 'wrecked'
+          {blocked === 'wrecked'
             ? 'THE SHIP IS DESTROYED'
-            : blocked === 'charging'
-            ? 'THE DRIVE IS STILL BUILDING'
+            : blocked === 'fuel'
+            ? 'OUT OF FUEL — THE SHIP IS ADRIFT'
             : blocked === 'engines'
-            ? 'WREN DRIVE COLD — POWER IT ON THE SPACE SCREEN'
+            ? 'POWER THE WREN DRIVE FIRST'
+            : blocked === 'charging'
+            ? 'THE WREN DRIVE IS CHARGING'
             : target === null
             ? `${inRange.size} STARS IN RANGE`
-            : `${target === boss ? 'BOSS · ' : ''}RANGE ${Math.round(
+            : `${target === boss ? 'BOSS · ' : ''}DISTANCE ${Math.round(
                 distance(map.nodes[position], map.nodes[target]),
               )} OF ${JUMP_RANGE}`}
         </Text>
         <MenuButton
+          // The same words as the space screen's JUMP: OUT OF FUEL, NO WREN
+          // DRIVE, or JUMP (dark while charging, grey when destroyed).
           label={
-            blocked === 'wrecked'
-              ? 'SHIP DESTROYED'
-              : blocked === 'fuel'
+            blocked === 'fuel'
               ? 'OUT OF FUEL'
-              : blocked === 'charging'
-                ? 'DRIVE CHARGING'
-                : blocked
-                  ? 'WREN DRIVE OFFLINE'
-                  : target === null
-                  ? 'SELECT A STAR'
-                  : 'JUMP'
+              : blocked === 'engines'
+                ? 'NO WREN DRIVE'
+                : blocked || target !== null
+                  ? 'JUMP'
+                  : 'SELECT A STAR'
           }
+          gauge={blocked === 'fuel' ? undefined : { label: 'FUEL', value: String(fuel) }}
           onPress={onConfirmJump}
           primary={!blocked && target !== null}
           tone={BUTTON_TONE.engines}
@@ -383,7 +381,6 @@ const styles = StyleSheet.create({
     zIndex: 5,
   },
   back: { width: 52 },
-  fuelSlot: { alignItems: 'flex-end' },
   backLabel: {
     fontFamily: fonts.body,
     fontSize: 11,

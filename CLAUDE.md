@@ -878,6 +878,13 @@ more, because a render can run with an older state than the newest commit.
 press, not from the copy it opened with. A bolt fired just before JUMP lands a
 moment later and saves its hit; jumping from the older copy wrote over it.
 
+**Star select speaks the space screen's language.** Its JUMP carries the same
+FUEL gauge (the cyan F badge in its corner is gone, and `FuelBadge` with it),
+and every blocked state uses the space screen's words in `jumpBlocker`'s
+order — OUT OF FUEL, NO WREN DRIVE, or JUMP (dark while the Wren Drive
+charges) — with the line above it saying why. The author asked for the two
+screens not to contradict each other.
+
 **JUMP is the engines' orange** the way FIRE is the weapons' red: dark while
 the drive charges, bright when it is ready, grey when it cannot (no fuel, cold
 engines, destroyed — the label stays JUMP and Game Over says the rest). Both come from `BUTTON_TONE` in `lib/subsystems.ts`;
@@ -911,8 +918,8 @@ The hull is one white line above the controls (`components/StatusBar.tsx`),
 the full width of the chrome, with the plates left written at its right end
 as `8/8`. **A hull line changes colour as it empties** — `hullColor(fraction)`
 in `lib/theme.ts`, used by this line and the other ship's (`FoeStatus`)
-alike: white at half or more, a soft yellow under half, red at a quarter or
-less — so a hull is already red at 2 of 8.
+alike: white above half, a soft yellow at half or less (4 of 8), red at a
+quarter or less (2 of 8).
 Only the line changes; the number beside it stays white. **Fuel rides on the jump button** — `MenuButton`
 takes a `gauge` of `{ label, value }` and gives it a section of its own at the
 right end, the full height of the button and divided off by a rule — because
@@ -1001,7 +1008,7 @@ subsystem tints, which are a different question again — a cyan shield bubble
 and an orange exhaust say which *row* is powering them, not which ship it is.
 
 The accent survives only as app chrome that was never ship-specific: the menu
-buttons, the fuel badge on the map, the
+buttons, the
 wordmark's rule, the settings controls and the planet's atmosphere.
 
 Hull and speed used to sit beside cargo on the ship cards. They are gone —
