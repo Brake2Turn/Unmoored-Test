@@ -70,6 +70,9 @@ const SETTLE_MS = 600;
  */
 const TURN_MS = 140;
 
+/** How quickly a ship caught sliding home from a dodge pulls up to fire. */
+const STOP_MS = 60;
+
 /** Where both ships stand for a shot, as `lineUp` hands it over. */
 export type Stance = {
   /** The shooter's height off its resting line. */
@@ -127,8 +130,10 @@ type Jink = {
   backAt: number;
   /** Held out for a shot: its return waits for that shot to land. */
   pinned: boolean;
-  /** Already on its way back: a free ship again, as far as aiming goes. */
+  /** On its way back: since when, and over how long. */
   returning: boolean;
+  returnStart: number;
+  returnMs: number;
   timers: ReturnType<typeof setTimeout>[];
 };
 
@@ -196,8 +201,10 @@ export function useDrift(
     (side: Side, jink: Jink) => {
       if (jinks.current[side] !== jink) return;
       jink.returning = true;
-      moveTo(side, jink.from, paced(DODGE_RETURN_MS));
-      jink.backAt = Date.now() + paced(DODGE_RETURN_MS);
+      jink.returnStart = Date.now();
+      jink.returnMs = paced(DODGE_RETURN_MS);
+      moveTo(side, jink.from, jink.returnMs);
+      jink.backAt = Date.now() + jink.returnMs;
       jink.timers.push(
         setTimeout(() => {
           if (jinks.current[side] === jink) jinks.current[side] = null;
@@ -275,22 +282,31 @@ export function useDrift(
         // to finish: it will turn rather than move, and the other ship is
         // already holding still for its own shot, so nothing is pulled two
         // ways. That is what lets it fire back while dodging.
-        const own = jinks.current[shooter];
-        const dodging = !!own && !own.returning;
+        const dodging = !!jinks.current[shooter];
         const clearAt = Math.max(dodging ? 0 : (line.current?.holdUntil ?? 0), outAt);
         if (now < clearAt) {
           later(go, clearAt - now + 10);
           return;
         }
-        // Anyone mid-dodge stays where it has jinked to until this shot lands.
+        // Anyone anywhere in a dodge stays where it is until this shot lands
+        // — out at the far end, or wherever it has got to on the way back.
         const pinned: Side[] = [];
         for (const side of [shooter, other]) {
           const jink = jinks.current[side];
-          // One already heading home counts as free: it is simply steered
-          // to the new line from wherever it has got to.
-          if (!jink || jink.returning) continue;
+          if (!jink) continue;
           jink.timers.forEach(clearTimeout);
           jink.timers = [];
+          if (jink.returning) {
+            // Stopped part-way home. Where that is, is worked out from the
+            // clock and the glide's own curve (`inOut(sin)`, which is
+            // (1 − cos πt) / 2) rather than read off a moving view, like
+            // every other height here.
+            const t = Math.max(0, Math.min(1, (Date.now() - jink.returnStart) / (jink.returnMs || 1)));
+            const at = jink.to + (jink.from - jink.to) * ((1 - Math.cos(Math.PI * t)) / 2);
+            moveTo(side, at, STOP_MS, Easing.out(Easing.quad));
+            jink.to = at;
+            jink.returning = false;
+          }
           jink.pinned = true;
           pinned.push(side);
         }
@@ -363,6 +379,8 @@ export function useDrift(
         backAt: now + paced(DODGE_MS) + paced(DODGE_HOLD_MS) + paced(DODGE_RETURN_MS),
         pinned: false,
         returning: false,
+        returnStart: 0,
+        returnMs: 0,
         timers: [],
       };
       jinks.current[side] = jink;

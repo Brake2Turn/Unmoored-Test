@@ -892,9 +892,13 @@ most), then stays where it has jinked to instead of gliding back, and
 the *muzzle's* line passes exactly through the target — the muzzle is off
 the centre, so it is the angle to the target less one `asin` of the muzzle's
 sideways offset — and `LaserShot` tilts the bolt to match. After the shot it
-turns level and returns (`Jink.pinned`, `release`). A target caught mid-dodge
-is held where it has jinked to until the bolt lands; one already heading home
-counts as free. A line already held for one shot is let go before the next
+turns level and returns (`Jink.pinned`, `release`). **Anywhere in a dodge
+counts** — the author's call: a ship already sliding home when its weapon
+charges pulls up where it is (`STOP_MS`, 60ms) and turns and fires from
+there, rather than gliding back into line. Where it has got to is worked out
+from the clock and the glide's curve (`inOut(sin)`, (1 − cos πt) / 2), not
+read off the moving view. A target caught anywhere in a dodge is held still
+the same way until the bolt lands. A line already held for one shot is let go before the next
 is lined up, so the two ships never pull each other two ways at once. Line-ups (and turns) happen
 under Reduce Motion too (the author asked that every shot visibly line up),
 and settle back to rest afterwards when nothing else is swaying. **The ships are sized with room kept for a dodge**
@@ -980,7 +984,12 @@ one switch for every test tool, so none of them reach a player:
   moving part of a shot uses — the line-up, dodge and turn in `useDrift`, the
   bolt's flight in `LaserShot` — so they stay in step at any speed. Checked
   in headless both ways: the dodging shooter fired pinned off its line and
-  turned (8–19°) to hit, the opening shot flew level.
+  turned (8–19°) to hit, the opening shot flew level — and, charged part-way
+  home, stopped there (26pt off its line of a 48pt dodge) and did the same.
+  **The demos force what real fights leave to chance**: which shot misses
+  and when the dodger's weapon is full. The motion is the real code; in a
+  real fight it only happens when a weapon happens to finish charging during
+  a dodge.
 
 **The space screen is assembled from `components/space/`.** `app/run.tsx`
 only puts the pieces together: `useLiveRun` (the run, `runRef`, `commit`,
