@@ -80,6 +80,37 @@ function spotOffset(spot: { x: number; y: number }, unit: number): { x: number; 
   return { x: -(spot.y - 130) * unit, y: (spot.x - 100) * unit };
 }
 
+/**
+ * How a ship turned `turn` radians (clockwise on screen) about `centre` puts
+ * its muzzle — `muzzle` off the centre while level, pointing along `facing`
+ * (1 right, −1 left) — on a line straight through `at`: the turn, where the
+ * muzzle ends up, and which way the bolt then flies.
+ *
+ * Turned, the muzzle's line runs through `at` exactly when `at`, seen from the
+ * centre in the ship's own turned frame, sits the muzzle's sideways offset off
+ * the ship's axis — which is one `asin`. Level ships (a free shooter already
+ * glided into line) come out at a turn of nothing.
+ */
+function aimAt(centre: Point, muzzle: Point, facing: 1 | -1, at: Point) {
+  const vx = at.x - centre.x;
+  const vy = at.y - centre.y;
+  const reach = Math.hypot(vx, vy) || 1;
+  const off = Math.asin(Math.max(-1, Math.min(1, muzzle.y / reach)));
+  let turn = Math.atan2(vy, vx) - (facing === 1 ? off : Math.PI - off);
+  // The short way round.
+  turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+  const cos = Math.cos(turn);
+  const sin = Math.sin(turn);
+  const from = { x: centre.x + muzzle.x * cos - muzzle.y * sin, y: centre.y + muzzle.x * sin + muzzle.y * cos };
+  return { turn, from, dir: { x: facing * cos, y: facing * sin } };
+}
+
+/** Where a bolt from `aim` reaches the screen column `x`, carrying on along its line. */
+function along(aim: { from: Point; dir: Point }, x: number): Point {
+  const run = aim.dir.x === 0 ? 0 : (x - aim.from.x) / aim.dir.x;
+  return { x, y: aim.from.y + aim.dir.y * run };
+}
+
 type Box = { x: number; y: number; width: number; height: number };
 
 /**
@@ -131,6 +162,11 @@ export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width:
     }, after);
   }, []);
 
+  /** Puts one bolt in flight. */
+  const addShot = useCallback((shot: Omit<Shot, 'id'>) => {
+    setShots((current) => [...current, { ...shot, id: Date.now() + Math.random() }]);
+  }, []);
+
   const measureHere = useCallback(async (view: View | null) => {
     const [root, box] = await Promise.all([measure(rootRef.current), measure(view)]);
     if (!box) return null;
@@ -164,44 +200,43 @@ export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width:
       // Where the targeted system sits on the other ship, from its centre.
       const spot =
         foe && target ? spotOffset(systemSpots(encounterAt(current.map, node))[target], foe.height / 200) : NO_OFFSET;
-      // The muzzle's own height off the ship's centre line (the Lance's twin
-      // barrels sit a little to one side), so it is the muzzle that lines up.
+      // The systems box is the ship's 200×260 box grown about its centre and
+      // laid on its side, so its on-screen *height* is the upright width. The
+      // muzzle, as an offset from the ship's centre, turned the same way (the
+      // Lance's twin barrels sit a little to one side).
+      const scale = rest.height / SYSTEMS_SPAN / 200;
       const tip = weaponTip(weapon);
-      const muzzleY = (mount.x + tip.x - 100) * (rest.height / SYSTEMS_SPAN / 200);
-      // Come level with that system first — after any dodge of our own has
-      // played out — then let go.
-      drift.lineUp('player', spot.y - muzzleY, (shooterDy, targetDy) => {
+      const muzzle = { x: -(mount.y + tip.y - 130) * scale, y: (mount.x + tip.x - 100) * scale };
+      // Level with that system — or, caught mid-dodge, turned onto it.
+      drift.lineUp('player', spot.y - muzzle.y, ({ shooterDy, targetDy }) => {
         const now = runRef.current;
         const there = !!now && now.position === node && foeHull(now, node) > 0;
         // Whether it misses is rolled as it leaves, against the other ship's
         // Wren Drive: the harder a ship sways, the harder it is to hit.
         const misses = there && shotMisses(now, 'foe', Math.random());
-        const box = { ...rest, y: rest.y + shooterDy };
-        // The systems box is the ship's 200×260 box grown about its centre
-        // and laid on its side, so its on-screen *height* is the upright
-        // width. A point in ship units is its offset from the centre, turned.
-        const scale = box.height / SYSTEMS_SPAN / 200;
-        const from = sidewaysPoint(box, (mount.x + tip.x - 100) * scale, (mount.y + tip.y - 130) * scale);
-        // Straight across onto the targeted system; or, on a miss or with
-        // nobody there, straight on off the right edge. The bolt's path never
-        // changes: on a miss the other ship dodges out of it.
+        const centre = { x: rest.x + rest.width / 2, y: rest.y + rest.height / 2 + shooterDy };
+        // Onto the targeted system; with nobody there, straight ahead.
+        const at = foe
+          ? { x: foe.x + foe.width / 2 + spot.x, y: foe.y + foe.height / 2 + targetDy + spot.y }
+          : { x: width + 40, y: centre.y + muzzle.y };
+        const aim = aimAt(centre, muzzle, 1, at);
         const hits = there && !!foe && !misses;
-        const at = foe ? { x: foe.x + foe.width / 2 + spot.x, y: foe.y + foe.height / 2 + targetDy + spot.y } : null;
-        const to = at && hits ? { x: at.x, y: from.y } : { x: width + 40, y: from.y };
-        const launch = () =>
-          setShots((current) => [
-            ...current,
-            { id: Date.now() + Math.random(), by: 'player', node, from, to, hits, target, damage },
-          ]);
-        if (foe && at && there && !hits) {
-          // Clear of its widest part — the wings, across its upright width —
-          // from a line running through the system it was aimed at.
-          const lead = drift.dodge('foe', foe.height * DODGE_FOE + DODGE_MARGIN, spot.y);
-          showMiss(at, lead + passesAt(from, to, at.x));
-          setTimeout(launch, lead);
-        } else {
-          launch();
-        }
+        // A hit ends on the system; anything else flies on, along the same
+        // line, off the right edge. The bolt's path never changes: on a miss
+        // the other ship dodges out of it.
+        const to = hits ? at : along(aim, width + 40);
+        const launch = () => {
+          if (foe && there && !hits) {
+            // Clear of its widest part — the wings, across its upright width —
+            // from the line through the system it was aimed at.
+            const lead = drift.dodge('foe', foe.height * DODGE_FOE + DODGE_MARGIN, spot.y);
+            showMiss(at, lead + passesAt(aim.from, to, at.x));
+            setTimeout(() => addShot({ by: 'player', node, from: aim.from, to, hits, target, damage }), lead);
+          } else {
+            addShot({ by: 'player', node, from: aim.from, to, hits, target, damage });
+          }
+        };
+        return { turn: aim.turn, launch };
       });
     };
     void shoot();
@@ -245,48 +280,44 @@ export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width:
       // upright width, a `SYSTEMS_SPAN` share of which is the ship itself.
       const playerScale = box.height / SYSTEMS_SPAN / 200;
       const spot = spotOffset((SYSTEM_SPOTS[shipId] ?? SYSTEM_SPOTS.drifter)[target], playerScale);
-      drift.lineUp('foe', spot.y, (shooterDy, targetDy) => {
+      // The other ship is on its side too; its on-screen height is its
+      // upright width, 200 units across. Its gun points left, at the player.
+      const foeScale = rest.height / 200;
+      const gun = foeMuzzle(encounterAt(current.map, node));
+      const muzzle = { x: -(gun.y - 130) * foeScale, y: (gun.x - 100) * foeScale };
+      drift.lineUp('foe', spot.y - muzzle.y, ({ shooterDy, targetDy }) => {
         const now = runRef.current;
         // Aimed at the system itself — or, while there is a shield, at the
-        // shield's rim level with it.
+        // shield's rim level with it. The shield is an ellipse 96 units across
+        // and 140 along the ship, so at that height its rim stands this far
+        // out in front of the centre (a touch inside it, so the bolt meets the
+        // glow).
         const shielded = !!now && shieldLevel(now.shieldCharge) > 0;
-        const foe = { ...rest, y: rest.y + shooterDy };
-        // The other ship is on its side too; its on-screen height is its
-        // upright width, 200 units across.
-        const muzzle = foeMuzzle(encounterAt(current.map, node));
-        const foeScale = foe.height / 200;
-        const from = sidewaysPoint(foe, (muzzle.x - 100) * foeScale, (muzzle.y - 130) * foeScale);
-        const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 + targetDy };
-        const at = { x: centre.x + spot.x, y: centre.y + spot.y };
+        const player = { x: box.x + box.width / 2, y: box.y + box.height / 2 + targetDy };
+        const rim = 136 * Math.sqrt(Math.max(0, 1 - (spot.y / playerScale / SHIELD_ACROSS) ** 2));
+        const at = {
+          x: shielded ? player.x + rim * playerScale : player.x + spot.x,
+          y: player.y + spot.y,
+        };
+        const centre = { x: rest.x + rest.width / 2, y: rest.y + rest.height / 2 + shooterDy };
+        const aim = aimAt(centre, muzzle, -1, at);
         // Rolled against the player's own Wren Drive: the more in it, the
         // more often the player's ship dodges — out of the bolt's line far
         // enough to take the shield with it (or the hull, with no shield up) —
         // and the bolt flies on off the left edge.
-        if (now && shotMisses(now, 'player', Math.random())) {
-          const clear = (shielded ? DODGE_SHIELD : DODGE_HULL) * playerScale + DODGE_MARGIN;
-          const lead = drift.dodge('player', clear, spot.y);
-          const to = { x: -40, y: from.y };
-          showMiss(at, lead + passesAt(from, to, at.x));
-          setTimeout(
-            () =>
-              setShots((shots) => [
-                ...shots,
-                { id: Date.now() + Math.random(), by: 'foe', node, from, to, hits: false, target, damage },
-              ]),
-            lead,
-          );
-          return;
-        }
-        // The shield is an ellipse 96 units across and 140 along the ship,
-        // so at this height its rim stands this far out in front of the
-        // centre (a touch inside it, so the bolt meets the glow).
-        const across = spot.y / playerScale;
-        const rim = 136 * Math.sqrt(Math.max(0, 1 - (across / SHIELD_ACROSS) ** 2));
-        const to = { x: shielded ? centre.x + rim * playerScale : at.x, y: from.y };
-        setShots((shots) => [
-          ...shots,
-          { id: Date.now() + Math.random(), by: 'foe', node, from, to, hits: true, target, damage },
-        ]);
+        const misses = !!now && shotMisses(now, 'player', Math.random());
+        const to = misses ? along(aim, -40) : at;
+        const launch = () => {
+          if (misses) {
+            const clear = (shielded ? DODGE_SHIELD : DODGE_HULL) * playerScale + DODGE_MARGIN;
+            const lead = drift.dodge('player', clear, spot.y);
+            showMiss(at, lead + passesAt(aim.from, to, at.x));
+            setTimeout(() => addShot({ by: 'foe', node, from: aim.from, to, hits: false, target, damage }), lead);
+          } else {
+            addShot({ by: 'foe', node, from: aim.from, to, hits: true, target, damage });
+          }
+        };
+        return { turn: aim.turn, launch };
       });
     };
     void shoot();

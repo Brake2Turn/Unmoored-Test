@@ -656,18 +656,19 @@ listens for those, not for pointer events.
 of JUMP** (still `components/FireButton.tsx`). The author's rules, in the
 order they came:
 
-- **Choosing a target is an order to fire once** (`setTarget` sets
-  `run.shotPending`): the weapon goes the moment it is fully charged, autofire
-  on or off, and the shot spends the order. Choosing the same system again
-  orders another shot.
-- **AUTOFIRE only decides whether it keeps going** (`run.autofire`,
-  `toggleAutofire`): on, it fires at the target on every full charge.
+- **A target is an order to fire** (`run.target`, `setTarget`): the weapon
+  goes at it the moment it is fully charged, autofire on or off.
+- **Without autofire, one target is one shot**: `fireWeapon` clears the
+  target as the bolt leaves, so its marker goes and nothing fires again until
+  another is chosen.
+- **AUTOFIRE keeps the target** (`run.autofire`, `toggleAutofire`): on, the
+  target stays after each shot and is fired at on every full charge.
 
-`fireReady(run)` is the whole condition — a target, an order (pending shot or
-autofire), a live ship here, nobody talking, `fireBlocker` clear — and the
-helm fires the moment it turns true (`useCombat`). The button's second line
-says where things stand: OFF, ONE SHOT (off, with a shot waiting on the
-charge), ON, NO TARGET or NO WEAPON. `fireWeapon` refuses without a target or
+`fireReady(run)` is the whole condition — a target, a live ship here, nobody
+talking, `fireBlocker` clear — and the helm fires the moment it turns true
+(`useCombat`). The button's second line says where things stand: OFF, ONE
+SHOT (off, with a target chosen and its shot waiting on the charge), ON, NO
+TARGET or NO WEAPON. `fireWeapon` refuses without a target or
 a ship, so choosing a target is the decision to attack: nothing opens up on a
 merchant by itself.
 `fireBlocker(run)` still returns `'wrecked'`, `'weapon'`, `'charging'` or
@@ -770,10 +771,10 @@ struck through once destroyed.
 **Aiming: tap the weapon on your own ship.** A tap target sits over the gun
 on the player's nose (in `Arena`); tapping it rings the gun and grows the
 other ship's three marks into buttons ("TAP ONE OF THEIR SYSTEMS TO
-TARGET"), and picking one sets `run.target` and orders a shot at it
-(`setTarget`); picking the one already aimed at orders another. The target
-wears red corner brackets. It is cleared on every jump, when the ship it named
-is destroyed, and **when the player's own ship is destroyed** — the author
+TARGET"), and picking one sets `run.target` (`setTarget`). The target
+wears red corner brackets. It is cleared by the shot it orders (autofire
+off), on every jump, when the ship it named is destroyed, and **when the
+player's own ship is destroyed** — the author
 asked for the marker to go with it (`takeHit` clears it at zero hull, and
 `Arena` hides it on a wreck).
 
@@ -880,10 +881,21 @@ a bolt leaves, the target stops where it is and the shooter glides until its
 off the shooter's — the Lance's twin barrels sit off-centre), over `ALIGN_MS`
 (320ms); both hold until the bolt has landed (`HOLD_MS`), then wander off
 again. The bolt then flies dead level onto the system's spot, or onto the
-shield's rim at that height (`useCombat`, `spotOffset`). **A ship mid-dodge
-finishes the dodge before lining up its own shot** (`busy` in `useDrift`),
-and a line already held for one shot is let go before the next is lined up,
-so the two ships never pull each other two ways at once. Line-ups happen
+shield's rim at that height (`useCombat`, `spotOffset`).
+
+**A ship can shoot mid-dodge — it turns to aim** (the author's request; it
+used to wait the dodge out). A ship still jinking out finishes that (170ms at
+most), then stays where it has jinked to instead of gliding back, and
+**rotates** its nose onto the targeted system (`TURN_MS`, 140ms; the
+`playerTurn` / `foeTurn` shared values, applied about each ship's centre in
+`Arena`) and fires at a slant. `aimAt` in `useCombat` works out the turn so
+the *muzzle's* line passes exactly through the target — the muzzle is off
+the centre, so it is the angle to the target less one `asin` of the muzzle's
+sideways offset — and `LaserShot` tilts the bolt to match. After the shot it
+turns level and returns (`Jink.pinned`, `release`). A target caught mid-dodge
+is held where it has jinked to until the bolt lands; one already heading home
+counts as free. A line already held for one shot is let go before the next
+is lined up, so the two ships never pull each other two ways at once. Line-ups (and turns) happen
 under Reduce Motion too (the author asked that every shot visibly line up),
 and settle back to rest afterwards when nothing else is swaying. **The ships are sized with room kept for a dodge**
 above and below whenever a pair is on screen (`artScaleFor`): a dodge is
@@ -1317,7 +1329,7 @@ Settled with the author, so a new chat does not reopen them:
 - **A repair system is next, by the author's plan.** Until it exists,
   system damage lasts the whole run and a shot-out Wren Drive strands it.
 - **Not yet seen on the author's phone:** aiming, the line-up onto a
-  targeted system, autofire, the dodge, the sway and the line-up before a
+  targeted system, turning to fire mid-dodge, autofire, the dodge, the sway and the line-up before a
   shot, the MISS pop-up in motion, and star select sized from the game area
   (`useScreenBox`). All were checked in headless only, where nothing moves.
 

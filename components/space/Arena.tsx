@@ -70,8 +70,16 @@ export function Arena({
   /** The player picked a subsystem on the other ship to aim at. */
   onTarget: (target: Subsystem | null) => void;
 }) {
-  const playerDrift = useAnimatedStyle(() => ({ transform: [{ translateY: drift.player.value }] }));
-  const foeDrift = useAnimatedStyle(() => ({ transform: [{ translateY: drift.foe.value }] }));
+  // Each ship rides its drift up and down, and turns about its own centre
+  // when it has to aim from mid-dodge. The name over the other ship rides
+  // with it but stays level.
+  const playerDrift = useAnimatedStyle(() => ({
+    transform: [{ translateY: drift.player.value }, { rotate: `${drift.playerTurn.value}deg` }],
+  }));
+  const foeDrift = useAnimatedStyle(() => ({
+    transform: [{ translateY: drift.foe.value }, { rotate: `${drift.foeTurn.value}deg` }],
+  }));
+  const foeLabelDrift = useAnimatedStyle(() => ({ transform: [{ translateY: drift.foe.value }] }));
   const ship = shipById(run?.shipId);
   const encounter = run ? encounterAt(run.map, run.position) : 'empty';
   const present = run ? shipHere(run) : 'empty';
@@ -87,8 +95,8 @@ export function Arena({
     if (!canAim) setAiming(false);
   }, [canAim]);
   const choose = (target: Subsystem) => {
-    // Picking a system — even the one already aimed at — is an order to fire
-    // at it once the weapon is charged.
+    // Picking a system is an order to fire at it once the weapon is charged;
+    // without autofire, that one shot spends it.
     onTarget(target);
     setAiming(false);
   };
@@ -167,7 +175,7 @@ export function Arena({
           <View style={styles.foeColumn}>
             {/* Who is out here and their hull, over their own ship. Gone with
                 it once it is destroyed, but its room is kept. */}
-            <Animated.View style={[styles.foeStatus, present === 'empty' && styles.gone, foeDrift]}>
+            <Animated.View style={[styles.foeStatus, present === 'empty' && styles.gone, foeLabelDrift]}>
               {run ? (
                 <FoeStatus
                   name={foeName(run) ?? waiting.label}

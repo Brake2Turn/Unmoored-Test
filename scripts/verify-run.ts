@@ -160,23 +160,24 @@ function hits(run: RunState, n: number): RunState {
   // Targeting and autofire.
   check('nothing can be targeted at an empty star', setTarget(at(3, { target: null }), 'weapons').target === null);
   check('a ship here can be targeted', setTarget(at(1, { target: null }), 'shields').target === 'shields');
-  // Choosing a target is one order to fire, autofire or not.
+  // One target, one shot — unless autofire keeps it.
   const ordered = setTarget(at(1, { target: null, weaponCharge: WEAPON_UNITS }), 'shields');
-  check('choosing a target orders a shot', ordered.shotPending && fireReady(ordered));
+  check('choosing a target readies a shot', fireReady(ordered));
   const spent = fireWeapon(ordered);
-  check('that one shot spends the order', !spent.shotPending && !fireReady({ ...spent, weaponCharge: WEAPON_UNITS }));
-  check('the target stays after the shot', spent.target === 'shields');
-  check('choosing it again orders another', fireReady(setTarget({ ...spent, weaponCharge: WEAPON_UNITS }, 'shields')));
-  check('autofire keeps firing after the order', fireReady({ ...spent, weaponCharge: WEAPON_UNITS, autofire: true }));
-  let lost = at(1, { target: 'weapons', shotPending: true, shieldCharge: 0 });
+  check('without autofire a shot spends the target', spent.target === null);
+  check('and nothing fires again until another is chosen', !fireReady({ ...spent, weaponCharge: WEAPON_UNITS }));
+  const kept = fireWeapon({ ...ordered, autofire: true });
+  check('autofire keeps the target', kept.target === 'shields');
+  check('and keeps firing on the next charge', fireReady({ ...kept, weaponCharge: WEAPON_UNITS }));
+  let lost = at(1, { target: 'weapons', shieldCharge: 0 });
   while (lost.hull > 0) lost = takeHit(lost);
-  check('a wrecked ship drops its target', lost.target === null && !lost.shotPending);
+  check('a wrecked ship drops its target', lost.target === null);
   check('a wreck cannot take aim', setTarget(lost, 'weapons').target === null);
   const ready = at(1, { weaponCharge: WEAPON_UNITS, autofire: true });
+  check('a target fires with autofire off too', fireReady(toggleAutofire(ready)));
   check('autofire fires a charged, aimed weapon', fireReady(ready));
-  check('autofire waits for a target', !fireReady({ ...ready, target: null }));
+  check('nothing fires without a target', !fireReady({ ...ready, target: null }));
   check('autofire waits for the charge', !fireReady({ ...ready, weaponCharge: 1 }));
-  check('autofire off holds fire once the order is spent', !fireReady(toggleAutofire(ready)));
   check('autofire waits for the talking', !fireReady({ ...ready, spoken: [] }));
   check('autofire never fires at nothing', !fireReady(at(3, { weaponCharge: WEAPON_UNITS, autofire: true })));
   const picks = new Set<string>();

@@ -88,7 +88,6 @@ export function Controls({
             on={!!run?.autofire}
             blocked={run ? fireBlocker(run) : 'weapon'}
             targeted={!!run?.target}
-            pending={!!run?.shotPending}
             weaponName={weaponById(run?.mounted)?.name ?? null}
             width={FIRE_WIDTH}
             height={JUMP_HEIGHT}

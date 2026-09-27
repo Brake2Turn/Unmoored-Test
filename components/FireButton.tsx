@@ -7,12 +7,12 @@ import { fonts, layout, palette, tracking } from '@/lib/theme';
 
 /**
  * AUTOFIRE: a switch, not a trigger. Choosing a target (tap the weapon on the
- * ship, then one of their systems) fires once, as soon as the weapon is
- * charged, whatever this says. On, it keeps firing at that target on every
- * full charge. The second line says where things stand:
+ * ship, then one of their systems) fires at it once, as soon as the weapon is
+ * charged, and the target is spent. On, the target is kept and fired at on
+ * every full charge. The second line says where things stand:
  *
  * - **OFF** — dark, outlined: one shot per target chosen;
- * - **ONE SHOT** — off, with a shot ordered and waiting on the charge;
+ * - **ONE SHOT** — off, with a target chosen and its shot waiting on the charge;
  * - **ON** — red: firing on every full charge;
  * - **NO TARGET** / **NO WEAPON** — on, but with nothing to fire at or with.
  */
@@ -22,7 +22,6 @@ export function FireButton({
   on,
   blocked,
   targeted,
-  pending,
   weaponName,
   width,
   height,
@@ -33,15 +32,13 @@ export function FireButton({
   blocked: FireBlock;
   /** A subsystem on the other ship is targeted. */
   targeted: boolean;
-  /** One shot is ordered and waiting on the charge. */
-  pending: boolean;
   weaponName: string | null;
   width: number;
   height: number;
   onPress: () => void;
 }) {
   const noWeapon = blocked === 'weapon' || blocked === 'wrecked';
-  const status = !on ? (pending && !noWeapon ? 'ONE SHOT' : 'OFF') : noWeapon ? 'NO WEAPON' : !targeted ? 'NO TARGET' : 'ON';
+  const status = !on ? (targeted && !noWeapon ? 'ONE SHOT' : 'OFF') : noWeapon ? 'NO WEAPON' : !targeted ? 'NO TARGET' : 'ON';
   const live = status === 'ON';
   const look = live
     ? { fill: TONE.bright, border: TONE.bright, text: TONE.ink, status: TONE.ink }

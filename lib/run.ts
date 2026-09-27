@@ -170,15 +170,9 @@ export type RunState = {
    */
   target: Subsystem | null;
   /**
-   * One shot is waiting on the charge: choosing a target is an order to fire
-   * at it, so the weapon goes the moment it is full, autofire or not. Spent
-   * by that shot.
-   */
-  shotPending: boolean;
-  /**
-   * The player's weapon keeps firing, every time it is fully charged, rather
-   * than once per order — as long as there is a target (`fireReady`).
-   * Toggled by the AUTOFIRE button.
+   * The weapon keeps its target after firing, and so keeps firing at it every
+   * time it is fully charged. Off, a shot spends the target: the marker goes
+   * and nothing fires until another is chosen. Toggled by AUTOFIRE.
    */
   autofire: boolean;
 };
@@ -287,7 +281,8 @@ export function fireWeapon(run: RunState): RunState {
   return {
     ...run,
     weaponCharge: 0,
-    shotPending: false,
+    // Without autofire a shot spends the target: one target, one shot.
+    target: run.autofire ? run.target : null,
     provoked: provokes ? [...run.provoked, run.position] : run.provoked,
   };
 }
@@ -326,7 +321,7 @@ export function hitFoe(run: RunState, node: number, target: Subsystem | null = n
   // A ship shot to nothing takes the target with it: there is nothing left
   // to aim at, and autofire goes back to waiting for one.
   const next =
-    node === run.position && foeHull(struck, node) <= 0 ? { ...struck, target: null, shotPending: false } : struck;
+    node === run.position && foeHull(struck, node) <= 0 ? { ...struck, target: null } : struck;
   if (!target) return next;
   const before = run.foeSystemDamage[key] ?? NO_DAMAGE;
   const after = { ...before, [target]: Math.min(SUBSYSTEM_CAPACITY, before[target] + Math.max(0, damage)) };
@@ -584,7 +579,6 @@ export function createRun(shipId: string): RunState {
     foeShieldCharge: 0,
     foeShieldHits: 0,
     target: null,
-    shotPending: false,
     autofire: false,
   };
 }
@@ -617,7 +611,6 @@ export function applyJump(run: RunState, target: number): RunState {
     foeCharge: 0,
     foeShieldCharge: foeSystems(run, target).shields,
     target: null,
-    shotPending: false,
   };
 }
 
@@ -657,7 +650,7 @@ export function takeHit(run: RunState, target: Subsystem | null = null, damage =
 
   const hull = damagedHull(run.hull);
   // A wreck aims at nothing: the target (and its marker) go with the ship.
-  const hit = hull === run.hull ? run : isWrecked(hull) ? { ...run, hull, target: null, shotPending: false } : { ...run, hull };
+  const hit = hull === run.hull ? run : isWrecked(hull) ? { ...run, hull, target: null } : { ...run, hull };
   return target ? damageSystem(hit, target, damage) : hit;
 }
 
@@ -681,16 +674,14 @@ export function damageSystem(run: RunState, target: Subsystem, damage: number): 
 }
 
 /**
- * Aims the weapon at one subsystem on the other ship — which is also the
- * order to fire at it once, as soon as the weapon is charged — or at nothing.
- * Choosing the one already aimed at orders another shot. Only while there is
- * a ship here to aim at, and a ship to aim from.
+ * Aims the weapon at one subsystem on the other ship, or at nothing. A target
+ * is an order to fire: the weapon goes at it as soon as it is charged. Only
+ * while there is a ship here to aim at, and a ship to aim from.
  */
 export function setTarget(run: RunState, target: Subsystem | null): RunState {
-  if (!target) return run.target || run.shotPending ? { ...run, target: null, shotPending: false } : run;
-  if (shipHere(run) === 'empty' || isWrecked(run.hull)) return run;
-  if (target === run.target && run.shotPending) return run;
-  return { ...run, target, shotPending: true };
+  if (target === run.target) return run;
+  if (target && (shipHere(run) === 'empty' || isWrecked(run.hull))) return run;
+  return { ...run, target };
 }
 
 /** Turns autofire on or off. */
@@ -700,13 +691,11 @@ export function toggleAutofire(run: RunState): RunState {
 
 /**
  * The player's weapon should fire now: a subsystem on a ship here is
- * targeted, there is an order to fire at it — the one shot choosing it gave,
- * or autofire's standing order — the weapon is charged, and nobody is still
- * talking.
+ * targeted, the weapon is charged, and nobody is still talking. Whether it
+ * fires again after that is autofire's business (`fireWeapon`).
  */
 export function fireReady(run: RunState): boolean {
   return (
-    (run.autofire || run.shotPending) &&
     !!run.target &&
     shipHere(run) !== 'empty' &&
     !pendingMeeting(run) &&
@@ -826,7 +815,6 @@ export function devStageEncounter(run: RunState, target: number | 'boss'): RunSt
     foeCharge: 0,
     foeShieldCharge: foeSystems(fresh, node).shields,
     target: null,
-    shotPending: false,
     jumpCharge: 0,
     weaponCharge: 0,
   };
@@ -900,7 +888,6 @@ export function hydrateRun(value: unknown): RunState | null {
       typeof stored.target === 'string' && (SUBSYSTEMS as readonly string[]).includes(stored.target)
         ? (stored.target as Subsystem)
         : null,
-    shotPending: stored.shotPending === true,
     autofire: stored.autofire === true,
   };
   // How long this star holds the drive depends on who is here — a red ship,
@@ -916,7 +903,7 @@ export function hydrateRun(value: unknown): RunState | null {
     jumpCharge: Math.min(run.jumpCharge, jumpUnitsFor(run)),
     foeShieldCharge: clampNumber(stored.foeShieldCharge, 0, foeShields, foeShields),
     // Nothing to aim at, or nothing left to aim from: no target, no order.
-    ...(shipHere(run) === 'empty' || isWrecked(run.hull) || !run.target ? { target: null, shotPending: false } : {}),
+    target: shipHere(run) === 'empty' || isWrecked(run.hull) ? null : run.target,
   };
 }
 
