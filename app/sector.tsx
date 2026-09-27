@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Line } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -8,6 +8,7 @@ import { MenuButton } from '@/components/MenuButton';
 import { BUTTON_TONE } from '@/lib/subsystems';
 import { useHaptics, useSettings } from '@/lib/settings';
 import { StarChart } from '@/components/StarChart';
+import { useScreenBox } from '@/components/useScreenBox';
 import { fonts, palette, tracking, useMenuWidth } from '@/lib/theme';
 import { applyJump, jumpBlocker, sectorOf, type RunState } from '@/lib/run';
 import { loadRun, saveRun } from '@/lib/runStore';
@@ -40,7 +41,8 @@ const DEV_ROW_HEIGHT = 34;
 export default function SectorScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width, height } = useWindowDimensions();
+  // What the screen was given, not the window — see `useScreenBox`.
+  const { width, height, onLayout } = useScreenBox();
   const haptics = useHaptics();
   const { settings } = useSettings();
 
@@ -133,7 +135,7 @@ export default function SectorScreen() {
   const buttonWidth = useMenuWidth();
 
   if (!map) {
-    return <View style={styles.container} />;
+    return <View onLayout={onLayout} style={styles.container} />;
   }
 
   const current = map.nodes[position];
@@ -141,7 +143,7 @@ export default function SectorScreen() {
   const boss = bossIndex(map);
 
   return (
-    <View style={styles.container}>
+    <View onLayout={onLayout} style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable
           accessibilityRole="button"

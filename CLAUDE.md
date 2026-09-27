@@ -1051,6 +1051,15 @@ rows.
 
 These cost real debugging time. Do not rediscover them.
 
+- **The window is not the screen.** In the Claude app on a phone the game
+  is shown under the app's own bar, in an area shorter than
+  `useWindowDimensions` reports. Star select sized its chart from the window,
+  so on the author's phone the chart ran down behind "3 STARS IN RANGE" and
+  JUMP, which sat where the game area really ended — invisible in a test
+  browser, which gives the game the whole window. Screens that size things
+  from the height take it from `useScreenBox()` (`components/useScreenBox.ts`),
+  measured off their own outermost view. To test it, shrink `#root` below
+  the window (`#root{height:640px}`) in the probe page.
 - **SVG ids are one namespace on the web.** On a phone every `<Svg>` is a
   document of its own; in a browser every drawing on every mounted screen
   shares one page, and `url(#violet)` finds the *first* element with that id —

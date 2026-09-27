@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Backdrop } from '@/components/Backdrop';
@@ -12,6 +12,7 @@ import { MissPop } from '@/components/MissPop';
 import { ModeBadge } from '@/components/ModeBadge';
 import { ShipDetail } from '@/components/ShipPanel';
 import { StarField } from '@/components/StarField';
+import { useScreenBox } from '@/components/useScreenBox';
 import { Arena } from '@/components/space/Arena';
 import { Controls } from '@/components/space/Controls';
 import { DevControls } from '@/components/space/DevControls';
@@ -64,7 +65,8 @@ import { fonts, layout, palette, tracking, useMenuWidth } from '@/lib/theme';
 export default function RunScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width, height } = useWindowDimensions();
+  // What the screen was given, not the window — see `useScreenBox`.
+  const { width, height, onLayout } = useScreenBox();
   const haptics = useHaptics();
   const { settings } = useSettings();
   const animate = !settings.reduceMotion;
@@ -162,7 +164,7 @@ export default function RunScreen() {
   );
 
   return (
-    <View ref={combat.rootRef} collapsable={false} style={styles.container}>
+    <View ref={combat.rootRef} collapsable={false} onLayout={onLayout} style={styles.container}>
       <Backdrop width={width} height={height} variant="deep" />
       {/* Travelling alone the stars stream past, right to left; with another
           ship alongside they hold still and twinkle. */}
