@@ -38,8 +38,10 @@ import {
   modeOf,
   moveGear,
   pendingMeeting,
+  setTarget,
   shiftEnergy,
   shipHere,
+  toggleAutofire,
   wrenBars,
 } from '@/lib/run';
 import { clearRun } from '@/lib/runStore';
@@ -118,6 +120,11 @@ export default function RunScreen() {
   );
   const onMoveGear = useCallback(
     (from: Place, to: Place) => apply((current) => moveGear(current, from, to)),
+    [apply],
+  );
+  const onToggleAutofire = useCallback(() => apply(toggleAutofire), [apply]);
+  const onTarget = useCallback(
+    (target: Subsystem | null) => apply((current) => setTarget(current, target)),
     [apply],
   );
 
@@ -204,13 +211,14 @@ export default function RunScreen() {
           shipRef={combat.shipRef}
           foeRef={combat.foeRef}
           drift={drift}
+          onTarget={onTarget}
         />
         <Controls
           run={run}
           width={buttonWidth}
           animate={animate}
           onShift={onShift}
-          onFire={combat.onFire}
+          onToggleAutofire={onToggleAutofire}
           onOpenShip={onOpenShip}
           onJump={onJump}
         />

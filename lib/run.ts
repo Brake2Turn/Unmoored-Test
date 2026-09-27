@@ -1,11 +1,15 @@
 import {
   HOSTILE_JUMP_UNITS,
   JUMP_UNITS,
+  SUBSYSTEMS,
+  SUBSYSTEM_CAPACITY,
   WEAPON_UNITS,
+  capacityAfter,
   chargeRate,
   clampEnergy,
   damagedShield,
   defaultEnergy,
+  fitEnergy,
   regenShield,
   shieldLevel,
   shift,
@@ -138,6 +142,39 @@ export type RunState = {
    * same as a red one — and once damaged it is drawn red. By node index.
    */
   provoked: number[];
+  /**
+   * Bars destroyed in each of the player's subsystems by hits that got past
+   * the shields. A subsystem holds four bars less this, for the rest of the
+   * run — there is no repair yet — and bars that no longer fit went back to
+   * the reactor as spare when they were lost.
+   */
+  systemDamage: EnergyState;
+  /**
+   * The same for the ship at each star, keyed by node index like `foeDamage`:
+   * bars the player's aimed shots have destroyed in its subsystems.
+   */
+  foeSystemDamage: Record<string, EnergyState>;
+  /**
+   * The shield charge of the ship at this star, run by the player's own rules
+   * (`regenShield`, `damagedShield`). Set to full on arrival — a ship waiting
+   * at a star has its shields up — and not kept once the player leaves.
+   */
+  foeShieldCharge: number;
+  /** Hits that ship's shield has taken, only ever compared with itself. */
+  foeShieldHits: number;
+  /**
+   * The subsystem on the other ship the player's weapon is aimed at, or null
+   * for none. **Nothing fires without one** — choosing a target is the
+   * decision to attack. Cleared on every jump, since it named a ship that is
+   * no longer there.
+   */
+  target: Subsystem | null;
+  /**
+   * The player's weapon fires on its own whenever it is fully charged — as
+   * long as there is a target (`autofireReady`). Toggled by the button that
+   * used to be FIRE.
+   */
+  autofire: boolean;
 };
 
 /** Which sector the run is in. Derived, so it cannot drift out of step. */
@@ -229,13 +266,14 @@ export function fireBlocker(run: RunState): FireBlock {
 
 /**
  * Fires the weapon: spends the whole charge, so it fires once and then has
- * to build again. Refused (the same run back) when `fireBlocker` says so.
+ * to build again. Refused (the same run back) when `fireBlocker` says so, and
+ * when there is no ship here or nothing on it is targeted.
  *
  * It does not touch the other ship — the bolt has to get there first, and
  * `hitFoe` is what lands it.
  */
 export function fireWeapon(run: RunState): RunState {
-  if (fireBlocker(run)) return run;
+  if (fireBlocker(run) || !run.target || shipHere(run) === 'empty') return run;
   // Firing on a ship that was minding its own business starts a fight.
   const here = shipHere(run);
   const provokes =
@@ -265,10 +303,55 @@ export function foeHull(run: RunState, node: number = run.position): number {
  * ship instead. Nothing at the star, or nothing left of its hull, and the run
  * comes back unchanged.
  */
-export function hitFoe(run: RunState, node: number): RunState {
+export function hitFoe(run: RunState, node: number, target: Subsystem | null = null, damage = 1): RunState {
   if (foeHull(run, node) <= 0) return run;
+  // Its shields soak the hit first, exactly as the player's do. They only
+  // stand at the star the player is at.
+  if (node === run.position && shieldLevel(run.foeShieldCharge) > 0) {
+    return {
+      ...run,
+      foeShieldCharge: damagedShield(run.foeShieldCharge),
+      foeShieldHits: run.foeShieldHits + 1,
+    };
+  }
   const key = String(node);
-  return { ...run, foeDamage: { ...run.foeDamage, [key]: (run.foeDamage[key] ?? 0) + 1 } };
+  const struck: RunState = { ...run, foeDamage: { ...run.foeDamage, [key]: (run.foeDamage[key] ?? 0) + 1 } };
+  // A ship shot to nothing takes the target with it: there is nothing left
+  // to aim at, and autofire goes back to waiting for one.
+  const next = node === run.position && foeHull(struck, node) <= 0 ? { ...struck, target: null } : struck;
+  if (!target) return next;
+  const before = run.foeSystemDamage[key] ?? NO_DAMAGE;
+  const after = { ...before, [target]: Math.min(SUBSYSTEM_CAPACITY, before[target] + Math.max(0, damage)) };
+  const hurt: RunState = { ...next, foeSystemDamage: { ...run.foeSystemDamage, [key]: after } };
+  // A shield that has lost its bars loses the charge they held.
+  return node === run.position
+    ? { ...hurt, foeShieldCharge: Math.min(hurt.foeShieldCharge, foeSystems(hurt).shields) }
+    : hurt;
+}
+
+/** No bars destroyed anywhere. */
+const NO_DAMAGE: EnergyState = { shields: 0, weapons: 0, engines: 0 };
+
+/**
+ * The bars in each subsystem of the ship at a star: its kind's fixed split,
+ * less whatever the player's aimed shots have destroyed. All none once it is
+ * destroyed, or where there is no ship.
+ */
+export function foeSystems(run: RunState, node: number = run.position): EnergyState {
+  if (foeHull(run, node) <= 0) return NO_DAMAGE;
+  const split = ENCOUNTER_RULES[encounterAt(run.map, node)].systems;
+  const capacity = capacityAfter(run.foeSystemDamage[String(node)] ?? NO_DAMAGE);
+  return fitEnergy(split, capacity);
+}
+
+/** How many bars each of the ship's subsystems can still hold. */
+export function foeCapacity(run: RunState, node: number = run.position): EnergyState {
+  return capacityAfter(run.foeSystemDamage[String(node)] ?? NO_DAMAGE);
+}
+
+/** How many bars each of the player's subsystems can still hold. */
+export function systemCapacity(run: RunState): EnergyState {
+  return capacityAfter(run.systemDamage);
 }
 
 /**
@@ -326,12 +409,6 @@ export function foeName(run: RunState): string | null {
 }
 
 /**
- * How fast a hostile ship's weapon charges, as if it had this many bars in
- * its weapons row: two, which fills `WEAPON_UNITS` in about nine seconds.
- */
-export const FOE_WEAPON_BARS = 2;
-
-/**
  * After each shot a hostile ship starts up to this many units *below* empty,
  * so its shots come every nine to fourteen seconds rather than on a steady
  * beat the player could count along to.
@@ -344,7 +421,13 @@ export const FOE_JITTER_UNITS = 6;
  * there is nothing to fire, so the caller knows not to draw a shot.
  */
 export function foeFires(run: RunState): RunState {
-  if (!foeArmed(run) || isWrecked(run.hull) || pendingMeeting(run) || run.foeCharge < WEAPON_UNITS) {
+  if (
+    !foeArmed(run) ||
+    isWrecked(run.hull) ||
+    pendingMeeting(run) ||
+    foeSystems(run).weapons <= 0 ||
+    run.foeCharge < WEAPON_UNITS
+  ) {
     return run;
   }
   return { ...run, foeCharge: -Math.random() * FOE_JITTER_UNITS };
@@ -365,7 +448,7 @@ export type Side = 'player' | 'foe';
  * (`ENCOUNTER_RULES`), and none once it is destroyed.
  */
 export function wrenBars(run: RunState, side: Side): number {
-  return side === 'player' ? run.energy.engines : ENCOUNTER_RULES[shipHere(run)].wren;
+  return side === 'player' ? run.energy.engines : foeSystems(run).engines;
 }
 
 /** The chance, 0 to 1, that a shot at `target` misses it. */
@@ -416,9 +499,12 @@ export function tickRun(run: RunState, seconds: number): RunState {
   // shields — charges until the conversation at this star is over.
   if (isWrecked(run.hull) || pendingMeeting(run)) return run;
 
+  // The other ship's systems run by the player's rules, off its own bars.
+  const foe = foeSystems(run);
   const foeCharge = foeArmed(run)
-    ? Math.min(WEAPON_UNITS, run.foeCharge + seconds * chargeRate(FOE_WEAPON_BARS))
+    ? Math.min(WEAPON_UNITS, run.foeCharge + seconds * chargeRate(foe.weapons))
     : run.foeCharge;
+  const foeShieldCharge = regenShield(run.foeShieldCharge, foe.shields, seconds);
   const jumpCharge = Math.min(
     jumpUnitsFor(run),
     run.jumpCharge + seconds * chargeRate(run.energy.engines),
@@ -433,11 +519,12 @@ export function tickRun(run: RunState, seconds: number): RunState {
     jumpCharge === run.jumpCharge &&
     weaponCharge === run.weaponCharge &&
     shieldCharge === run.shieldCharge &&
-    foeCharge === run.foeCharge
+    foeCharge === run.foeCharge &&
+    foeShieldCharge === run.foeShieldCharge
   ) {
     return run;
   }
-  return { ...run, jumpCharge, weaponCharge, shieldCharge, foeCharge };
+  return { ...run, jumpCharge, weaponCharge, shieldCharge, foeCharge, foeShieldCharge };
 }
 
 /**
@@ -483,6 +570,12 @@ export function createRun(shipId: string): RunState {
     foeDamage: {},
     foeCharge: 0,
     provoked: [],
+    systemDamage: { ...NO_DAMAGE },
+    foeSystemDamage: {},
+    foeShieldCharge: 0,
+    foeShieldHits: 0,
+    target: null,
+    autofire: false,
   };
 }
 
@@ -509,8 +602,11 @@ export function applyJump(run: RunState, target: number): RunState {
     // ship can leave, and a hostile star makes that build far longer.
     jumpCharge: 0,
     weaponCharge: 0,
-    // Whatever is at the next star starts charging from nothing.
+    // Whatever is at the next star starts charging from nothing, with its
+    // shields already up — and the old target named a ship left behind.
     foeCharge: 0,
+    foeShieldCharge: foeSystems(run, target).shields,
+    target: null,
   };
 }
 
@@ -524,7 +620,7 @@ export function applyJump(run: RunState, target: number): RunState {
  * caller knows to skip the save and the haptic.
  */
 export function shiftEnergy(run: RunState, subsystem: Subsystem, delta: number): RunState {
-  const energy = shift(run.energy, reactorOf(run), subsystem, delta);
+  const energy = shift(run.energy, reactorOf(run), subsystem, delta, systemCapacity(run));
   if (energy === run.energy) return run;
 
   return {
@@ -545,11 +641,75 @@ export function shiftEnergy(run: RunState, subsystem: Subsystem, delta: number):
  * shields. One rule, so that whatever starts shooting later does not get to
  * invent its own order.
  */
-export function takeHit(run: RunState): RunState {
+export function takeHit(run: RunState, target: Subsystem | null = null, damage = 1): RunState {
   if (shieldLevel(run.shieldCharge) > 0) return damageShield(run);
 
   const hull = damagedHull(run.hull);
-  return hull === run.hull ? run : { ...run, hull };
+  const hit = hull === run.hull ? run : { ...run, hull };
+  return target ? damageSystem(hit, target, damage) : hit;
+}
+
+/**
+ * Destroys `damage` bars of one of the player's subsystems, for the rest of
+ * the run. Bars that no longer fit come out of it and go back to the reactor
+ * as spare, and whatever those bars were holding — shield layers, the drive's
+ * reach — goes with them. Reached through `takeHit`.
+ */
+export function damageSystem(run: RunState, target: Subsystem, damage: number): RunState {
+  const lost = Math.max(0, Math.min(SUBSYSTEM_CAPACITY - run.systemDamage[target], damage));
+  if (lost === 0) return run;
+  const systemDamage = { ...run.systemDamage, [target]: run.systemDamage[target] + lost };
+  const energy = fitEnergy(run.energy, capacityAfter(systemDamage));
+  return {
+    ...run,
+    systemDamage,
+    energy,
+    shieldCharge: Math.min(run.shieldCharge, energy.shields),
+  };
+}
+
+/**
+ * Aims the weapon at one subsystem on the other ship, or at nothing. Only
+ * while there is a ship here to aim at.
+ */
+export function setTarget(run: RunState, target: Subsystem | null): RunState {
+  if (target === run.target) return run;
+  if (target && shipHere(run) === 'empty') return run;
+  return { ...run, target };
+}
+
+/** Turns autofire on or off. */
+export function toggleAutofire(run: RunState): RunState {
+  return { ...run, autofire: !run.autofire };
+}
+
+/**
+ * The player's weapon should fire now, on its own: autofire is on, a
+ * subsystem on a ship here is targeted, the weapon is charged, and nobody is
+ * still talking.
+ */
+export function autofireReady(run: RunState): boolean {
+  return (
+    run.autofire &&
+    !!run.target &&
+    shipHere(run) !== 'empty' &&
+    !pendingMeeting(run) &&
+    fireBlocker(run) === null
+  );
+}
+
+/** The damage stat of the weapon on the hardpoint, 0 with none mounted. */
+export function weaponDamage(run: RunState): number {
+  return run.mounted ? (weaponById(run.mounted)?.damage ?? 1) : 0;
+}
+
+/**
+ * Which of the player's subsystems a hostile ship's shot is aimed at: one of
+ * the three, picked by `roll` from 0 up to 1. Passed in, like the miss roll,
+ * so the rule can be checked exactly.
+ */
+export function foeTargetFor(roll: number): Subsystem {
+  return SUBSYSTEMS[Math.max(0, Math.min(SUBSYSTEMS.length - 1, Math.floor(roll * SUBSYSTEMS.length)))];
 }
 
 /**
@@ -636,6 +796,8 @@ export function devStageEncounter(run: RunState, target: number | 'boss'): RunSt
 
   const key = String(node);
   const { [key]: _wiped, ...foeDamage } = run.foeDamage;
+  const { [key]: _mended, ...foeSystemDamage } = run.foeSystemDamage;
+  const fresh = { ...run, map, foeDamage, foeSystemDamage };
   return {
     ...run,
     map,
@@ -644,7 +806,10 @@ export function devStageEncounter(run: RunState, target: number | 'boss'): RunSt
     spoken: run.spoken.filter((i) => i !== node),
     provoked: run.provoked.filter((i) => i !== node),
     foeDamage,
+    foeSystemDamage,
     foeCharge: 0,
+    foeShieldCharge: foeSystems(fresh, node).shields,
+    target: null,
     jumpCharge: 0,
     weaponCharge: 0,
   };
@@ -678,8 +843,10 @@ export function hydrateRun(value: unknown): RunState | null {
   // since cut from the roster flies as the first ship.
   const ship = shipById(typeof stored.shipId === 'string' ? stored.shipId : undefined);
   // A ship's reactor can be retuned under a run in progress, so the stored
-  // allocation is forced into something this ship can actually power.
-  const energy = clampEnergy(stored.energy, ship.reactor);
+  // allocation is forced into something this ship can actually power — and
+  // into what its damaged subsystems can still hold.
+  const systemDamage = cleanSystems(stored.systemDamage) ?? { ...NO_DAMAGE };
+  const energy = fitEnergy(clampEnergy(stored.energy, ship.reactor), capacityAfter(systemDamage));
   const now = Date.now();
 
   const run: RunState = {
@@ -708,13 +875,52 @@ export function hydrateRun(value: unknown): RunState | null {
     foeDamage: cleanDamage(stored.foeDamage),
     foeCharge: clampNumber(stored.foeCharge, -FOE_JITTER_UNITS, WEAPON_UNITS, 0),
     provoked: stars(stored.provoked),
+    systemDamage,
+    foeSystemDamage: cleanSystemMap(stored.foeSystemDamage),
+    foeShieldCharge: 0,
+    foeShieldHits: Math.floor(clampNumber(stored.foeShieldHits, 0, Number.MAX_SAFE_INTEGER, 0)),
+    target:
+      typeof stored.target === 'string' && (SUBSYSTEMS as readonly string[]).includes(stored.target)
+        ? (stored.target as Subsystem)
+        : null,
+    autofire: stored.autofire === true,
   };
   // How long this star holds the drive depends on who is here — a red ship,
   // a yellow one the pilot provoked, or a wreck — and that is only known once
   // the damage and the provocations above are read in. Capping by the star's
   // colour alone cut a charge built against a provoked ship back to an
   // ordinary star's on every reload.
-  return { ...run, jumpCharge: Math.min(run.jumpCharge, jumpUnitsFor(run)) };
+  // The other ship's shield, like the drive, depends on who is here and what
+  // is left of them. A save from before it had one finds its shields up.
+  const foeShields = foeSystems(run).shields;
+  return {
+    ...run,
+    jumpCharge: Math.min(run.jumpCharge, jumpUnitsFor(run)),
+    foeShieldCharge: clampNumber(stored.foeShieldCharge, 0, foeShields, foeShields),
+    target: shipHere(run) === 'empty' ? null : run.target,
+  };
+}
+
+/** Destroyed bars per subsystem, each forced to a whole 0–4; null when absent. */
+function cleanSystems(value: unknown): EnergyState | null {
+  if (!value || typeof value !== 'object') return null;
+  const source = value as Partial<Record<Subsystem, unknown>>;
+  const clean = { ...NO_DAMAGE };
+  for (const subsystem of SUBSYSTEMS) {
+    clean[subsystem] = Math.floor(clampNumber(source[subsystem], 0, SUBSYSTEM_CAPACITY, 0));
+  }
+  return clean;
+}
+
+/** The other ships' destroyed bars, keyed by star; anything unreadable is dropped. */
+function cleanSystemMap(value: unknown): Record<string, EnergyState> {
+  if (!value || typeof value !== 'object') return {};
+  const clean: Record<string, EnergyState> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    const systems = cleanSystems(entry);
+    if (systems && SUBSYSTEMS.some((s) => systems[s] > 0)) clean[key] = systems;
+  }
+  return clean;
 }
 
 /** Only whole, positive hit counts survive a load. */

@@ -12,6 +12,7 @@ import Animated, {
 import { SubstationGlyph, SubsystemGlyph, SubsystemsGlyph } from '@/components/SubsystemGlyph';
 import { CARD } from '@/components/PanelChrome';
 import {
+  FULL_CAPACITY,
   SUBSYSTEMS,
   SUBSYSTEM_CAPACITY,
   canAdd,
@@ -76,6 +77,7 @@ function chargeOf(subsystem: Subsystem, charges: Charges): number {
 export function ReactorPanel({
   energy,
   reactor,
+  capacity = FULL_CAPACITY,
   charges,
   width,
   onShift,
@@ -83,6 +85,8 @@ export function ReactorPanel({
 }: {
   energy: EnergyState;
   reactor: number;
+  /** Bars each subsystem can still hold: four, less any hits have destroyed. */
+  capacity?: EnergyState;
   charges: Charges;
   width: number;
   onShift: (subsystem: Subsystem, delta: number) => void;
@@ -119,9 +123,14 @@ export function ReactorPanel({
           key={subsystem}
           subsystem={subsystem}
           level={energy[subsystem]}
+          capacity={capacity[subsystem]}
           charge={chargeOf(subsystem, charges)}
-          layers={subsystem === 'shields' ? { charge: charges.shield, ceiling: energy.shields } : null}
-          canAddMore={canAdd(energy, reactor, subsystem)}
+          layers={
+            subsystem === 'shields'
+              ? { charge: charges.shield, ceiling: energy.shields, capacity: capacity.shields }
+              : null
+          }
+          canAddMore={canAdd(energy, reactor, subsystem, capacity)}
           canTakeAway={canRemove(energy, subsystem)}
           onShift={onShift}
           animate={animate}
@@ -135,6 +144,7 @@ export function ReactorPanel({
 function SubsystemRow({
   subsystem,
   level,
+  capacity,
   charge,
   canAddMore,
   canTakeAway,
@@ -145,9 +155,11 @@ function SubsystemRow({
 }: {
   subsystem: Subsystem;
   level: number;
+  /** Bars it can still hold; the rest are destroyed and drawn broken. */
+  capacity: number;
   charge: number;
-  /** The shield's charge in layers, and how many its bars allow. */
-  layers: { charge: number; ceiling: number } | null;
+  /** The shield's charge in layers, how many its bars allow, and how many survive. */
+  layers: { charge: number; ceiling: number; capacity: number } | null;
   canAddMore: boolean;
   canTakeAway: boolean;
   onShift: (subsystem: Subsystem, delta: number) => void;
@@ -172,14 +184,24 @@ function SubsystemRow({
 
         {/* What is in it: one cell per bar. */}
         <View style={styles.pips}>
-          {Array.from({ length: SUBSYSTEM_CAPACITY }, (_, i) => (
-            <EnergyCell key={i} lit={i < level} accent={style.accent} animate={animate} style={styles.pip} />
-          ))}
+          {Array.from({ length: SUBSYSTEM_CAPACITY }, (_, i) =>
+            // A bar a hit has destroyed: red and struck through, for the run.
+            i >= capacity ? (
+              <View key={i} style={[styles.pip, styles.broken]} />
+            ) : (
+              <EnergyCell key={i} lit={i < level} accent={style.accent} animate={animate} style={styles.pip} />
+            ),
+          )}
         </View>
 
         {/* How far what it is building has got. */}
         {layers ? (
-          <ShieldLayers charge={layers.charge} ceiling={layers.ceiling} accent={style.accent} />
+          <ShieldLayers
+            charge={layers.charge}
+            ceiling={layers.ceiling}
+            capacity={layers.capacity}
+            accent={style.accent}
+          />
         ) : (
           <View style={[styles.track, !lit && styles.trackStalled]}>
             <View
@@ -192,22 +214,24 @@ function SubsystemRow({
         )}
       </View>
 
+      {/* Out of what it can still hold, in red once hits have cut that down. */}
       <Text style={[styles.count, { color: lit ? palette.textPrimary : palette.textDisabled }]}>
-        {level}/{SUBSYSTEM_CAPACITY}
+        {level}/
+        <Text style={capacity < SUBSYSTEM_CAPACITY ? { color: palette.danger } : null}>{capacity}</Text>
       </Text>
 
       <StepButton
         symbol="−"
         enabled={canTakeAway}
         accent={style.accent}
-        label={`Take one bar of energy out of ${style.name}, now ${level} of ${SUBSYSTEM_CAPACITY}`}
+        label={`Take one bar of energy out of ${style.name}, now ${level} of ${capacity}`}
         onPress={() => onShift(subsystem, -1)}
       />
       <StepButton
         symbol="+"
         enabled={canAddMore}
         accent={style.accent}
-        label={`Put one bar of energy into ${style.name}, now ${level} of ${SUBSYSTEM_CAPACITY}`}
+        label={`Put one bar of energy into ${style.name}, now ${level} of ${capacity}`}
         onPress={() => onShift(subsystem, 1)}
       />
     </View>
@@ -223,14 +247,27 @@ function SubsystemRow({
  * it go further. Sections past what the bars allow are drawn hollow — room
  * the shield could have, but has not been given.
  */
-function ShieldLayers({ charge, ceiling, accent }: { charge: number; ceiling: number; accent: string }) {
+function ShieldLayers({
+  charge,
+  ceiling,
+  capacity,
+  accent,
+}: {
+  charge: number;
+  ceiling: number;
+  capacity: number;
+  accent: string;
+}) {
   return (
     <View style={styles.layers}>
       {Array.from({ length: SUBSYSTEM_CAPACITY }, (_, i) => {
         const allowed = i < ceiling;
         const fill = allowed ? Math.max(0, Math.min(1, charge - i)) : 0;
         return (
-          <View key={i} style={[styles.track, styles.layer, !allowed && styles.layerLocked]}>
+          <View
+            key={i}
+            style={[styles.track, styles.layer, !allowed && styles.layerLocked, i >= capacity && styles.layerBroken]}
+          >
             {fill > 0 ? (
               <View
                 style={[
@@ -380,6 +417,11 @@ const styles = StyleSheet.create({
   },
   pips: { flexDirection: 'row', gap: 3 },
   pip: { flex: 1, height: PIP_HEIGHT, borderRadius: 1.5, overflow: 'hidden' },
+  broken: {
+    backgroundColor: 'rgba(255,93,107,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,93,107,0.7)',
+  },
   flash: { backgroundColor: '#FFFFFF' },
   track: {
     height: TRACK_HEIGHT,
@@ -396,6 +438,7 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: 'rgba(255,255,255,0.12)',
   },
+  layerBroken: { borderColor: 'rgba(255,93,107,0.6)' },
   trackFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: TRACK_HEIGHT / 2 },
 
   count: {

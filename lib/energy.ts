@@ -141,9 +141,50 @@ export function freeEnergy(energy: EnergyState, reactor: number): number {
   return Math.max(0, reactorBudget(reactor) - spentEnergy(energy));
 }
 
-/** A bar can be added only if the reactor is making a spare one and the subsystem has room. */
-export function canAdd(energy: EnergyState, reactor: number, subsystem: Subsystem): boolean {
-  return freeEnergy(energy, reactor) > 0 && energy[subsystem] < SUBSYSTEM_CAPACITY;
+/** Every subsystem at its full four bars: an undamaged ship. */
+export const FULL_CAPACITY: EnergyState = {
+  shields: SUBSYSTEM_CAPACITY,
+  weapons: SUBSYSTEM_CAPACITY,
+  engines: SUBSYSTEM_CAPACITY,
+};
+
+/**
+ * How many bars each subsystem can still hold once `damage` has been taken
+ * off it: four less whatever hits have destroyed, never below none.
+ */
+export function capacityAfter(damage: EnergyState): EnergyState {
+  return {
+    shields: Math.max(0, SUBSYSTEM_CAPACITY - damage.shields),
+    weapons: Math.max(0, SUBSYSTEM_CAPACITY - damage.weapons),
+    engines: Math.max(0, SUBSYSTEM_CAPACITY - damage.engines),
+  };
+}
+
+/**
+ * An allocation cut down to what a damaged ship can hold. Bars that no longer
+ * fit are simply not there any more — they go back to the reactor as spare.
+ * Returns the same object when nothing had to be cut.
+ */
+export function fitEnergy(energy: EnergyState, capacity: EnergyState): EnergyState {
+  if (SUBSYSTEMS.every((s) => energy[s] <= capacity[s])) return energy;
+  return {
+    shields: Math.min(energy.shields, capacity.shields),
+    weapons: Math.min(energy.weapons, capacity.weapons),
+    engines: Math.min(energy.engines, capacity.engines),
+  };
+}
+
+/**
+ * A bar can be added only if the reactor is making a spare one and the
+ * subsystem has room — four bars, less any that hits have destroyed.
+ */
+export function canAdd(
+  energy: EnergyState,
+  reactor: number,
+  subsystem: Subsystem,
+  capacity: EnergyState = FULL_CAPACITY,
+): boolean {
+  return freeEnergy(energy, reactor) > 0 && energy[subsystem] < Math.min(SUBSYSTEM_CAPACITY, capacity[subsystem]);
 }
 
 export function canRemove(energy: EnergyState, subsystem: Subsystem): boolean {
@@ -163,10 +204,11 @@ export function shift(
   reactor: number,
   subsystem: Subsystem,
   delta: number,
+  capacity: EnergyState = FULL_CAPACITY,
 ): EnergyState {
   if (delta === 0) return energy;
 
-  const allowed = delta > 0 ? canAdd(energy, reactor, subsystem) : canRemove(energy, subsystem);
+  const allowed = delta > 0 ? canAdd(energy, reactor, subsystem, capacity) : canRemove(energy, subsystem);
   if (!allowed) return energy;
 
   return { ...energy, [subsystem]: energy[subsystem] + (delta > 0 ? 1 : -1) };

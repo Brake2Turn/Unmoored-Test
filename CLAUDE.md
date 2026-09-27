@@ -548,7 +548,7 @@ button on the title screen; it moved when dev mode arrived.
 The reactor is on the helm only — the sector map is for choosing where to go
 and deliberately carries none of it — and it is **one panel, always open**
 (`components/ReactorPanel.tsx`, `REACTOR_PANEL_HEIGHT`), the full width of
-the chrome above FIRE, the SHIP square and JUMP. The author asked for energy
+the chrome above AUTOFIRE, the SHIP square and JUMP. The author asked for energy
 to be moved without opening anything, and supplied a mock-up ("minimal list
 view") to take influence from: short rows, big buttons.
 
@@ -576,7 +576,7 @@ panel, its separate shield-level squares and its tap-to-open are gone; only
 the ship panel opens over the helm now.
 
 **The ship section** (`components/ShipPanel.tsx`) is collapsed to a small
-**SHIP square between FIRE and JUMP** (`ShipButton`, `SHIP_BUTTON_WIDTH`) —
+**SHIP square between AUTOFIRE and JUMP** (`ShipButton`, `SHIP_BUTTON_WIDTH`) —
 dark with a white outline and white lettering, drawn like JUMP's fuel reading
 without the orange (it was a solid white block until the author asked for it
 inverted) —
@@ -652,13 +652,19 @@ listens for those, not for pointer events.
 
 ### Firing, and the other ship's hull
 
-**FIRE sits left of JUMP** on the space screen (`components/FireButton.tsx`),
-and its look is its state: grey with nothing on the hardpoint, dark red while
-the weapon charges, bright red when it is ready. `fireBlocker(run)` returns
-`'weapon'`, `'charging'` or null, and both the button and `fireWeapon` ask
-it — the same pattern as `jumpBlocker` and `applyJump`. A shot spends the
-whole charge on the press, so it fires once per charge and a second press
-before the bolt lands does nothing.
+**There is no fire button: AUTOFIRE sits left of JUMP** (still
+`components/FireButton.tsx`), a switch the author asked for in place of FIRE.
+On (`run.autofire`, `toggleAutofire`), the weapon fires by itself every time it
+is fully charged — **but only at a target.** The author's rule: the weapon is
+only fired once the switch is on *and* a subsystem on the other ship has been
+chosen (`run.target`, below). `autofireReady(run)` is that whole condition —
+on, targeted, a live ship here, nobody talking, `fireBlocker` clear — and the
+helm fires the moment it turns true (`useCombat`). The button's second line
+says which it is waiting on: OFF, ON, NO TARGET or NO WEAPON. `fireWeapon`
+refuses without a target or a ship, so choosing a target is the decision to
+attack: that is what keeps autofire from opening up on a merchant by itself.
+`fireBlocker(run)` still returns `'wrecked'`, `'weapon'`, `'charging'` or
+null. A shot spends the whole charge, so it fires once per charge.
 
 **The rule and the picture are two steps.** `fireWeapon` only spends the
 charge. The bolt (`components/LaserShot.tsx`) then flies from the weapon's tip
@@ -689,8 +695,9 @@ drifts with its ship in combat.
 **Red ships shoot back** — every hostile one (Shrike and Elder Shrike, the
 same `hostile` flag that pins the drive). Each carries a copy of Weapon 1,
 drawn on its nose turned to point down (`FOE_WEAPON` and `foeMuzzle(kind)` in
-`EncounterShip.tsx`). `run.foeCharge` builds in `tickRun` as if from two bars
-of weapons (`FOE_WEAPON_BARS`), about nine seconds to full; `foeFires` then
+`EncounterShip.tsx`). `run.foeCharge` builds in `tickRun` off the bars in its
+own weapons system (`foeSystems`, below; two for every kind today), about
+nine seconds to full, and a ship whose weapons are shot out never fires; `foeFires` then
 resets it to a random point up to `FOE_JITTER_UNITS` *below* empty, so shots
 come every nine to fourteen seconds rather than on a beat. It does not charge
 or fire while the star's dialogue is still open, and `applyJump` empties it.
@@ -723,6 +730,67 @@ ring, debris, 1.1s) fires on the *transition* to zero, compared against the
 last render in a ref, not on the hull being zero — so loading a save with a
 wreck in it does not blow it up again, and every route to zero (either
 ship's bolts, the dev hit) is caught by one check.
+
+### Both ships have the same three subsystems
+
+The author's request: **the other ship runs shields, weapons and a Wren Drive
+by the player's own rules.** Its split is fixed by kind —
+`ENCOUNTER_RULES[kind].systems` (Shrike 0/2/2, merchant 0/2/1, Elder Shrike
+0/2/3: shields/weapons/Wren) — since it has no reactor to move bars with, and
+`foeSystems(run)` is that split cut down by the damage done to it. Its weapons
+bars charge its gun, its Wren Drive bars are its dodge (`wrenBars`), and its
+shields (`run.foeShieldCharge`, full on arrival, `regenShield` in `tickRun`)
+soak the player's bolts in `hitFoe` exactly as `takeHit` does for the player.
+
+**Every enemy shield is zero bars, on purpose.** The author chose "same rules
+as the player's", and under those rules a layer rebuilds in five seconds while
+the player's one weapon fires every seven to nine — so a ship with even one
+powered shield bar can never be hurt. The system is there, drawn, targetable
+and working (`verify:run` checks a shielded enemy soaks a shot); it is left
+unpowered until the player can outgun a shield. A ring round the enemy shows
+it when it is up.
+
+**Where each system is on a ship** is a table beside the art — `SYSTEM_SPOTS`
+in `ShipArt.tsx` for the player's hulls, `systemSpots(kind)` in
+`EncounterShip.tsx` for the others — and `components/ships/SystemMarks.tsx`
+draws each system's mark (`SubsystemGlyph`, the reactor panel's own marks) on
+a dark disc there, turned with the ship through the same (dx, dy) → (−dy, dx)
+as `sidewaysPoint` while the marks stay upright. A mark is its system's
+colour while powered, grey with no bars, red-rimmed once damaged, and red and
+struck through once destroyed.
+
+**Aiming: tap the weapon on your own ship.** A tap target sits over the gun
+on the player's nose (in `Arena`); tapping it rings the gun and grows the
+other ship's three marks into buttons ("TAP ONE OF THEIR SYSTEMS TO
+TARGET"), and picking one sets `run.target` (`setTarget`) — picking the one
+already aimed at clears it. The target wears red corner brackets. It is
+cleared on every jump, and when the ship it named is destroyed.
+
+**A hit that gets past the shields takes a hull plate *and* bars** — the
+author's choice. `hitFoe(run, node, target, damage)` and `takeHit(run,
+target, damage)` both take the plate as before and then `damage` bars off the
+targeted system's capacity; a shield that soaks the hit takes neither. How
+many bars is the weapon's `damage` stat (`lib/weapons.ts`, 1 for every weapon
+today). A hostile ship aims at one of the player's three systems at random per
+shot (`foeTargetFor`). The target and damage ride on the bolt (`Shot`), fixed
+as it leaves — **a bolt in flight is live**, and lands whatever has happened
+to the ship that fired it (checked in headless: an enemy destroyed with its
+bolt in the air still took a plate and a bar).
+
+**Damage lasts the whole run** (`run.systemDamage`, `run.foeSystemDamage`
+per star). The author is building a repair system next; until then nothing
+mends it, which means **a run can be stranded**: a Wren Drive shot down to
+nothing cannot jump, and nothing brings it back. Known and accepted. The
+capacity is four less the damage (`capacityAfter`); bars that no longer fit
+drop out to the reactor as spare (`fitEnergy`), `shift` refuses to put more
+in (`canAdd` takes the capacity), and the reactor panel draws destroyed bars
+as red outlined cells with the row's `n/cap` in red.
+
+**Their readout is under their hull line** (`FoeStatus`, `readout`): three
+thin rows — mark, four 3pt cells (lit, hollow, or red when destroyed) and a
+hairline for what it is building (shield layers, gun charge; the Wren Drive
+builds nothing for them). `FOE_STATUS_HEIGHT` counts it in, so the ships are
+sized with room for it.
 
 ### The ships lie on their sides
 
@@ -763,9 +831,9 @@ is still `engines` in the code and in saves — renaming it would have broken
 every save for no gain. It still charges the jump, and it is now also the
 dodge: **each bar makes shots at that ship 10% likelier to miss**
 (`MISS_PER_WREN_BAR`, `missChance`, `shotMisses` in `lib/run.ts`). The player's
-bars are whatever the reactor gives it; the other ship's are fixed by kind
-(`ENCOUNTER_RULES[kind].wren`: Shrike 2, merchant 1, Elder Shrike 3 —
-placeholders), and a destroyed ship has none. The author chose "shots *at*
+bars are whatever the reactor gives it; the other ship's are its Wren Drive
+system (`ENCOUNTER_RULES[kind].systems.engines`: Shrike 2, merchant 1, Elder
+Shrike 3 — placeholders), less any shot out, and a destroyed ship has none. The author chose "shots *at*
 it miss" over "its own shots miss"; the Wren Drive costs nothing in aim.
 
 **A miss is rolled as the bolt leaves**, after the line-up, against the
@@ -829,7 +897,7 @@ starts from nothing.
 
 **Game Over** (`components/GameOver.tsx`) comes up `EXPLOSION_MS` after the
 player's hull reaches zero (at once when a save is opened already wrecked).
-The HUD behind it — hull, reactor, FIRE, SHIP and JUMP — drops to 30% opacity and
+The HUD behind it — hull, reactor, AUTOFIRE, SHIP and JUMP — drops to 30% opacity and
 stops taking touches. NEW RUN goes to ship select, MAIN MENU back to the
 start screen, and both `clearRun()` first. **Let go of the run before
 clearing it** (`commit(null)`): the helm writes its run back to
@@ -866,7 +934,7 @@ only puts the pieces together: `useLiveRun` (the run, `runRef`, `commit`,
 `apply`, loading on focus and saving on the way out), `useRunClock` (the
 charging clock), `useCombat` (both ships' shots, hits landing, explosions,
 Game Over's timing, and `measureHere`), `Arena` (the two ships), `Controls`
-(hull, reactor, FIRE, SHIP, JUMP), `DevControls`, and `layout` (every size
+(hull, reactor, AUTOFIRE, SHIP, JUMP), `DevControls`, and `layout` (every size
 they share, and `artScaleFor`). It was one 930-line file until the author had
 it split. Files there are not routes — anything under `app/` would be.
 
@@ -902,14 +970,14 @@ drawn** (`onLayout`, then `FOOTER_GAP`), not from a fixed allowance: the old
 fixed 132 points fitted the test browser with 11 to spare and still let
 "3 STARS IN RANGE" run into the chart on the author's phone.
 
-**JUMP is the engines' orange** the way FIRE is the weapons' red: dark while
+**JUMP is the engines' orange** the way AUTOFIRE is the weapons' red: dark while
 the drive charges, bright when it is ready, grey when it cannot (no fuel, cold
 engines, destroyed — the label stays JUMP and Game Over says the rest). Both come from `BUTTON_TONE` in `lib/subsystems.ts`;
 `MenuButton` takes a `tone` and a `charging` flag, and uses the tone for its
 fill, its press bloom and the fuel gauge. The star select's JUMP uses it too.
 
 To check a shot in headless, the probe holds the shot's timers (skip any
-`setTimeout` of 150–800ms after pressing FIRE) so the bolt stays at its first
+`setTimeout` of 150–800ms after the shot) so the bolt stays at its first
 frame; guessing a `--virtual-time-budget` that lands inside a 200ms flight
 did not work.
 
@@ -1053,7 +1121,7 @@ tints live in `lib/subsystems.ts`, which is to it what `encounters.ts` is to
 `lib/sectorMap.ts` is nearly one: it imports `dialogue.ts` alone, to deal
 encounters across the stars, and both still run under bare node. `lib/ships.ts`, `lib/encounters.ts` and
 `lib/subsystems.ts` depend on the theme. `lib/encounterRules.ts` is a leaf
-too (it imports only a type from `sectorMap`): the rule half of each kind of
+too (it imports only types, from `sectorMap` and `energy`): the rule half of each kind of
 star — its name, `hostile`, its hull — which `encounters.ts` spreads into
 `ENCOUNTER_STYLE` with the colours and sizes. `lib/run.ts` depends on the
 leaves alone — ships, the map, energy, hull, hold, weapons, dialogue and
@@ -1219,10 +1287,14 @@ Settled with the author, so a new chat does not reopen them:
 - **Music and Sound Effects sliders stay** in Settings though there is no
   sound yet — placeholders the author wants kept.
 - **Placeholder numbers the author may retune:** enemy hulls (Shrike 6,
-  merchant 4, Elder Shrike 12), enemy Wren Drive (2, 1, 3), 10% miss per Wren
+  merchant 4, Elder Shrike 12), enemy systems (shields 0 for all — see
+  "Both ships have the same three subsystems" for why — weapons 2, Wren
+  Drive 2, 1, 3), 1 bar of system damage per hit, 10% miss per Wren
   bar, a 10pt sway, the 320ms line-up before a shot, and the dodge's timing
   (90ms lead, 170ms out, 220ms held, 380ms back).
-- **Not yet seen on the author's phone:** the dodge, the sway and the line-up before a
+- **A repair system is next, by the author's plan.** Until it exists,
+  system damage lasts the whole run and a shot-out Wren Drive strands it.
+- **Not yet seen on the author's phone:** aiming and autofire, the dodge, the sway and the line-up before a
   shot, the MISS pop-up in motion, and star select sized from the game area
   (`useScreenBox`). All were checked in headless only, where nothing moves.
 

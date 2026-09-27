@@ -6,13 +6,18 @@ import { FLIGHT_MS, type Point } from '@/components/LaserShot';
 import { WEAPON_UNITS, shieldLevel } from '@/lib/energy';
 import { MOUNTS } from '@/components/ships/ShipArt';
 import { SYSTEMS_SPAN } from '@/components/ships/ShipSystems';
-import { foeMuzzle } from '@/components/ships/EncounterShip';
+import { FOE_WEAPON, foeMuzzle } from '@/components/ships/EncounterShip';
 import { sidewaysPoint } from '@/components/ships/Sideways';
 import { DODGE_FOE, DODGE_HULL, DODGE_MARGIN, DODGE_SHIELD, type Drift } from '@/components/space/useDrift';
 import type { LiveRun } from '@/components/space/useLiveRun';
 import { weaponTip } from '@/components/WeaponArt';
+import type { Subsystem } from '@/lib/energy';
+import { weaponById } from '@/lib/weapons';
 import {
+  autofireReady,
   fireWeapon,
+  foeTargetFor,
+  weaponDamage,
   foeArmed,
   foeDestroyed,
   foeFires,
@@ -34,6 +39,13 @@ export type Shot = {
   from: Point;
   to: Point;
   hits: boolean;
+  /**
+   * The subsystem it is aimed at and how many of its bars a hit destroys —
+   * both fixed as it leaves. **A bolt in flight is live**: it lands with
+   * these whatever has happened to the ship that fired it since.
+   */
+  target: Subsystem | null;
+  damage: number;
 };
 
 /** One explosion on screen: where, and how big the ship was. */
@@ -111,11 +123,12 @@ export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width:
   }, []);
 
   /**
-   * Firing. The charge is spent on the press, so a second press cannot fire
-   * twice; the bolt is then aimed from the weapon's tip to the other ship,
-   * both measured on screen, and the hull only drops when it arrives.
+   * Firing, which autofire does by itself (below). The charge is spent at
+   * once, so it cannot fire twice; the bolt is then aimed from the weapon's
+   * tip to the other ship, both measured on screen, and the hull only drops
+   * when it arrives. It carries its target and damage from this moment.
    */
-  const onFire = useCallback(() => {
+  const fire = useCallback(() => {
     const current = runRef.current;
     if (!current?.mounted) return;
     const next = fireWeapon(current);
@@ -125,6 +138,8 @@ export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width:
 
     const node = current.position;
     const weapon = current.mounted;
+    const target = current.target;
+    const damage = weaponDamage(current);
     const mount = MOUNTS[current.shipId] ?? MOUNTS.drifter;
     const aim = async (dy: number) => {
       const now = runRef.current;
@@ -149,7 +164,10 @@ export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width:
       const hits = there && !!foe && !misses;
       const to = foe && hits ? { x: foe.x + foe.width * 0.45, y: from.y } : { x: width + 40, y: from.y };
       const launch = () =>
-        setShots((current) => [...current, { id: Date.now() + Math.random(), by: 'player', node, from, to, hits }]);
+        setShots((current) => [
+          ...current,
+          { id: Date.now() + Math.random(), by: 'player', node, from, to, hits, target, damage },
+        ]);
       if (foe && there && !hits) {
         // Clear of its widest part — the wings, across its upright width.
         const lead = drift.dodge('foe', foe.height * DODGE_FOE + DODGE_MARGIN);
@@ -163,6 +181,16 @@ export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width:
     // Come level with the other ship's centre first, then let go.
     drift.lineUp('player', (dy) => void aim(dy));
   }, [commit, drift, haptics, measureHere, runRef, showMiss, width]);
+
+  /**
+   * Autofire: the moment the weapon is full, with a target chosen and nobody
+   * talking, it goes. Firing empties the charge, which drops this back to
+   * false until the next full one.
+   */
+  const autoReady = !!run && autofireReady(run);
+  useEffect(() => {
+    if (autoReady) fire();
+  }, [autoReady, fire]);
 
   /**
    * A hostile ship's weapon has charged: it fires at the player. Nothing but
@@ -180,6 +208,10 @@ export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width:
     commit(next, false);
 
     const node = current.position;
+    // Which of the player's systems it is after, and what a hit costs —
+    // settled now, so the bolt stays live whatever becomes of its ship.
+    const target = foeTargetFor(Math.random());
+    const damage = weaponById(FOE_WEAPON)?.damage ?? 1;
     const aim = async (dy: number) => {
       // Aim at the shield's rim while there is a shield to hit, else the hull.
       const now = runRef.current;
@@ -207,13 +239,20 @@ export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width:
         const pass = { x: box.x + box.width / 2, y: box.y + dy + box.height / 2 };
         showMiss(pass, lead + passesAt(from, to, pass.x));
         setTimeout(
-          () => setShots((shots) => [...shots, { id: Date.now() + Math.random(), by: 'foe', node, from, to, hits: false }]),
+          () =>
+            setShots((shots) => [
+              ...shots,
+              { id: Date.now() + Math.random(), by: 'foe', node, from, to, hits: false, target, damage },
+            ]),
           lead,
         );
         return;
       }
       const to = { x: box.x + box.width / 2 + reach, y: from.y };
-      setShots((shots) => [...shots, { id: Date.now() + Math.random(), by: 'foe', node, from, to, hits: true }]);
+      setShots((shots) => [
+        ...shots,
+        { id: Date.now() + Math.random(), by: 'foe', node, from, to, hits: true, target, damage },
+      ]);
     };
     drift.lineUp('foe', (dy) => void aim(dy));
   }, [commit, drift, foeReady, measureHere, runRef, showMiss]);
@@ -230,9 +269,9 @@ export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width:
       if (!current) return;
       const next =
         shot.by === 'player'
-          ? hitFoe(current, shot.node)
+          ? hitFoe(current, shot.node, shot.target, shot.damage)
           : current.position === shot.node
-            ? takeHit(current)
+            ? takeHit(current, shot.target, shot.damage)
             : current;
       if (next === current) return;
       commit(next);
@@ -293,7 +332,7 @@ export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width:
     }
   }, [drift, measureHere, run]);
 
-  return { rootRef, shipRef, foeRef, shots, blasts, misses, over, setOver, cleared, onFire, onImpact, onShotDone };
+  return { rootRef, shipRef, foeRef, shots, blasts, misses, over, setOver, cleared, onImpact, onShotDone };
 }
 
 /** A view's box in window coordinates, or null when it is not mounted. */

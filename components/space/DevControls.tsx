@@ -42,7 +42,7 @@ export function DevControls({
         description="Developer: put a hit on the other ship"
         enabled={canHitThem}
         color={palette.danger}
-        onPress={() => apply((current) => hitFoe(current, current.position))}
+        onPress={() => apply((current) => hitFoe(current, current.position, current.target, 1))}
       />
       <DevButton
         label="DEV · REFILL CHARGES"

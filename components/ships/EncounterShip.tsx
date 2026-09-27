@@ -6,6 +6,7 @@ import { ENCOUNTER_STYLE } from '@/lib/encounters';
 import { palette } from '@/lib/theme';
 import { EngineBlocks, EngineGlow, EngineGlowDefs, type Engine } from '@/components/ships/EngineArt';
 import { HULL, HULL_DEEP } from '@/components/ships/ShipArt';
+import type { SystemSpots } from '@/components/ships/SystemMarks';
 import { WeaponShape, weaponTip } from '@/components/WeaponArt';
 import type { Encounter } from '@/lib/sectorMap';
 
@@ -121,6 +122,26 @@ export function foeMuzzle(encounter: Encounter): { x: number; y: number } {
   const tip = weaponTip(FOE_WEAPON);
   return { x: mount.x - tip.x, y: mount.y - tip.y };
 }
+
+/**
+ * Where each silhouette carries its three subsystems, for `SystemMarks`: the
+ * Shrike's shields and weapons out in its two swept wings with the Wren Drive
+ * in the spine behind the cockpit; the merchant's in its two slung pods, the
+ * Wren Drive amidships. The Elder Shrike is the Shrike drawn bigger.
+ */
+export function systemSpots(encounter: Encounter): SystemSpots {
+  return ENCOUNTER_STYLE[encounter].hostile ? SHRIKE_SPOTS : MERCHANT_SPOTS;
+}
+const SHRIKE_SPOTS: SystemSpots = {
+  shields: { x: 52, y: 94 },
+  weapons: { x: 148, y: 94 },
+  engines: { x: 100, y: 66 },
+};
+const MERCHANT_SPOTS: SystemSpots = {
+  shields: { x: 46, y: 140 },
+  weapons: { x: 154, y: 140 },
+  engines: { x: 100, y: 90 },
+};
 
 /** Raider plating runs warmer than the player's, so the red reads as its own. */
 const HOSTILE_HULL = '#1E1320';

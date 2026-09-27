@@ -47,7 +47,7 @@ game in a container.
 - **Space screen** — your ship on its side, and whatever is waiting at this star
   facing it. Below: the hull (yellow at half, red at a quarter), the reactor
   panel (move bars of energy between shields, weapons and the Wren Drive with
-  − and +), then FIRE, SHIP (the weapon, cargo and crew) and JUMP, with the
+  − and +), then AUTOFIRE, SHIP (the weapon, cargo and crew) and JUMP, with the
   fuel left on it.
 - **Star select** — twenty stars on a chart. Stars in range are bright; the boss
   is the red one at the top, always six jumps away. A tank holds ten jumps.
@@ -61,6 +61,14 @@ fire on them. The weapon and the jump drive charge over time, faster with more
 energy in their row; the energy in the shields sets how many layers they can
 build up to. Shields soak hits until they are down; then the hull loses
 plates, and at zero it is Game Over.
+
+Every ship — yours and theirs — has the same three systems, each marked where
+it sits on the hull. Tap the weapon on your ship, then one of their systems,
+to target it; with **AUTOFIRE** on, the weapon then fires by itself on every
+full charge, and nothing fires without a target. A hit that gets past the
+shields takes a hull plate and a bar off the system it was aimed at, for the
+rest of the run (a repair system is planned). Their systems show as thin bars
+under their hull line.
 
 Every ship has an engine on its tail that burns brighter the more bars are in
 its **Wren Drive**, and goes dark with none. A powered ship bobs gently up and

@@ -1,3 +1,4 @@
+import type { EnergyState } from './energy.ts';
 import type { Encounter } from './sectorMap.ts';
 
 /**
@@ -22,15 +23,26 @@ export const ENCOUNTER_RULES: Record<
      */
     hull: number;
     /**
-     * Bars in its Wren Drive, which it has no reactor to move: how hard it
-     * sways in a fight, and so how often the player's shots miss it (see
-     * `missChance`). Placeholder numbers.
+     * The bars in each of its three subsystems — the same three the player
+     * has, run by the same rules. It has no reactor to move them with, so this
+     * is fixed, less whatever hits destroy (`foeSystems` in `run.ts`).
+     *
+     * - **weapons** set how fast its gun charges;
+     * - **engines** are its Wren Drive: each bar makes the player's shots 10%
+     *   likelier to miss it;
+     * - **shields** soak the player's shots exactly as the player's own do.
+     *
+     * Every shield here is **zero, on purpose**. A shield layer rebuilds in
+     * five seconds and the player's one weapon fires every seven to nine, so
+     * a ship with even one powered shield bar can never be hurt. The system is
+     * there, drawn and targetable; power it once the player can outgun it.
+     * Placeholder numbers.
      */
-    wren: number;
+    systems: EnergyState;
   }
 > = {
-  empty: { label: 'EMPTY', hostile: false, hull: 0, wren: 0 },
-  enemy: { label: 'SHRIKE', hostile: true, hull: 6, wren: 2 },
-  merchant: { label: 'MERCHANT', hostile: false, hull: 4, wren: 1 },
-  boss: { label: 'ELDER SHRIKE', hostile: true, hull: 12, wren: 3 },
+  empty: { label: 'EMPTY', hostile: false, hull: 0, systems: { shields: 0, weapons: 0, engines: 0 } },
+  enemy: { label: 'SHRIKE', hostile: true, hull: 6, systems: { shields: 0, weapons: 2, engines: 2 } },
+  merchant: { label: 'MERCHANT', hostile: false, hull: 4, systems: { shields: 0, weapons: 2, engines: 1 } },
+  boss: { label: 'ELDER SHRIKE', hostile: true, hull: 12, systems: { shields: 0, weapons: 2, engines: 3 } },
 };

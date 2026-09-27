@@ -1,66 +1,74 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { FireBlock } from '@/lib/run';
 import { BUTTON_TONE } from '@/lib/subsystems';
 import { fonts, layout, palette, tracking } from '@/lib/theme';
 
 /**
- * Fires the weapon. Three looks, one per state, so the button says whether it
- * will do anything before it is pressed:
+ * AUTOFIRE: a switch, not a trigger. On, the weapon fires by itself every
+ * time it is fully charged — but only at a target: nothing fires until a
+ * subsystem on the other ship has been chosen (tap the weapon on the ship).
+ * The second line says which of those it is waiting on:
  *
- * - **grey** — nothing on the hardpoint, so nothing to fire;
- * - **dark red** — a weapon is mounted and still charging;
- * - **bright red** — charged and ready. One press spends the whole charge.
+ * - **OFF** — dark, outlined: the weapon holds fire;
+ * - **ON** — red: firing on every full charge;
+ * - **NO TARGET** / **NO WEAPON** — on, but with nothing to fire at or with.
  */
 const TONE = BUTTON_TONE.weapons;
-const LOOK: Record<'weapon' | 'charging' | 'ready', { fill: string; border: string; text: string }> = {
-  weapon: { fill: 'rgba(255,255,255,0.03)', border: 'rgba(255,255,255,0.12)', text: palette.textDisabled },
-  charging: { fill: TONE.dark.fill, border: TONE.dark.border, text: TONE.dark.label },
-  ready: { fill: TONE.bright, border: TONE.bright, text: TONE.ink },
-};
 
 export function FireButton({
+  on,
   blocked,
+  targeted,
   weaponName,
   width,
   height,
   onPress,
 }: {
+  /** Autofire is switched on. */
+  on: boolean;
   blocked: FireBlock;
+  /** A subsystem on the other ship is targeted. */
+  targeted: boolean;
   weaponName: string | null;
   width: number;
   height: number;
   onPress: () => void;
 }) {
-  // A destroyed ship has nothing to fire with, which looks the same as having
-  // no weapon mounted.
-  const state = blocked === 'wrecked' ? 'weapon' : (blocked ?? 'ready');
-  const look = LOOK[state];
-  const label =
-    blocked === 'wrecked'
-      ? 'Fire: the ship is destroyed'
-      : state === 'weapon'
-      ? 'Fire: no weapon mounted'
-      : state === 'charging'
-        ? `Fire: ${weaponName ?? 'weapon'} is charging`
-        : `Fire ${weaponName ?? 'the weapon'}`;
+  const noWeapon = blocked === 'weapon' || blocked === 'wrecked';
+  const status = !on ? 'OFF' : noWeapon ? 'NO WEAPON' : !targeted ? 'NO TARGET' : 'ON';
+  const live = status === 'ON';
+  const look = live
+    ? { fill: TONE.bright, border: TONE.bright, text: TONE.ink, status: TONE.ink }
+    : on
+      ? { fill: TONE.dark.fill, border: TONE.dark.border, text: TONE.dark.label, status: TONE.dark.label }
+      : { fill: 'rgba(255,255,255,0.03)', border: 'rgba(255,255,255,0.16)', text: palette.textMuted, status: palette.textDisabled };
+
+  const label = on
+    ? `Autofire is on${status === 'ON' ? `: ${weaponName ?? 'the weapon'} fires at the target every full charge` : `, but ${status.toLowerCase()}`}. Turn autofire off`
+    : 'Autofire is off. Turn autofire on';
 
   return (
     <Pressable
-      accessibilityRole="button"
+      accessibilityRole="switch"
       accessibilityLabel={label}
-      accessibilityState={{ disabled: !!blocked }}
-      disabled={!!blocked}
+      accessibilityState={{ checked: on, disabled: blocked === 'wrecked' }}
+      disabled={blocked === 'wrecked'}
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
         { width, height, backgroundColor: look.fill, borderColor: look.border },
-        state === 'ready' && styles.glow,
+        live && styles.glow,
         pressed && styles.pressed,
       ]}
     >
-      <Text style={[styles.label, { color: look.text }]}>FIRE</Text>
+      <View style={styles.stack}>
+        <Text style={[styles.label, { color: look.text }]}>AUTOFIRE</Text>
+        <Text numberOfLines={1} style={[styles.status, { color: look.status }]}>
+          {status}
+        </Text>
+      </View>
     </Pressable>
   );
 }
@@ -80,11 +88,19 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
   },
   pressed: { opacity: 0.8 },
+  stack: { alignItems: 'center', gap: 3 },
   label: {
     fontFamily: fonts.bodyBold,
-    fontSize: 14,
+    fontSize: 11,
     fontWeight: '700',
-    letterSpacing: tracking.label,
-    marginRight: -tracking.label,
+    letterSpacing: tracking.caption,
+    marginRight: -tracking.caption,
+  },
+  status: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 8,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    marginRight: -1.2,
   },
 });

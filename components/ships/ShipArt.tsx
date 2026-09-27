@@ -2,6 +2,7 @@ import React from 'react';
 import Svg, { Defs, Ellipse, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 
 import { EngineBlocks, EngineGlowDefs, type Engine } from '@/components/ships/EngineArt';
+import type { SystemSpots } from '@/components/ships/SystemMarks';
 import { useSvgIds } from '@/components/svgIds';
 import { MountedWeapon } from '@/components/WeaponArt';
 import { palette } from '@/lib/theme';
@@ -69,6 +70,19 @@ export const MOUNTS: Record<string, { x: number; y: number }> = {
   drifter: { x: 100, y: 94 },
   lance: { x: 100, y: 64 },
   bulwark: { x: 100, y: 46 },
+};
+
+/**
+ * Where each hull carries its three subsystems, in the same 200×260 box —
+ * the places `SystemMarks` draws their marks, read off the paths below. The
+ * Drifter keeps shields and weapons in its two prongs; the Lance in its two
+ * wings, with the Wren Drive in the spine; the Bulwark in its two cargo pods.
+ * Each Wren Drive sits ahead of the engine it feeds.
+ */
+export const SYSTEM_SPOTS: Record<string, SystemSpots> = {
+  drifter: { shields: { x: 60, y: 96 }, weapons: { x: 140, y: 96 }, engines: { x: 100, y: 180 } },
+  lance: { shields: { x: 66, y: 182 }, weapons: { x: 134, y: 182 }, engines: { x: 100, y: 150 } },
+  bulwark: { shields: { x: 43, y: 150 }, weapons: { x: 157, y: 150 }, engines: { x: 100, y: 176 } },
 };
 
 /** Same fallback as the art: an unknown ship gets the Drifter's. */

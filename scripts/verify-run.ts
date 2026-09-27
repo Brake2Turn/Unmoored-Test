@@ -10,6 +10,14 @@
  *   npm run verify:run
  */
 import {
+  autofireReady,
+  shiftEnergy,
+  foeCapacity,
+  foeSystems,
+  foeTargetFor,
+  setTarget,
+  systemCapacity,
+  toggleAutofire,
   applyJump,
   chargeFractions,
   createRun,
@@ -39,7 +47,16 @@ import {
   tickRun,
   type RunState,
 } from '../lib/run.ts';
-import { HOSTILE_JUMP_UNITS, JUMP_UNITS, SUBSYSTEM_CAPACITY, WEAPON_UNITS, shieldLevel, spentEnergy } from '../lib/energy.ts';
+import {
+  HOSTILE_JUMP_UNITS,
+  JUMP_UNITS,
+  SUBSYSTEMS,
+  SUBSYSTEM_CAPACITY,
+  WEAPON_UNITS,
+  shieldLevel,
+  spentEnergy,
+} from '../lib/energy.ts';
+import { ENCOUNTER_RULES } from '../lib/encounterRules.ts';
 import { HULL_MAX } from '../lib/hull.ts';
 import { cargoSlots } from '../lib/hold.ts';
 import { MEETINGS } from '../lib/dialogue.ts';
@@ -73,15 +90,86 @@ const SECTOR: SectorMap = {
   ],
 };
 
-/** A fresh Drifter run standing at `star`, its arrival already spoken. */
+/**
+ * A fresh Drifter run standing at `star`, its arrival already spoken, with
+ * the weapon aimed at the other ship's weapons — nothing fires untargeted.
+ */
 function at(star: number, extra: Partial<RunState> = {}): RunState {
-  return { ...createRun('drifter'), map: SECTOR, position: star, spoken: [star], ...extra };
+  return { ...createRun('drifter'), map: SECTOR, position: star, spoken: [star], target: 'weapons', ...extra };
 }
 
 /** Lands `n` of the player's bolts on the ship here. */
 function hits(run: RunState, n: number): RunState {
   for (let i = 0; i < n; i++) run = hitFoe(run, run.position);
   return run;
+}
+
+// Subsystems, both ways -----------------------------------------------------
+{
+  // An aimed hit that gets past the shields takes a plate AND a bar.
+  const bare = at(1, { shieldCharge: 0 });
+  const hit = takeHit(bare, 'engines', 1);
+  check('an aimed hit takes a plate', hit.hull === bare.hull - 1);
+  check('an aimed hit takes a bar off that system', systemCapacity(hit).engines === SUBSYSTEM_CAPACITY - 1);
+  check('the other systems are untouched', systemCapacity(hit).weapons === SUBSYSTEM_CAPACITY);
+  // Shields soak it whole: no plate, no bar.
+  const soaked = takeHit(at(1, { shieldCharge: 2, energy: { shields: 2, weapons: 2, engines: 2 } }), 'weapons', 1);
+  check('a shield soaks an aimed hit whole', systemCapacity(soaked).weapons === SUBSYSTEM_CAPACITY && soaked.hull === HULL_MAX);
+  // Bars that no longer fit go back to the reactor, and cannot be put back.
+  let wrecked = at(1, { shieldCharge: 0, energy: { shields: 2, weapons: 2, engines: 2 } });
+  for (let i = 0; i < 3; i++) wrecked = takeHit(wrecked, 'engines', 1);
+  check('a damaged system sheds the bars it cannot hold', wrecked.energy.engines === 1);
+  const refilled = shiftEnergy(wrecked, 'engines', 1);
+  check('a damaged system takes no more than it can hold', refilled === wrecked);
+  check('the shed bar is spare again', shiftEnergy(wrecked, 'weapons', 1).energy.weapons === 3);
+  let dead = wrecked;
+  for (let i = 0; i < 5; i++) dead = takeHit(dead, 'engines', 1);
+  check('a system bottoms out at nothing', systemCapacity(dead).engines === 0 && dead.energy.engines === 0);
+  check('damage outlasts a reload', hydrateRun(JSON.parse(JSON.stringify(dead)))?.systemDamage.engines === SUBSYSTEM_CAPACITY);
+  const shieldsHit = takeHit(at(1, { shieldCharge: 0, energy: { shields: 3, weapons: 1, engines: 2 } }), 'shields', 1);
+  check('the shield charge fits what is left', shieldsHit.energy.shields <= systemCapacity(shieldsHit).shields);
+
+  // The other ship: the same three, by the same rules.
+  const raider = at(1);
+  check('a red ship carries its kind\'s split', foeSystems(raider).weapons === ENCOUNTER_RULES.enemy.systems.weapons);
+  const aimed = hitFoe(raider, 1, 'weapons', 1);
+  check('an aimed shot takes a plate from them', foeHull(aimed) === foeHull(raider) - 1);
+  check('an aimed shot takes a bar from them', foeCapacity(aimed).weapons === SUBSYSTEM_CAPACITY - 1);
+  let disarmed = raider;
+  for (let i = 0; i < 4; i++) disarmed = hitFoe(disarmed, 1, 'weapons', 1);
+  check('their weapons shot out', foeSystems(disarmed).weapons === 0);
+  let sunk = raider;
+  while (foeHull(sunk) > 0) sunk = hitFoe(sunk, 1, 'weapons', 1);
+  check('destroying a ship lets go of the target', sunk.target === null);
+  const silent = { ...disarmed, foeCharge: WEAPON_UNITS };
+  check('a ship with no weapons does not fire', foeFires(silent) === silent);
+  check('their Wren Drive is their dodge', wrenBars(raider, 'foe') === ENCOUNTER_RULES.enemy.systems.engines);
+  let slowed = raider;
+  for (let i = 0; i < 4; i++) slowed = hitFoe(slowed, 1, 'engines', 1);
+  check('shooting out their Wren Drive stops their dodging', missChance(slowed, 'foe') === 0);
+  // Their shields soak the player's shots exactly as the player's do.
+  const guarded = at(1, { foeShieldCharge: 2 });
+  const blocked = hitFoe(guarded, 1, 'weapons', 1);
+  check('their shield soaks a shot', foeHull(blocked) === foeHull(guarded) && foeCapacity(blocked).weapons === SUBSYSTEM_CAPACITY);
+  check('their shield loses a layer', shieldLevel(blocked.foeShieldCharge) === 1 && blocked.foeShieldHits === 1);
+  // Arriving finds the next ship with its shields up and nothing targeted.
+  const moved = applyJump(at(0, { jumpCharge: HOSTILE_JUMP_UNITS }), 1);
+  check('a jump clears the target', moved.target === null);
+  check('a jump finds their shields up', moved.foeShieldCharge === ENCOUNTER_RULES.enemy.systems.shields);
+
+  // Targeting and autofire.
+  check('nothing can be targeted at an empty star', setTarget(at(3, { target: null }), 'weapons').target === null);
+  check('a ship here can be targeted', setTarget(at(1, { target: null }), 'shields').target === 'shields');
+  const ready = at(1, { weaponCharge: WEAPON_UNITS, autofire: true });
+  check('autofire fires a charged, aimed weapon', autofireReady(ready));
+  check('autofire waits for a target', !autofireReady({ ...ready, target: null }));
+  check('autofire waits for the charge', !autofireReady({ ...ready, weaponCharge: 1 }));
+  check('autofire off holds fire', !autofireReady(toggleAutofire(ready)));
+  check('autofire waits for the talking', !autofireReady({ ...ready, spoken: [] }));
+  check('autofire never fires at nothing', !autofireReady(at(3, { weaponCharge: WEAPON_UNITS, autofire: true })));
+  const picks = new Set<string>();
+  for (let i = 0; i < 300; i++) picks.add(foeTargetFor(Math.random()));
+  check('a hostile ship aims at every system', SUBSYSTEMS.every((s) => picks.has(s)) && foeTargetFor(0.9999) === 'engines');
 }
 
 // Firing -------------------------------------------------------------------
@@ -93,6 +181,10 @@ check('firing spends the whole charge', fireWeapon(armed).weaponCharge === 0);
 const refused = at(1);
 check('a refused shot is the same run', fireWeapon(refused) === refused);
 check('firing on a red ship provokes nobody', fireWeapon(armed).provoked.length === 0);
+const untargeted = { ...armed, target: null };
+check('nothing fires without a target', fireWeapon(untargeted) === untargeted);
+const nobody = at(3, { weaponCharge: WEAPON_UNITS });
+check('nothing fires at an empty star', fireWeapon(nobody) === nobody);
 
 // Provoking ----------------------------------------------------------------
 const trader = at(2, { weaponCharge: WEAPON_UNITS });

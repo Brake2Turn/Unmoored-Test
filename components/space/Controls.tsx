@@ -15,13 +15,13 @@ import {
 } from '@/components/space/layout';
 import type { Subsystem } from '@/lib/energy';
 import { isWrecked } from '@/lib/hull';
-import { chargeFractions, fireBlocker, jumpBlocker, reactorOf, type RunState } from '@/lib/run';
+import { chargeFractions, fireBlocker, jumpBlocker, reactorOf, systemCapacity, type RunState } from '@/lib/run';
 import { BUTTON_TONE } from '@/lib/subsystems';
 import { weaponById } from '@/lib/weapons';
 
 /**
  * The bottom of the space screen: the hull on one line, the reactor across
- * the full width with its controls right on it, and under it FIRE, the SHIP
+ * the full width with its controls right on it, and under it AUTOFIRE, the SHIP
  * square and JUMP. Greyed out and dead to touch once the ship is destroyed.
  */
 export function Controls({
@@ -29,7 +29,7 @@ export function Controls({
   width,
   animate,
   onShift,
-  onFire,
+  onToggleAutofire,
   onOpenShip,
   onJump,
 }: {
@@ -37,7 +37,7 @@ export function Controls({
   width: number;
   animate: boolean;
   onShift: (subsystem: Subsystem, delta: number) => void;
-  onFire: () => void;
+  onToggleAutofire: () => void;
   onOpenShip: () => void;
   onJump: () => void;
 }) {
@@ -73,6 +73,7 @@ export function Controls({
           <ReactorPanel
             energy={run.energy}
             reactor={reactorOf(run)}
+            capacity={systemCapacity(run)}
             charges={{ shield: run.shieldCharge, weapon: charge.weapon, engine: charge.jump }}
             width={width}
             onShift={onShift}
@@ -84,11 +85,13 @@ export function Controls({
 
         <View style={styles.actionRow}>
           <FireButton
+            on={!!run?.autofire}
             blocked={run ? fireBlocker(run) : 'weapon'}
+            targeted={!!run?.target}
             weaponName={weaponById(run?.mounted)?.name ?? null}
             width={FIRE_WIDTH}
             height={JUMP_HEIGHT}
-            onPress={onFire}
+            onPress={onToggleAutofire}
           />
           <ShipButton
             loadout={{ mounted: run?.mounted ?? null, hold: run?.hold ?? [] }}
