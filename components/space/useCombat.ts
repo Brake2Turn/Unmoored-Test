@@ -3,7 +3,8 @@ import type { View } from 'react-native';
 
 import { EXPLOSION_MS } from '@/components/Explosion';
 import { FLIGHT_MS, type Point } from '@/components/LaserShot';
-import { WEAPON_UNITS, shieldLevel } from '@/lib/energy';
+import { FULL_CAPACITY, WEAPON_UNITS, fitEnergy, shieldLevel } from '@/lib/energy';
+import { HULL_MAX, isWrecked } from '@/lib/hull';
 import { MOUNTS, SYSTEM_SPOTS } from '@/components/ships/ShipArt';
 import { SYSTEMS_SPAN } from '@/components/ships/ShipSystems';
 import { FOE_WEAPON, foeMuzzle, systemSpots } from '@/components/ships/EncounterShip';
@@ -11,7 +12,6 @@ import { sidewaysPoint } from '@/components/ships/Sideways';
 import { DODGE_FOE, DODGE_HULL, DODGE_MARGIN, DODGE_SHIELD, type Drift } from '@/components/space/useDrift';
 import type { LiveRun } from '@/components/space/useLiveRun';
 import { demoNow, paced, stopDemo, useDemo } from '@/components/space/devDemo';
-import { isWrecked } from '@/lib/hull';
 import { weaponTip } from '@/components/WeaponArt';
 import type { Subsystem } from '@/lib/energy';
 import { weaponById } from '@/lib/weapons';
@@ -59,9 +59,10 @@ export type Miss = { id: number; at: Point };
 /** How often the dodge-and-fire demo plays a round, at normal speed. */
 const DEMO_ROUND_MS = 4000;
 
-/** The dodge-and-fire demo is running at this star. */
-function demoAt(node: number): boolean {
-  return demoNow()?.node === node;
+/** Which ship dodges and fires back in the demo running at this star, if any. */
+function demoAt(node: number): 'player' | 'foe' | null {
+  const demo = demoNow();
+  return demo && demo.node === node ? demo.who : null;
 }
 
 /** How long a MISS stays up. */
@@ -223,9 +224,11 @@ export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width:
         const there = !!now && now.position === node && foeHull(now, node) > 0;
         // Whether it misses is rolled as it leaves, against the other ship's
         // Wren Drive: the harder a ship sways, the harder it is to hit.
-        // (The dodge-and-fire demo always hits, so the turn can be watched
-        // landing.)
-        const misses = there && !demoAt(node) && shotMisses(now, 'foe', Math.random());
+        // (The dodge-and-fire demo settles it: the player's shot always hits
+        // when the player is the one dodging and firing back, and always
+        // misses when the other ship is.)
+        const staged = demoAt(node);
+        const misses = there && (staged ? staged === 'foe' : shotMisses(now, 'foe', Math.random()));
         const centre = { x: rest.x + rest.width / 2, y: rest.y + rest.height / 2 + shooterDy };
         // Onto the targeted system; with nobody there, straight ahead.
         const at = foe
@@ -242,6 +245,12 @@ export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width:
             // Clear of its widest part — the wings, across its upright width —
             // from the line through the system it was aimed at.
             const lead = drift.dodge('foe', foe.height * DODGE_FOE + DODGE_MARGIN, spot.y);
+            // The enemy demo's point: jinking out of the way, the other ship's
+            // gun is filled, so it fires back mid-dodge.
+            const latest = runRef.current;
+            if (staged === 'foe' && latest && latest.position === node) {
+              commit({ ...latest, foeCharge: WEAPON_UNITS }, false);
+            }
             showMiss(at, lead + passesAt(aim.from, to, at.x));
             setTimeout(() => addShot({ by: 'player', node, from: aim.from, to, hits, target, damage }), lead);
           } else {
@@ -289,7 +298,28 @@ export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width:
       const key = String(current.position);
       const { [key]: _hull, ...foeDamage } = current.foeDamage;
       const { [key]: _systems, ...foeSystemDamage } = current.foeSystemDamage;
-      commit({ ...current, foeDamage, foeSystemDamage, weaponCharge: 0, target: null, foeCharge: WEAPON_UNITS }, false);
+      const mended = { ...current, foeDamage, foeSystemDamage };
+      if (demo?.who === 'foe') {
+        // The player opens fire, charged and aimed; the other ship's gun is
+        // held back until it is dodging. The player's ship is patched up too,
+        // since every shot at it lands — dev only, and only in this demo.
+        commit(
+          {
+            ...mended,
+            hull: HULL_MAX,
+            systemDamage: { shields: 0, weapons: 0, engines: 0 },
+            energy: fitEnergy(current.energy, FULL_CAPACITY),
+            shieldCharge: current.energy.shields,
+            weaponCharge: WEAPON_UNITS,
+            target: 'weapons',
+            foeCharge: 0,
+          },
+          false,
+        );
+      } else {
+        // The other ship opens fire; the player's weapon waits for the dodge.
+        commit({ ...mended, weaponCharge: 0, target: null, foeCharge: WEAPON_UNITS }, false);
+      }
     };
     const first = setTimeout(round, 1200);
     const every = setInterval(round, paced(DEMO_ROUND_MS));
@@ -346,8 +376,11 @@ export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width:
         // more often the player's ship dodges — out of the bolt's line far
         // enough to take the shield with it (or the hull, with no shield up) —
         // and the bolt flies on off the left edge.
-        // (The dodge-and-fire demo always misses, so the player always dodges.)
-        const misses = !!now && (demoAt(node) || shotMisses(now, 'player', Math.random()));
+        // (The demo settles it the other way round: this always misses when
+        // the player is the one dodging, and always hits when the other ship
+        // is.)
+        const staged = demoAt(node);
+        const misses = !!now && (staged ? staged === 'player' : shotMisses(now, 'player', Math.random()));
         const to = misses ? along(aim, -40) : at;
         const launch = () => {
           if (misses) {
@@ -355,9 +388,9 @@ export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width:
             const lead = drift.dodge('player', clear, spot.y);
             // The demo's point: with the ship now jinking out of the way, its
             // weapon is charged and aimed, so it fires back mid-dodge.
-            const staged = runRef.current;
-            if (demoAt(node) && staged && staged.position === node) {
-              commit({ ...staged, weaponCharge: WEAPON_UNITS, target: 'weapons' }, false);
+            const latest = runRef.current;
+            if (staged === 'player' && latest && latest.position === node) {
+              commit({ ...latest, weaponCharge: WEAPON_UNITS, target: 'weapons' }, false);
             }
             showMiss(at, lead + passesAt(aim.from, to, at.x));
             setTimeout(() => addShot({ by: 'foe', node, from: aim.from, to, hits: false, target, damage }), lead);

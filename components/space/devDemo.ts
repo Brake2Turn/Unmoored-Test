@@ -5,17 +5,26 @@ import { useSyncExternalStore } from 'react';
  * the space screen. Screen-side only — nothing here is a rule, and nothing is
  * saved: a demo lasts until the ship leaves its star or it is stopped.
  *
- * **Dodge and fire** stages the moment the author wanted to watch: the other
- * ship fires and always misses, the player's ship dodges, and while it is
- * still jinked out of the way its own weapon fires back — so it has to turn
- * its nose to aim. Round after round, a few seconds apart, with the other
- * ship patched up each time so the demo never runs out.
+ * **Dodge and fire** stages the moment the author wanted to watch: one ship
+ * fires and always misses, the other dodges, and while it is still jinked out
+ * of the way its own weapon fires back — so it has to turn its nose to aim.
+ * Either way round (`who`). Round after round, a few seconds apart, with both
+ * ships patched up each time so the demo never runs out.
  *
  * `slow` stretches every part of it that moves — the line-up, the dodge, the
  * turn, the bolt's flight — by `SLOW_FACTOR`, since the real thing is over
  * in about half a second.
  */
-export type Demo = { kind: 'dodge-fire'; node: number; slow: boolean };
+export type Demo = {
+  kind: 'dodge-fire';
+  /**
+   * Which ship dodges and fires back: the player's (the other ship's shot
+   * always misses) or the other ship (the player's always does).
+   */
+  who: 'player' | 'foe';
+  node: number;
+  slow: boolean;
+};
 
 /** How much slower the slow-motion demo runs. */
 export const SLOW_FACTOR = 4;

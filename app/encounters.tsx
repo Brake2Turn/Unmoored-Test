@@ -24,6 +24,14 @@ import { fonts, palette, tracking } from '@/lib/theme';
  */
 
 const GAP = 12;
+
+/** The combat tests, each at full speed and in slow motion. */
+const DEMOS: { who: 'player' | 'foe'; slow: boolean }[] = [
+  { who: 'player', slow: false },
+  { who: 'player', slow: true },
+  { who: 'foe', slow: false },
+  { who: 'foe', slow: true },
+];
 const FACE = 76;
 
 /** What each kind of meeting is called on its card. */
@@ -56,7 +64,7 @@ export default function EncountersScreen() {
 
   /** Stages the dodge-and-fire demo and goes to watch it. */
   const onDemo = useCallback(
-    async (slow: boolean) => {
+    async (who: 'player' | 'foe', slow: boolean) => {
       if (busy) return;
       setBusy(true);
       haptics.confirm();
@@ -64,7 +72,7 @@ export default function EncountersScreen() {
       const staged = run ? devStageDodgeDemo(run) : null;
       if (staged) {
         await saveRun(staged);
-        startDemo({ kind: 'dodge-fire', node: staged.position, slow });
+        startDemo({ kind: 'dodge-fire', who, node: staged.position, slow });
       }
       router.dismissTo('/run');
     },
@@ -150,21 +158,23 @@ export default function EncountersScreen() {
         {/* Not encounters but moments of a fight, played on a loop so they
             can be watched: the space screen runs them (devDemo.ts). */}
         <Text style={styles.section}>COMBAT TESTS</Text>
-        {[false, true].map((slow) => (
+        {DEMOS.map(({ who, slow }) => (
           <Pressable
-            key={String(slow)}
+            key={`${who}-${slow}`}
             accessibilityRole="button"
-            accessibilityLabel={`Combat test: dodge and fire${slow ? ', slow motion' : ''}`}
-            onPress={() => void onDemo(slow)}
+            accessibilityLabel={`Combat test: ${who === 'player' ? 'you dodge and fire' : 'enemy dodges and fires'}${slow ? ', slow motion' : ''}`}
+            onPress={() => void onDemo(who, slow)}
             style={({ pressed }) => [styles.card, styles.testCard, pressed && styles.pressed]}
           >
-            <Text style={styles.name}>DODGE AND FIRE</Text>
+            <Text style={styles.name}>{who === 'player' ? 'YOU DODGE AND FIRE' : 'ENEMY DODGES AND FIRES'}</Text>
             <Text style={[styles.kind, { color: palette.weapons }]}>
               {slow ? `SLOW MOTION · ${SLOW_FACTOR}× SLOWER` : 'FULL SPEED'}
             </Text>
             <Text style={styles.blurb}>
-              A Shrike fires and always misses. You dodge, and your weapon fires back mid-dodge, turning to aim at
-              their weapons. Repeats every few seconds.
+              {who === 'player'
+                ? 'A Shrike fires and always misses. You dodge, and your weapon fires back mid-dodge, turning to aim at their weapons.'
+                : 'You fire at a Shrike and always miss. It dodges, and fires back mid-dodge, turning to aim at one of your systems.'}{' '}
+              Repeats every few seconds.
             </Text>
           </Pressable>
         ))}

@@ -964,19 +964,23 @@ one switch for every test tool, so none of them reach a player:
   ship there and resets it as never visited: dialogue again, ship undamaged
   and unprovoked, both guns and the drive empty — then `router.dismissTo('/run')`.
 - **The encounter tester ends with COMBAT TESTS** — moments of a fight on a
-  loop, to be watched rather than played. The one there, **DODGE AND FIRE**
-  (full speed, and slow motion at `SLOW_FACTOR` 4×), was asked for to see a
-  ship shoot while dodging. `devStageDodgeDemo` sets the scene (the table's
+  loop, to be watched rather than played. **DODGE AND FIRE**, both ways
+  round — **YOU DODGE AND FIRE** and **ENEMY DODGES AND FIRES** (`Demo.who`),
+  each at full speed and in slow motion at `SLOW_FACTOR` 4× — was asked for
+  to see a ship shoot while dodging. `devStageDodgeDemo` sets the scene (the table's
   first red ship, talking done, weapon on the hardpoint, nothing aimed) and
   `components/space/devDemo.ts` holds which demo is running — screen state,
   never saved, ended by leaving the star or DEV · STOP DEMO. `useCombat` plays
-  it: every `DEMO_ROUND_MS` (4s) the other ship is patched up and its gun
-  filled; its shot always misses, and as the player dodges it is handed a
-  charged weapon aimed at their weapons, so it fires mid-dodge and turns to
-  aim; that shot always hits. Slow motion goes through `paced()`, which every
+  it: every `DEMO_ROUND_MS` (4s) both ships are patched up and one opens
+  fire. Its shot always misses; as the target dodges it is handed a full
+  charge (the player's weapon aimed at their weapons, or the other ship's
+  gun), so it fires mid-dodge and turns to aim; that shot always hits. In the
+  enemy version the player's hull, systems and shield are restored each round
+  — dev only, and the one place anything puts plates back. Slow motion goes through `paced()`, which every
   moving part of a shot uses — the line-up, dodge and turn in `useDrift`, the
   bolt's flight in `LaserShot` — so they stay in step at any speed. Checked
-  in headless: the shot left pinned 48pt off its line, turned 19°, and hit.
+  in headless both ways: the dodging shooter fired pinned off its line and
+  turned (8–19°) to hit, the opening shot flew level.
 
 **The space screen is assembled from `components/space/`.** `app/run.tsx`
 only puts the pieces together: `useLiveRun` (the run, `runRef`, `commit`,
