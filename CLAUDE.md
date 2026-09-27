@@ -704,8 +704,9 @@ or fire while the star's dialogue is still open, and `applyJump` empties it.
 A ship does not have to be red to fight. **Firing on a yellow one provokes
 it** (`fireWeapon` adds the star to `run.provoked`): from then on `foeArmed`
 counts it hostile, so it shoots back and pins the drive like a red one, and
-once it has taken damage `foeLooksHostile` draws it red — its own silhouette,
-red colours, and a Weapon 1 on its bow (`MERCHANT_MOUNT`). `foeMuzzle(kind)`
+`foeLooksHostile` draws it red. **Both happen as the shot leaves, hit or
+miss** — the author's rule; the red used to wait for a hit to land. Red means
+its own silhouette, red colours, and a Weapon 1 on its bow (`MERCHANT_MOUNT`). `foeMuzzle(kind)`
 gives each silhouette's muzzle.
 The helm watches for the charge filling and shoots; the bolt goes through
 `takeHit` on arrival, so shields soak it first, and it aims at the bubble's

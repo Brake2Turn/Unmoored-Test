@@ -194,8 +194,11 @@ const provoked = fireWeapon(trader);
 check('firing on a yellow ship provokes it', provoked.provoked.includes(2));
 check('a provoked ship fights', foeArmed(provoked) && modeOf(provoked) === 'combat');
 check('a provoked ship pins the drive', jumpUnitsFor(provoked) === HOSTILE_JUMP_UNITS);
-check('provoked but unhurt still looks yellow', !foeLooksHostile(provoked));
-check('provoked and hurt looks red', foeLooksHostile(hitFoe(provoked, 2)));
+// The shot leaving is what counts, so a miss turns it red and starts the
+// fight just the same: nothing here has landed on it yet.
+check('provoked turns red at once, hit or miss', foeLooksHostile(provoked) && (provoked.foeDamage['2'] ?? 0) === 0);
+check('provoked starts the fight at once, hit or miss', modeOf(provoked) === 'combat');
+check('an unprovoked yellow ship looks yellow', !foeLooksHostile(trader));
 check('a hit alone provokes nobody', !foeArmed(hitFoe(trader, 2)));
 
 // Destroying ---------------------------------------------------------------

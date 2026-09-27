@@ -389,12 +389,13 @@ export function foeArmed(run: RunState): boolean {
 
 /**
  * The ship here is drawn red: a hostile kind, or a friendly one the pilot has
- * both fired on and actually damaged.
+ * fired on — from the moment the shot leaves, whether it hits or misses, the
+ * same moment the fight starts.
  */
 export function foeLooksHostile(run: RunState): boolean {
   const here = shipHere(run);
   if (here === 'empty') return false;
-  return ENCOUNTER_RULES[here].hostile || (foeProvoked(run) && (run.foeDamage[String(run.position)] ?? 0) > 0);
+  return ENCOUNTER_RULES[here].hostile || foeProvoked(run);
 }
 
 /**
