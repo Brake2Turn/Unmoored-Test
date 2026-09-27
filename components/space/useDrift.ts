@@ -68,26 +68,31 @@ export type Drift = {
   player: SharedValue<number>;
   foe: SharedValue<number>;
   /**
-   * Brings `shooter` level with the other ship's centre, then calls `fire`
-   * with the height they now share. Both hold that line until the bolt has
-   * landed. When nobody is swaying it fires at once, level at
-   * the resting line.
+   * Brings `shooter` level with the part of the other ship it is aiming at —
+   * `aim` points below (+) or above (−) that ship's centre — then calls
+   * `fire` with where each now is: the shooter's height and the target's.
+   * Both hold there until the bolt has landed.
+   *
+   * It waits its turn: a ship still dodging finishes the dodge first, and a
+   * line already being held for another shot is let go first, so two shots
+   * never pull the ships two ways at once.
    */
-  lineUp: (shooter: Side, fire: (dy: number) => void) => void;
+  lineUp: (shooter: Side, aim: number, fire: (shooterDy: number, targetDy: number) => void) => void;
   /**
-   * Jinks `side` `clear` points out of the line it is on — away from its
-   * resting line, so it never strays further than `clear` from it — and back
-   * again. Returns how long to wait before letting the bolt go.
+   * Jinks `side` far enough that a bolt flying `line` points off its centre
+   * misses it by `clear` — whichever way is the shorter trip from where it
+   * is — and back again. Returns how long to wait before letting the bolt go.
    */
-  dodge: (side: Side, clear: number) => number;
+  dodge: (side: Side, clear: number, line: number) => number;
   /** Where a ship is, or is heading: its height as the rules know it. */
   offset: (side: Side) => number;
 };
 
 /**
  * The ships' sway: each rises and falls gently on its own course while its
- * Wren Drive has any power; before either fires, the shooter glides level with the other ship's centre
- * so the bolt flies straight across and lands in the middle of it.
+ * Wren Drive has any power; before either fires, the shooter glides level
+ * with the part of the other ship it is aiming at, so the bolt flies straight
+ * across and lands on that part.
  *
  * **Heights are decided here, not read back off the screen.** Each ship's
  * next height is chosen in advance and kept in a ref; the animation only
@@ -109,16 +114,18 @@ export function useDrift(
 
   // The height each ship is at or heading to.
   const target = useRef<Record<Side, number>>({ player: 0, foe: 0 });
-  // While lined up for a shot: the shared height, when both reach it, and
-  // until when they hold it.
-  const line = useRef<{ dy: number; readyAt: number; holdUntil: number } | null>(null);
+  // While lined up for a shot (or dodging one): until when both hold still.
+  const line = useRef<{ holdUntil: number } | null>(null);
+  // Until when each ship is busy dodging, and may not line up to fire.
+  const busy = useRef<Record<Side, number>>({ player: 0, foe: 0 });
   const activeRef = useRef(active);
   activeRef.current = active;
   // Read on every sway, so emptying the Wren Drive stills the next one.
   const wrenRef = useRef(wren);
   wrenRef.current = wren;
 
-  // A dodge's return trip, cancelled if the ship leaves the star first.
+  // Dodges' return trips and line-ups waiting their turn, all cancelled if
+  // the ship leaves the star first.
   const dodgeTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const moveTo = useCallback(
@@ -134,6 +141,7 @@ export function useDrift(
   // the old star's drift has nothing to do with this one.
   useEffect(() => {
     line.current = null;
+    busy.current = { player: 0, foe: 0 };
     dodgeTimers.current.forEach(clearTimeout);
     dodgeTimers.current = [];
     for (const side of ['player', 'foe'] as const) {
@@ -182,47 +190,57 @@ export function useDrift(
   }, [active, moveTo]);
 
   const lineUp = useCallback(
-    (shooter: Side, fire: (dy: number) => void) => {
-      if (!activeRef.current) {
-        fire(target.current[shooter]);
-        return;
-      }
-      const now = Date.now();
-      const current = line.current;
-      if (current && now < current.holdUntil) {
-        // Already lined up, or on the way: fire along the same line.
-        const wait = Math.max(0, current.readyAt - now);
-        current.holdUntil = Math.max(current.holdUntil, now + wait + HOLD_MS);
-        setTimeout(() => fire(current.dy), wait);
-        return;
-      }
-      // The shooter comes to the target; the target finishes the move it was
-      // making and stops there, so the line is where the target already is.
+    (shooter: Side, aim: number, fire: (shooterDy: number, targetDy: number) => void) => {
       const other: Side = shooter === 'player' ? 'foe' : 'player';
-      const dy = target.current[other];
-      moveTo(other, dy, ALIGN_MS);
-      moveTo(shooter, dy, ALIGN_MS);
-      line.current = { dy, readyAt: now + ALIGN_MS, holdUntil: now + ALIGN_MS + HOLD_MS };
-      setTimeout(() => fire(dy), ALIGN_MS);
+      const go = () => {
+        const now = Date.now();
+        // A ship mid-dodge finishes it, and a line held for another shot is
+        // let go, before this one starts: then try again.
+        const clearAt = Math.max(busy.current.player, busy.current.foe, line.current?.holdUntil ?? 0);
+        if (now < clearAt) {
+          dodgeTimers.current.push(setTimeout(go, clearAt - now + 10));
+          return;
+        }
+        // The target finishes the move it was making and stops there; the
+        // shooter comes level with the part of it being aimed at.
+        const targetDy = target.current[other];
+        const shooterDy = targetDy + aim;
+        moveTo(other, targetDy, ALIGN_MS);
+        moveTo(shooter, shooterDy, ALIGN_MS);
+        line.current = { holdUntil: now + ALIGN_MS + HOLD_MS };
+        dodgeTimers.current.push(setTimeout(() => fire(shooterDy, targetDy), ALIGN_MS));
+        // With nobody swaying (Reduce Motion, or the fight over), nothing
+        // else will take them back to rest once the shot is done.
+        dodgeTimers.current.push(
+          setTimeout(() => {
+            if (activeRef.current || Date.now() < (line.current?.holdUntil ?? 0)) return;
+            moveTo('player', 0, SETTLE_MS);
+            moveTo('foe', 0, SETTLE_MS);
+          }, ALIGN_MS + HOLD_MS + 20),
+        );
+      };
+      go();
     },
     [moveTo],
   );
 
   const dodge = useCallback(
-    (side: Side, clear: number) => {
+    (side: Side, clear: number, lineAt: number) => {
       const from = target.current[side];
-      // Back across the resting line when it is off it, so the jink never
-      // takes it further from rest than `clear`; either way when it is on it.
-      const away = from > 0.5 ? -1 : from < -0.5 ? 1 : Math.random() < 0.5 ? -1 : 1;
+      // Out of the bolt's line either way — above it or below it — whichever
+      // leaves the ship nearer its resting line, so a jink never takes it
+      // much further from rest than `clear`.
+      const up = lineAt - clear;
+      const down = lineAt + clear;
+      const step = Math.abs(from + up) <= Math.abs(from + down) ? up : down;
       const now = Date.now();
-      moveTo(side, from + away * clear, DODGE_MS, Easing.out(Easing.cubic));
+      moveTo(side, from + step, DODGE_MS, Easing.out(Easing.cubic));
       dodgeTimers.current.push(setTimeout(() => moveTo(side, from, DODGE_RETURN_MS), DODGE_MS + DODGE_HOLD_MS));
-      // Nobody wanders off while this plays out: the shooter holds its line
-      // and the target comes back to it.
+      // Nobody wanders off while this plays out, and this ship does not line
+      // up a shot of its own until it is back.
       const until = now + DODGE_MS + DODGE_HOLD_MS + DODGE_RETURN_MS;
-      line.current = line.current
-        ? { ...line.current, holdUntil: Math.max(line.current.holdUntil, until) }
-        : { dy: from, readyAt: now, holdUntil: until };
+      busy.current[side] = until;
+      line.current = { holdUntil: Math.max(line.current?.holdUntil ?? 0, until) };
       return DODGE_LEAD_MS;
     },
     [moveTo],

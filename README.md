@@ -64,8 +64,10 @@ plates, and at zero it is Game Over.
 
 Every ship — yours and theirs — has the same three systems, each marked where
 it sits on the hull. Tap the weapon on your ship, then one of their systems,
-to target it; with **AUTOFIRE** on, the weapon then fires by itself on every
-full charge, and nothing fires without a target. A hit that gets past the
+to target it: the weapon fires at it as soon as it is charged. With
+**AUTOFIRE** on it keeps firing on every full charge; nothing fires without a
+target. Before each shot the shooter lines up with the exact system it is
+aiming at. A hit that gets past the
 shields takes a hull plate and a bar off the system it was aimed at, for the
 rest of the run (a repair system is planned). Their systems show as thin bars
 under their hull line.

@@ -652,17 +652,24 @@ listens for those, not for pointer events.
 
 ### Firing, and the other ship's hull
 
-**There is no fire button: AUTOFIRE sits left of JUMP** (still
-`components/FireButton.tsx`), a switch the author asked for in place of FIRE.
-On (`run.autofire`, `toggleAutofire`), the weapon fires by itself every time it
-is fully charged — **but only at a target.** The author's rule: the weapon is
-only fired once the switch is on *and* a subsystem on the other ship has been
-chosen (`run.target`, below). `autofireReady(run)` is that whole condition —
-on, targeted, a live ship here, nobody talking, `fireBlocker` clear — and the
+**There is no fire button: choosing a target fires, and AUTOFIRE sits left
+of JUMP** (still `components/FireButton.tsx`). The author's rules, in the
+order they came:
+
+- **Choosing a target is an order to fire once** (`setTarget` sets
+  `run.shotPending`): the weapon goes the moment it is fully charged, autofire
+  on or off, and the shot spends the order. Choosing the same system again
+  orders another shot.
+- **AUTOFIRE only decides whether it keeps going** (`run.autofire`,
+  `toggleAutofire`): on, it fires at the target on every full charge.
+
+`fireReady(run)` is the whole condition — a target, an order (pending shot or
+autofire), a live ship here, nobody talking, `fireBlocker` clear — and the
 helm fires the moment it turns true (`useCombat`). The button's second line
-says which it is waiting on: OFF, ON, NO TARGET or NO WEAPON. `fireWeapon`
-refuses without a target or a ship, so choosing a target is the decision to
-attack: that is what keeps autofire from opening up on a merchant by itself.
+says where things stand: OFF, ONE SHOT (off, with a shot waiting on the
+charge), ON, NO TARGET or NO WEAPON. `fireWeapon` refuses without a target or
+a ship, so choosing a target is the decision to attack: nothing opens up on a
+merchant by itself.
 `fireBlocker(run)` still returns `'wrecked'`, `'weapon'`, `'charging'` or
 null. A shot spends the whole charge, so it fires once per charge.
 
@@ -763,9 +770,12 @@ struck through once destroyed.
 **Aiming: tap the weapon on your own ship.** A tap target sits over the gun
 on the player's nose (in `Arena`); tapping it rings the gun and grows the
 other ship's three marks into buttons ("TAP ONE OF THEIR SYSTEMS TO
-TARGET"), and picking one sets `run.target` (`setTarget`) — picking the one
-already aimed at clears it. The target wears red corner brackets. It is
-cleared on every jump, and when the ship it named is destroyed.
+TARGET"), and picking one sets `run.target` and orders a shot at it
+(`setTarget`); picking the one already aimed at orders another. The target
+wears red corner brackets. It is cleared on every jump, when the ship it named
+is destroyed, and **when the player's own ship is destroyed** — the author
+asked for the marker to go with it (`takeHit` clears it at zero hull, and
+`Arena` hides it on a wreck).
 
 **A hit that gets past the shields takes a hull plate *and* bars** — the
 author's choice. `hitFoe(run, node, target, damage)` and `takeHit(run,
@@ -841,7 +851,9 @@ it miss" over "its own shots miss"; the Wren Drive costs nothing in aim.
 target's bars. **The bolt's path never changes — the target dodges.** Every
 bolt flies dead level from the muzzle; on a miss it flies straight on off the
 screen, and the *target* jinks up or down out of its line (`drift.dodge`) and
-back, the author's request. It dodges far enough to clear its widest part —
+back, the author's request. The line runs through the targeted system, not
+the centre, so the dodge is measured from that line, whichever way is the
+shorter trip from where the ship is. It dodges far enough to clear its widest part —
 past the shield's side for the player with shields up (`DODGE_SHIELD`), past
 the hull's pods otherwise (`DODGE_HULL`), past the wingtips for the other ship
 (`DODGE_FOE`) — and always back across its resting line when it is off it, so
@@ -854,17 +866,26 @@ target as the bolt goes by (`components/MissPop.tsx`, up `MISS_MS`, first
 frame already whole). `verify:run` holds the percentages bar by bar and over
 twenty thousand rolls.
 
-**A ship with power in its Wren Drive bobs gently up and down, and both line
-up before every shot** (`components/space/useDrift.ts`, the author's request).
+**A ship with power in its Wren Drive bobs gently up and down, and the shooter
+lines up with the exact system it is aiming at before every shot**
+(`components/space/useDrift.ts`, the author's request).
 The bob is the same whatever the bars — `SWAY` (10pt) either side of the
 resting line, one height to the next every `SWAY_MS` or so — and it runs in
 either mode, alone at a star too. **No bars, no bob.** It used to grow harder
 and quicker with every bar; the author had that taken out, and the bars now
 show in the engine's brightness instead (below). Before
-a bolt leaves, the shooter glides level with the other ship's centre
-(`lineUp`, `ALIGN_MS` 320ms) and both hold that line until the bolt has
-landed (`HOLD_MS`), then wander off again. A second shot during a hold fires
-along the same line. **The ships are sized with room kept for a dodge**
+a bolt leaves, the target stops where it is and the shooter glides until its
+**muzzle** is level with the targeted system (`lineUp(shooter, aim, fire)`,
+`aim` being that system's height off the target's centre less the muzzle's
+off the shooter's — the Lance's twin barrels sit off-centre), over `ALIGN_MS`
+(320ms); both hold until the bolt has landed (`HOLD_MS`), then wander off
+again. The bolt then flies dead level onto the system's spot, or onto the
+shield's rim at that height (`useCombat`, `spotOffset`). **A ship mid-dodge
+finishes the dodge before lining up its own shot** (`busy` in `useDrift`),
+and a line already held for one shot is let go before the next is lined up,
+so the two ships never pull each other two ways at once. Line-ups happen
+under Reduce Motion too (the author asked that every shot visibly line up),
+and settle back to rest afterwards when nothing else is swaying. **The ships are sized with room kept for a dodge**
 above and below whenever a pair is on screen (`artScaleFor`): a dodge is
 about half a ship's width, which grows with the ships, so the room is solved
 for together with the scale rather than being a fixed number of points.
@@ -1295,7 +1316,8 @@ Settled with the author, so a new chat does not reopen them:
   (90ms lead, 170ms out, 220ms held, 380ms back).
 - **A repair system is next, by the author's plan.** Until it exists,
   system damage lasts the whole run and a shot-out Wren Drive strands it.
-- **Not yet seen on the author's phone:** aiming and autofire, the dodge, the sway and the line-up before a
+- **Not yet seen on the author's phone:** aiming, the line-up onto a
+  targeted system, autofire, the dodge, the sway and the line-up before a
   shot, the MISS pop-up in motion, and star select sized from the game area
   (`useScreenBox`). All were checked in headless only, where nothing moves.
 

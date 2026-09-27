@@ -87,8 +87,9 @@ export function Arena({
     if (!canAim) setAiming(false);
   }, [canAim]);
   const choose = (target: Subsystem) => {
-    // Picking the one already aimed at lets it go.
-    onTarget(run?.target === target ? null : target);
+    // Picking a system — even the one already aimed at — is an order to fire
+    // at it once the weapon is charged.
+    onTarget(target);
     setAiming(false);
   };
 
@@ -222,7 +223,8 @@ export function Arena({
                     systems={foeSystems(run)}
                     capacity={foeCapacity(run)}
                     owner="their"
-                    target={run.target}
+                    // A destroyed ship aims at nothing: its marker goes too.
+                    target={wrecked ? null : run.target}
                     choosing={aiming}
                     onChoose={choose}
                   />

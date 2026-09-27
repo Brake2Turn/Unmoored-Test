@@ -10,7 +10,7 @@
  *   npm run verify:run
  */
 import {
-  autofireReady,
+  fireReady,
   shiftEnergy,
   foeCapacity,
   foeSystems,
@@ -160,13 +160,25 @@ function hits(run: RunState, n: number): RunState {
   // Targeting and autofire.
   check('nothing can be targeted at an empty star', setTarget(at(3, { target: null }), 'weapons').target === null);
   check('a ship here can be targeted', setTarget(at(1, { target: null }), 'shields').target === 'shields');
+  // Choosing a target is one order to fire, autofire or not.
+  const ordered = setTarget(at(1, { target: null, weaponCharge: WEAPON_UNITS }), 'shields');
+  check('choosing a target orders a shot', ordered.shotPending && fireReady(ordered));
+  const spent = fireWeapon(ordered);
+  check('that one shot spends the order', !spent.shotPending && !fireReady({ ...spent, weaponCharge: WEAPON_UNITS }));
+  check('the target stays after the shot', spent.target === 'shields');
+  check('choosing it again orders another', fireReady(setTarget({ ...spent, weaponCharge: WEAPON_UNITS }, 'shields')));
+  check('autofire keeps firing after the order', fireReady({ ...spent, weaponCharge: WEAPON_UNITS, autofire: true }));
+  let lost = at(1, { target: 'weapons', shotPending: true, shieldCharge: 0 });
+  while (lost.hull > 0) lost = takeHit(lost);
+  check('a wrecked ship drops its target', lost.target === null && !lost.shotPending);
+  check('a wreck cannot take aim', setTarget(lost, 'weapons').target === null);
   const ready = at(1, { weaponCharge: WEAPON_UNITS, autofire: true });
-  check('autofire fires a charged, aimed weapon', autofireReady(ready));
-  check('autofire waits for a target', !autofireReady({ ...ready, target: null }));
-  check('autofire waits for the charge', !autofireReady({ ...ready, weaponCharge: 1 }));
-  check('autofire off holds fire', !autofireReady(toggleAutofire(ready)));
-  check('autofire waits for the talking', !autofireReady({ ...ready, spoken: [] }));
-  check('autofire never fires at nothing', !autofireReady(at(3, { weaponCharge: WEAPON_UNITS, autofire: true })));
+  check('autofire fires a charged, aimed weapon', fireReady(ready));
+  check('autofire waits for a target', !fireReady({ ...ready, target: null }));
+  check('autofire waits for the charge', !fireReady({ ...ready, weaponCharge: 1 }));
+  check('autofire off holds fire once the order is spent', !fireReady(toggleAutofire(ready)));
+  check('autofire waits for the talking', !fireReady({ ...ready, spoken: [] }));
+  check('autofire never fires at nothing', !fireReady(at(3, { weaponCharge: WEAPON_UNITS, autofire: true })));
   const picks = new Set<string>();
   for (let i = 0; i < 300; i++) picks.add(foeTargetFor(Math.random()));
   check('a hostile ship aims at every system', SUBSYSTEMS.every((s) => picks.has(s)) && foeTargetFor(0.9999) === 'engines');
