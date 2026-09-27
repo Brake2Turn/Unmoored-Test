@@ -682,7 +682,8 @@ so the two ships' centres stay level and bolts fly straight between them. It
 sat top left under LEAVE until the ships were laid side by side. The name is `nameOf(meeting)`, the first speaker who is not the
 pilot, so it matches the dialogue box; the boss has no meeting and shows its
 kind, ELDER SHRIKE. The art is scaled with room for it counted in
-(`FOE_STATUS_HEIGHT`), so the name never runs into the top of the screen.
+(`FOE_STATUS_HEIGHT`), so the name never runs into the top of the screen. It
+drifts with its ship in combat.
 
 **Red ships shoot back** — every hostile one (Shrike and Elder Shrike, the
 same `hostile` flag that pins the drive). Each carries a copy of Weapon 1,
@@ -754,6 +755,28 @@ are drawn inside the screen root but `measureInWindow` reports window
 coordinates; the two only agree while the root sits at the window's top-left
 corner. The author saw the player's bolt start from the wrong place with no
 other ship present — not reproducible here, and this was the likeliest cause.
+
+**In combat both ships drift up and down, and line up before every shot**
+(`components/space/useDrift.ts`, the author's request). Each rises and falls
+on its own slow course, `DRIFT` (24pt) either side of its resting line; before
+a bolt leaves, the shooter glides level with the other ship's centre
+(`lineUp`, `ALIGN_MS` 320ms) and both hold that line until the bolt has
+landed (`HOLD_MS`), then wander off again. A second shot during a hold fires
+along the same line. The ships are sized with `DRIFT` of room kept above and
+below whenever a pair is on screen (`artScaleFor`).
+
+**Heights are decided in JavaScript, not read off the screen.** Each ship's
+next height is chosen ahead and kept in a ref; Reanimated only carries the
+drawing there, and only the drawing *inside* each measured box moves. So a
+shot is aimed from the resting box plus the known shared height — measuring a
+moving view is not the same on web and phones — and the line-up is timed by a
+timer, not by the animation ending. Explosions are placed at the drifted
+height too. Drifting runs only in combat, with the ship alive and Reduce
+Motion off; outside it `lineUp` fires at once from the resting line, and when
+a fight ends the ships settle back after `EXPLOSION_MS`. **None of the motion
+can be seen in headless** — there the ships are drawn at rest while shots are
+aimed at the drifted height, so a bolt looks off-centre in a capture. That is
+the capture, not the game; the hits themselves still land on the timer.
 
 **Two modes, explorer and combat** (`modeOf(run)`, shown top right by
 `components/ModeBadge.tsx`, with the dev hit moved down a line under it).

@@ -23,6 +23,7 @@ import {
   artScaleFor,
 } from '@/components/space/layout';
 import { useCombat } from '@/components/space/useCombat';
+import { useDrift } from '@/components/space/useDrift';
 import { useLiveRun } from '@/components/space/useLiveRun';
 import { useRunClock } from '@/components/space/useRunClock';
 import { ENCOUNTER_STYLE } from '@/lib/encounters';
@@ -62,7 +63,10 @@ export default function RunScreen() {
   const live = useLiveRun();
   const { run, runRef, commit, apply } = live;
   useRunClock(live);
-  const combat = useCombat(live, width);
+  // In a fight both ships drift up and down, and line up before each shot.
+  const drifting = animate && !!run && modeOf(run) === 'combat' && !isWrecked(run.hull);
+  const drift = useDrift(drifting, run?.position ?? null);
+  const combat = useCombat(live, drift, width);
 
   // The ship panel is only on screen while the player is looking at it.
   const [shipOpen, setShipOpen] = useState(false);
@@ -183,6 +187,7 @@ export default function RunScreen() {
           animate={animate}
           shipRef={combat.shipRef}
           foeRef={combat.foeRef}
+          drift={drift}
         />
         <Controls
           run={run}

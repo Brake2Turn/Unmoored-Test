@@ -8,6 +8,7 @@ import { MOUNTS } from '@/components/ships/ShipArt';
 import { SYSTEMS_SPAN } from '@/components/ships/ShipSystems';
 import { foeMuzzle } from '@/components/ships/EncounterShip';
 import { sidewaysPoint } from '@/components/ships/Sideways';
+import type { Drift } from '@/components/space/useDrift';
 import type { LiveRun } from '@/components/space/useLiveRun';
 import { weaponTip } from '@/components/WeaponArt';
 import {
@@ -53,7 +54,7 @@ type Box = { x: number; y: number; width: number; height: number };
  * The screen hands the three views to measure — itself, the player's ship and
  * the other one — through the refs this returns.
  */
-export function useCombat({ run, runRef, commit }: LiveRun, width: number) {
+export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width: number) {
   const haptics = useHaptics();
   const rootRef = useRef<View>(null);
   const shipRef = useRef<View>(null);
@@ -100,9 +101,14 @@ export function useCombat({ run, runRef, commit }: LiveRun, width: number) {
     const node = current.position;
     const weapon = current.mounted;
     const mount = MOUNTS[current.shipId] ?? MOUNTS.drifter;
-    const hits = foeHull(current, node) > 0;
-    void Promise.all([measureHere(shipRef.current), measureHere(foeRef.current)]).then(([box, foe]) => {
-      if (!box) return;
+    const aim = async (dy: number) => {
+      const now = runRef.current;
+      const hits = !!now && now.position === node && foeHull(now, node) > 0;
+      // The boxes measured are the ships' resting places; `dy` is how far
+      // off that line both are drawn now.
+      const [rest, foe] = await Promise.all([measureHere(shipRef.current), measureHere(foeRef.current)]);
+      if (!rest) return;
+      const box = { ...rest, y: rest.y + dy };
       // The systems box is the ship's 200×260 box grown about its centre and
       // then laid on its side, so its on-screen *height* is the upright width.
       // A point in ship units is its offset from the centre, turned.
@@ -115,8 +121,10 @@ export function useCombat({ run, runRef, commit }: LiveRun, width: number) {
         ...current,
         { id: Date.now() + Math.random(), by: 'player', node, from, to, hits: hits && !!foe },
       ]);
-    });
-  }, [commit, haptics, measureHere, runRef, width]);
+    };
+    // Come level with the other ship's centre first, then let go.
+    drift.lineUp('player', (dy) => void aim(dy));
+  }, [commit, drift, haptics, measureHere, runRef, width]);
 
   /**
    * A hostile ship's weapon has charged: it fires at the player. Nothing but
@@ -134,10 +142,13 @@ export function useCombat({ run, runRef, commit }: LiveRun, width: number) {
     commit(next, false);
 
     const node = current.position;
-    // Aim at the shield's rim while there is a shield to hit, else the hull.
-    const shielded = shieldLevel(current.shieldCharge) > 0;
-    void Promise.all([measureHere(foeRef.current), measureHere(shipRef.current)]).then(([foe, box]) => {
-      if (!foe || !box) return;
+    const aim = async (dy: number) => {
+      // Aim at the shield's rim while there is a shield to hit, else the hull.
+      const now = runRef.current;
+      const shielded = !!now && shieldLevel(now.shieldCharge) > 0;
+      const [rest, box] = await Promise.all([measureHere(foeRef.current), measureHere(shipRef.current)]);
+      if (!rest || !box) return;
+      const foe = { ...rest, y: rest.y + dy };
       // The other ship is on its side too; its on-screen height is its
       // upright width, 200 units across.
       const muzzle = foeMuzzle(encounterAt(current.map, node));
@@ -150,8 +161,9 @@ export function useCombat({ run, runRef, commit }: LiveRun, width: number) {
       const reach = (shielded ? 136 : 92) * playerScale;
       const to = { x: box.x + box.width / 2 + reach, y: from.y };
       setShots((shots) => [...shots, { id: Date.now() + Math.random(), by: 'foe', node, from, to, hits: true }]);
-    });
-  }, [commit, foeReady, measureHere, runRef]);
+    };
+    drift.lineUp('foe', (dy) => void aim(dy));
+  }, [commit, drift, foeReady, measureHere, runRef]);
 
   /**
    * A bolt arrives. The player's takes a plate off the other ship; a hostile
@@ -204,28 +216,29 @@ export function useCombat({ run, runRef, commit }: LiveRun, width: number) {
       }
     }
 
-    const blowUp = (view: View | null) =>
+    // Blown up where the ship was drawn, off its resting line by its drift.
+    const blowUp = (view: View | null, dy: number) =>
       void measureHere(view).then((box) => {
         if (!box) return;
         const id = Date.now() + Math.random();
-        const at = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+        const at = { x: box.x + box.width / 2, y: box.y + box.height / 2 + dy };
         const size = Math.max(box.width, box.height) * 0.8;
         setBlasts((current) => [...current, { id, at, size }]);
         setTimeout(() => setBlasts((current) => current.filter((b) => b.id !== id)), EXPLOSION_MS + 50);
       });
 
     if (before.hull > 0 && now.hull <= 0) {
-      blowUp(shipRef.current);
+      blowUp(shipRef.current, drift.offset('player'));
       // Game over comes up once the explosion has had its moment.
       setTimeout(() => setOver(true), EXPLOSION_MS + 150);
     }
     if (before.position === now.position && !before.foeGone && now.foeGone) {
-      blowUp(foeRef.current);
+      blowUp(foeRef.current, drift.offset('foe'));
       // Once it has finished blowing up, the player's ship takes the middle.
       const node = now.position;
       setTimeout(() => setCleared(node), EXPLOSION_MS);
     }
-  }, [measureHere, run]);
+  }, [drift, measureHere, run]);
 
   return { rootRef, shipRef, foeRef, shots, blasts, over, setOver, cleared, onFire, onImpact, onShotDone };
 }

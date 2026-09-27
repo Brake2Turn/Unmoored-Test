@@ -1,5 +1,6 @@
 import React, { type RefObject } from 'react';
 import { StyleSheet, View } from 'react-native';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 
 import { FadeInView } from '@/components/FadeInView';
 import { FOE_STATUS_HEIGHT, FoeStatus } from '@/components/FoeStatus';
@@ -13,6 +14,7 @@ import {
   SHIP_HEIGHT,
   SHIP_WIDTH,
 } from '@/components/space/layout';
+import type { Drift } from '@/components/space/useDrift';
 import { ENCOUNTER_STYLE } from '@/lib/encounters';
 import { shieldLevel } from '@/lib/energy';
 import { isWrecked } from '@/lib/hull';
@@ -29,6 +31,10 @@ import { shipById } from '@/lib/ships';
  * place the explosion on. `laidOut` is what the row is sized for: the screen
  * turns it to `empty` once the explosion is over, which lets the player's
  * ship take the middle.
+ *
+ * In combat both drift up and down (`useDrift`). The drift moves only the
+ * drawing inside each measured box, so the boxes stay where the layout put
+ * them and a shot is aimed from those plus the drift's known height.
  */
 export function Arena({
   run,
@@ -37,6 +43,7 @@ export function Arena({
   animate,
   shipRef,
   foeRef,
+  drift,
 }: {
   run: RunState | null;
   laidOut: Encounter;
@@ -44,7 +51,10 @@ export function Arena({
   animate: boolean;
   shipRef: RefObject<View | null>;
   foeRef: RefObject<View | null>;
+  drift: Drift;
 }) {
+  const playerDrift = useAnimatedStyle(() => ({ transform: [{ translateY: drift.player.value }] }));
+  const foeDrift = useAnimatedStyle(() => ({ transform: [{ translateY: drift.foe.value }] }));
   const ship = shipById(run?.shipId);
   const encounter = run ? encounterAt(run.map, run.position) : 'empty';
   const present = run ? shipHere(run) : 'empty';
@@ -57,21 +67,23 @@ export function Arena({
           longer exhaust for engines. */}
       <FadeInView enabled={animate} duration={700}>
         <View ref={shipRef} collapsable={false} style={wrecked ? styles.gone : null}>
-          <Sideways
-            width={SHIP_WIDTH * artScale * SYSTEMS_SPAN}
-            height={SHIP_HEIGHT * artScale * SYSTEMS_SPAN}
-          >
-            <ShipSystems
-              shipId={ship.id}
-              width={SHIP_WIDTH * artScale}
-              height={SHIP_HEIGHT * artScale}
-              shields={shieldLevel(run?.shieldCharge ?? 0)}
-              shieldHits={run?.shieldHits ?? 0}
-              engines={run?.energy.engines ?? 0}
-              weapon={run?.mounted ?? null}
-              animate={animate}
-            />
-          </Sideways>
+          <Animated.View style={playerDrift}>
+            <Sideways
+              width={SHIP_WIDTH * artScale * SYSTEMS_SPAN}
+              height={SHIP_HEIGHT * artScale * SYSTEMS_SPAN}
+            >
+              <ShipSystems
+                shipId={ship.id}
+                width={SHIP_WIDTH * artScale}
+                height={SHIP_HEIGHT * artScale}
+                shields={shieldLevel(run?.shieldCharge ?? 0)}
+                shieldHits={run?.shieldHits ?? 0}
+                engines={run?.energy.engines ?? 0}
+                weapon={run?.mounted ?? null}
+                animate={animate}
+              />
+            </Sideways>
+          </Animated.View>
         </View>
       </FadeInView>
 
@@ -80,7 +92,7 @@ export function Arena({
           <View style={styles.foeColumn}>
             {/* Who is out here and their hull, over their own ship. Gone with
                 it once it is destroyed, but its room is kept. */}
-            <View style={[styles.foeStatus, present === 'empty' && styles.gone]}>
+            <Animated.View style={[styles.foeStatus, present === 'empty' && styles.gone, foeDrift]}>
               {run ? (
                 <FoeStatus
                   name={foeName(run) ?? waiting.label}
@@ -91,16 +103,18 @@ export function Arena({
               ) : (
                 <View style={{ height: FOE_STATUS_HEIGHT }} />
               )}
-            </View>
+            </Animated.View>
             <View ref={foeRef} collapsable={false} style={present === 'empty' ? styles.gone : null}>
-              <Sideways width={waiting.width * artScale} height={waiting.height * artScale}>
-                <EncounterShip
-                  encounter={encounter}
-                  angry={!!run && foeLooksHostile(run)}
-                  width={waiting.width * artScale}
-                  height={waiting.height * artScale}
-                />
-              </Sideways>
+              <Animated.View style={foeDrift}>
+                <Sideways width={waiting.width * artScale} height={waiting.height * artScale}>
+                  <EncounterShip
+                    encounter={encounter}
+                    angry={!!run && foeLooksHostile(run)}
+                    width={waiting.width * artScale}
+                    height={waiting.height * artScale}
+                  />
+                </Sideways>
+              </Animated.View>
             </View>
           </View>
         </FadeInView>

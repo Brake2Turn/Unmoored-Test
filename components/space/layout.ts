@@ -2,6 +2,7 @@ import { FOE_STATUS_HEIGHT } from '@/components/FoeStatus';
 import { REACTOR_PANEL_HEIGHT } from '@/components/ReactorPanel';
 import { STATUS_BAR_HEIGHT } from '@/components/StatusBar';
 import { SYSTEMS_SPAN } from '@/components/ships/ShipSystems';
+import { DRIFT } from '@/components/space/useDrift';
 
 /**
  * The space screen's measurements, in one place, because several of its
@@ -99,7 +100,9 @@ export function artScaleFor({
 }): number {
   const chrome =
     insetTop + HUD_TOP + insetBottom + HUD_BOTTOM + STATUS_BAR_HEIGHT + CONTROL_ROW_HEIGHT + STACK_GAP * 3;
-  const down = height - chrome;
+  // With another ship here a fight may start, and in a fight both drift up
+  // and down, so room is kept for that above and below.
+  const down = height - chrome - (other ? DRIFT * 2 : 0);
   const across = width - ARENA_MARGIN * 2 - (other ? ARENA_GAP : 0);
   return Math.max(
     0.4,
