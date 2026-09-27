@@ -3,17 +3,16 @@ import { StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
   Extrapolation,
-  cancelAnimation,
   interpolate,
   useAnimatedStyle,
   useSharedValue,
-  withRepeat,
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
 import Svg, { Defs, Ellipse, Path, RadialGradient, Stop } from 'react-native-svg';
 
-import { SHIP_BOX_H, SHIP_BOX_W, ShipArt, enginesFor, type Engine } from '@/components/ships/ShipArt';
+import { EngineGlow, EngineGlowDefs, type Engine } from '@/components/ships/EngineArt';
+import { SHIP_BOX_H, SHIP_BOX_W, ShipArt, enginesFor } from '@/components/ships/ShipArt';
 import { useSvgIds } from '@/components/svgIds';
 import { SUBSYSTEM_STYLE } from '@/lib/subsystems';
 
@@ -34,18 +33,18 @@ type Props = {
    * break is told apart from the player pulling the power.
    */
   shieldHits: number;
-  /** Bars in engines: 0 means cold engines, and each one lengthens the flame. */
+  /** Bars in the Wren Drive: 0 means a cold engine, and each one lights it brighter. */
   engines: number;
   /** The weapon on the hardpoint, or null when it is in the hold. */
   weapon?: string | null;
-  /** False holds the flame at a steady length instead of pulsing. */
+  /** False skips the shield's break effects. */
   animate?: boolean;
 };
 
 /**
  * How much bigger the systems box is than the ship art inside it.
  *
- * The shield stands off the hull and the exhaust runs past the tail, so both
+ * The shield stands off the hull and the engine's glow runs past the tail, so both
  * need room outside the ship's own 200×260 box. The helm has to know this
  * number to lay itself out, so it is exported rather than buried.
  */
@@ -139,27 +138,6 @@ const RIB_PATH = (() => {
   }
   return parts.join(' ');
 })();
-
-/** Exhaust length per bar, in ship units. Four bars runs to 60 of the 260. */
-const FLAME_BASE = 16;
-const FLAME_PER_LEVEL = 11;
-
-/**
- * Each bar does more than lengthen the plume — it burns harder.
- *
- * Length alone made four bars read as "longer", not "hotter". These ramp the
- * whole flame together: the plume widens a little, the plume and its core both
- * brighten, a heat haze builds around it, and the pulse itself gets deeper.
- */
-const FLAME_OPACITY = (level: number) => 0.6 + 0.1 * level;
-const PLUME_WIDTH = (level: number) => 0.98 + 0.05 * level;
-const PLUME_FILL = (level: number) => 0.36 + 0.1 * level;
-const CORE_FILL = (level: number) => 0.3 + 0.14 * level;
-const HAZE_FILL = (level: number) => 0.04 + 0.05 * level;
-
-/** How far the flame stretches at the top of its pulse. */
-const FLICKER_SCALE = (level: number) => 1.1 + 0.025 * level;
-const FLICKER_MS = 420;
 
 /**
  * Geometry for the two things a shield does when it is hit.
@@ -263,9 +241,9 @@ function round(n: number): number {
  *
  * Both are read straight off the reactor allocation, and both use their
  * subsystem's colour from `SUBSYSTEM_STYLE` — a cyan bubble is the shields
- * row, an orange flame is the engines row. Moving a bar in the panel is meant
- * to be visible on the ship without reading a number: the shield holds its
- * shape and grows brighter, the exhaust grows longer.
+ * row, an orange engine is the Wren Drive row. Moving a bar in the panel is
+ * meant to be visible on the ship without reading a number: the shield holds
+ * its shape and grows brighter, and so does the engine on the tail.
  *
  * Only the helm uses this. The ship cards on the select screen show a bare
  * hull, because a ship you have not launched has no reactor running.
@@ -288,15 +266,9 @@ export function ShipSystems({
       style={[styles.box, { width: width * SYSTEMS_SPAN, height: height * SYSTEMS_SPAN }]}
       pointerEvents="none"
     >
-      <Thruster
-        nozzles={nozzles}
-        level={engines}
-        width={width * SYSTEMS_SPAN}
-        height={height * SYSTEMS_SPAN}
-        animate={animate}
-      />
+      <EngineLight nozzles={nozzles} level={engines} width={width * SYSTEMS_SPAN} height={height * SYSTEMS_SPAN} />
 
-      <ShipArt shipId={shipId} width={width} height={height} weapon={weapon} />
+      <ShipArt shipId={shipId} width={width} height={height} weapon={weapon} engines={engines} />
 
       <Shield level={shields} width={width * SYSTEMS_SPAN} height={height * SYSTEMS_SPAN} />
 
@@ -704,110 +676,32 @@ function ShieldDissipate({ width, height }: { width: number; height: number }) {
 }
 
 /**
- * The exhaust, drawn under the hull so it reads as coming out of the tail.
- *
- * The pulse is a `scaleY` anchored on the nozzle rather than on the middle of
- * the box, so the flame stretches away from the ship instead of sliding up
- * into it. Every hull's engines share one `y`, so one anchor does for all of
- * them, including the Bulwark's pair.
+ * The light out of the back of the engines, drawn under the hull so what shows
+ * is the glow spilling past the tail. It is drawn here rather than in
+ * `ShipArt` because it reaches past the ship's own box, and this one is
+ * bigger. The engine blocks themselves, and their lit mouths, are the art's.
  */
-function Thruster({
+function EngineLight({
   nozzles,
   level,
   width,
   height,
-  animate,
 }: {
   nozzles: Engine[];
   level: number;
   width: number;
   height: number;
-  animate: boolean;
 }) {
-  const flicker = useSharedValue(1);
-  const lit = level > 0;
-
-  useEffect(() => {
-    if (!lit || !animate) {
-      cancelAnimation(flicker);
-      flicker.value = 1;
-      return;
-    }
-
-    flicker.value = 1;
-    flicker.value = withRepeat(
-      withTiming(FLICKER_SCALE(level), {
-        duration: FLICKER_MS,
-        easing: Easing.inOut(Easing.quad),
-      }),
-      -1,
-      true,
-    );
-
-    return () => cancelAnimation(flicker);
-  }, [animate, flicker, level, lit]);
-
-  // Where the nozzle sits inside this box, so the stretch can be pinned to it.
-  const scale = Math.min(width / VIEW_W, height / VIEW_H);
-  const nozzleY = (height - VIEW_H * scale) / 2 + (nozzles[0].y - VIEW_Y) * scale;
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scaleY: flicker.value }],
-    // Brightest at full stretch, which is what makes it read as burning.
-    opacity: FLAME_OPACITY(level) + (flicker.value - 1) * 1.4,
-  }));
-
-  if (!lit) return null;
-
-  const tint = SUBSYSTEM_STYLE.engines.accent;
-  const length = FLAME_BASE + FLAME_PER_LEVEL * level;
-
+  const id = useSvgIds();
+  if (level <= 0) return null;
   return (
-    <Animated.View
-      style={[
-        StyleSheet.absoluteFill,
-        { transformOrigin: ['50%', nozzleY, 0] },
-        animatedStyle,
-      ]}
-      pointerEvents="none"
-    >
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
       <Svg width={width} height={height} viewBox={VIEW_BOX}>
-        {nozzles.map((engine, i) => (
-          <React.Fragment key={i}>
-            {/* Heat haze: wider and shorter than the plume, barely there at one
-                bar and a real glow at four. */}
-            <Path
-              d={flamePath(engine.x, engine.y, engine.width * 2, length * 0.86)}
-              fill={tint}
-              fillOpacity={HAZE_FILL(level)}
-            />
-            <Path
-              d={flamePath(engine.x, engine.y, engine.width * PLUME_WIDTH(level), length)}
-              fill={tint}
-              fillOpacity={PLUME_FILL(level)}
-            />
-            {/* The hot core, shorter and narrower than the plume around it. */}
-            <Path
-              d={flamePath(engine.x, engine.y, engine.width * 0.5, length * 0.62)}
-              fill="#FFFFFF"
-              fillOpacity={CORE_FILL(level)}
-            />
-          </React.Fragment>
-        ))}
+        <EngineGlowDefs id={id('engine-light')} />
+        <EngineGlow engines={nozzles} aft={1} level={level} glowId={id('engine-light')} />
       </Svg>
-    </Animated.View>
+    </View>
   );
-}
-
-/** A plume: full width at the nozzle, tapering to a point at its tip. */
-function flamePath(x: number, y: number, width: number, length: number): string {
-  const half = width / 2;
-  return [
-    `M ${x - half} ${y}`,
-    `C ${x - half} ${y + length * 0.5}, ${x - half * 0.5} ${y + length * 0.78}, ${x} ${y + length}`,
-    `C ${x + half * 0.5} ${y + length * 0.78}, ${x + half} ${y + length * 0.5}, ${x + half} ${y}`,
-    'Z',
-  ].join(' ');
 }
 
 const styles = StyleSheet.create({

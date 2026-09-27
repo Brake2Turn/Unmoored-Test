@@ -62,10 +62,12 @@ energy in their row; the energy in the shields sets how many layers they can
 build up to. Shields soak hits until they are down; then the hull loses
 plates, and at zero it is Game Over.
 
-In a fight both ships sway up and down — harder the more bars are in their
-**Wren Drive** — and each shot waits a moment while the shooter lines up with
-the other ship. Every Wren Drive bar makes shots at that ship 10% likelier to
-miss: a miss flies just past, and MISS pops up over the ship.
+Every ship has an engine on its tail that burns brighter the more bars are in
+its **Wren Drive**, and goes dark with none. A powered ship bobs gently up and
+down, and each shot waits a moment while the shooter lines up with the other
+ship. Every Wren Drive bar makes shots at that ship 10% likelier to miss: on a
+miss the bolt flies straight on, the ship dodges out of its way, and MISS pops
+up over it.
 
 ## Project layout
 
@@ -79,7 +81,7 @@ app/                   The screens — one file each
   encounters.tsx       Dev Mode's encounter tester
 components/            Everything drawn: panels, buttons, effects
   space/               The space screen's pieces: the ships, the controls, combat
-  ships/               The ships, their shields and exhaust
+  ships/               The ships, their shields and engines
 lib/                   The rules, with no drawing in them
   run.ts               The rules of a run: jumping, energy, firing, hits
   runStore.ts          Saving and loading the run in progress

@@ -1,6 +1,7 @@
 import React from 'react';
 import Svg, { Defs, Ellipse, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 
+import { EngineBlocks, EngineGlowDefs, type Engine } from '@/components/ships/EngineArt';
 import { useSvgIds } from '@/components/svgIds';
 import { MountedWeapon } from '@/components/WeaponArt';
 import { palette } from '@/lib/theme';
@@ -16,6 +17,11 @@ type Props = {
    * bare hull — which is what a ship looks like once its weapon is in the hold.
    */
   weapon?: string | null;
+  /**
+   * Bars in the Wren Drive, which light the engine on the tail. Absent or 0
+   * draws it cold — which is every ship that is not flying.
+   */
+  engines?: number;
 };
 
 /** Every edge and light on a locked ship drops to this. */
@@ -29,16 +35,16 @@ export const HULL_DEEP = '#0B0F1E';
 export const SHIP_BOX_W = 200;
 export const SHIP_BOX_H = 260;
 
-/** Where a ship's exhaust leaves it, in the same 200×260 box as the art. */
-export type Engine = { x: number; y: number; width: number };
+export type { Engine };
 
 /**
- * The engine bar on each hull, transcribed from the art above.
+ * The engine on each hull's tail: the middle of its mouth and how wide it is,
+ * in the same 200×260 box as the art. `EngineBlocks` draws the block there and
+ * `EngineGlow` the light out of the back of it.
  *
- * It lives here rather than with the thruster that draws the flame, because
- * these numbers are read off the very paths in this file — move a ship's
- * tail and the nozzle is right there to move with it. Every ship's engines
- * share one `y`, which is what lets a thruster pulse from a single anchor.
+ * It lives here rather than with the drawing of the engine, because these
+ * numbers are read off the very paths in this file — move a ship's tail and
+ * the engine is right there to move with it.
  */
 export const ENGINES: Record<string, Engine[]> = {
   drifter: [{ x: 100, y: 232, width: 28 }],
@@ -80,6 +86,7 @@ export const ShipArt = React.memo(function ShipArt({
   height,
   locked = false,
   weapon = null,
+  engines = 0,
 }: Props) {
   const tint = locked ? LOCKED_TINT : palette.player;
   const Art = ART[shipId] ?? Drifter;
@@ -98,7 +105,16 @@ export const ShipArt = React.memo(function ShipArt({
           <Stop offset="1" stopColor={HULL_DEEP} />
         </LinearGradient>
       </Defs>
+      <EngineGlowDefs id={id('engine-glow')} />
       <Art {...paint} />
+      <EngineBlocks
+        engines={enginesFor(shipId)}
+        aft={1}
+        level={locked ? 0 : engines}
+        line={tint}
+        plate={paint.plate}
+        glowId={id('engine-glow')}
+      />
       {weapon ? (
         <MountedWeapon weaponId={weapon} x={mount.x} y={mount.y} line={tint} fill={paint.plate} />
       ) : null}
@@ -131,7 +147,6 @@ function Drifter({ line, plate, glass }: Paint) {
         strokeLinejoin="round"
       />
       <Path d="M78 146 L100 196 L122 146" fill="none" stroke={line} strokeWidth={2} strokeOpacity={0.5} />
-      <Path d="M86 232 L114 232" stroke={line} strokeWidth={4} strokeLinecap="round" opacity={0.9} />
     </>
   );
 }
@@ -162,7 +177,6 @@ function Lance({ line, plate, glass }: Paint) {
         strokeLinejoin="round"
       />
       <Ellipse cx={100} cy={86} rx={13} ry={26} fill={glass} stroke={line} strokeWidth={1.5} />
-      <Path d="M92 210 L108 210" stroke={line} strokeWidth={5} strokeLinecap="round" />
     </>
   );
 }
@@ -189,7 +203,6 @@ function Bulwark({ line, plate, glass }: Paint) {
         strokeWidth={1.5}
         strokeOpacity={0.35}
       />
-      <Path d="M74 216 L94 216 M106 216 L126 216" stroke={line} strokeWidth={5} strokeLinecap="round" opacity={0.9} />
     </>
   );
 }

@@ -4,6 +4,7 @@ import Svg, { Defs, Ellipse, G, LinearGradient, Path, Rect, Stop } from 'react-n
 import { useSvgIds } from '@/components/svgIds';
 import { ENCOUNTER_STYLE } from '@/lib/encounters';
 import { palette } from '@/lib/theme';
+import { EngineBlocks, EngineGlow, EngineGlowDefs, type Engine } from '@/components/ships/EngineArt';
 import { HULL, HULL_DEEP } from '@/components/ships/ShipArt';
 import { WeaponShape, weaponTip } from '@/components/WeaponArt';
 import type { Encounter } from '@/lib/sectorMap';
@@ -17,6 +18,8 @@ type Props = {
    * back. Its silhouette stays its own — only its colour and its gun change.
    */
   angry?: boolean;
+  /** Bars in its Wren Drive, which light the engines on its tail. Absent draws them cold. */
+  engines?: number;
 };
 
 /**
@@ -33,6 +36,7 @@ export const EncounterShip = React.memo(function EncounterShip({
   width,
   height,
   angry = false,
+  engines = 0,
 }: Props) {
   const id = useSvgIds();
   if (encounter === 'empty') return null;
@@ -45,6 +49,8 @@ export const EncounterShip = React.memo(function EncounterShip({
   const mount = raider ? SHRIKE_MOUNT : MERCHANT_MOUNT;
   const plate = `url(#${id('enc-plate')})`;
   const glass = `url(#${id('enc-glass')})`;
+  const tail = raider ? SHRIKE_ENGINES : MERCHANT_ENGINES;
+  const glowId = id('enc-engine-glow');
 
   return (
     <Svg width={width} height={height} viewBox="0 0 200 260">
@@ -58,11 +64,15 @@ export const EncounterShip = React.memo(function EncounterShip({
           <Stop offset="1" stopColor={hostile ? HOSTILE_HULL_DEEP : HULL_DEEP} />
         </LinearGradient>
       </Defs>
+      <EngineGlowDefs id={glowId} />
+      {/* Under the hull, so what shows is the light spilling past the tail. */}
+      <EngineGlow engines={tail} aft={-1} level={engines} glowId={glowId} />
       {raider ? (
         <Shrike accent={accent} plate={plate} glass={glass} />
       ) : (
         <Merchant accent={accent} plate={plate} glass={glass} />
       )}
+      <EngineBlocks engines={tail} aft={-1} level={engines} line={accent} plate={plate} glowId={glowId} />
       {hostile ? (
         // The red ships' gun, turned round to point at the player.
         <G transform={`translate(${mount.x} ${mount.y}) rotate(180)`}>
@@ -87,6 +97,20 @@ export const FOE_WEAPON = 'weapon1';
  */
 const SHRIKE_MOUNT = { x: 100, y: 200 };
 const MERCHANT_MOUNT = { x: 100, y: 224 };
+
+/**
+ * The engines on each silhouette's tail — the top of the drawing, since both
+ * are drawn nose-down. The Shrike carries a pair either side of its spine; the
+ * merchant a pair across its blunt stern.
+ */
+const SHRIKE_ENGINES: Engine[] = [
+  { x: 90, y: 50, width: 11 },
+  { x: 110, y: 50, width: 11 },
+];
+const MERCHANT_ENGINES: Engine[] = [
+  { x: 86, y: 54, width: 18 },
+  { x: 114, y: 54, width: 18 },
+];
 
 /**
  * Where a hostile ship's bolt leaves, in its 200×260 box: the weapon's tip,
@@ -136,13 +160,6 @@ function Shrike({ accent, plate, glass }: { accent: string; plate: string; glass
         strokeLinejoin="round"
       />
       <Ellipse cx={100} cy={116} rx={10} ry={26} fill={glass} stroke={accent} strokeWidth={1.5} />
-      <Path
-        d="M86 50 L97 50 M103 50 L114 50"
-        stroke={accent}
-        strokeWidth={5}
-        strokeLinecap="round"
-        opacity={0.9}
-      />
     </>
   );
 }
@@ -169,13 +186,6 @@ function Merchant({ accent, plate, glass }: { accent: string; plate: string; gla
         stroke={accent}
         strokeWidth={1.5}
         strokeLinejoin="round"
-      />
-      <Path
-        d="M76 54 L96 54 M104 54 L124 54"
-        stroke={accent}
-        strokeWidth={4}
-        strokeLinecap="round"
-        opacity={0.85}
       />
     </>
   );

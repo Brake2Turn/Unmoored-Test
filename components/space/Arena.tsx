@@ -18,7 +18,7 @@ import type { Drift } from '@/components/space/useDrift';
 import { ENCOUNTER_STYLE } from '@/lib/encounters';
 import { shieldLevel } from '@/lib/energy';
 import { isWrecked } from '@/lib/hull';
-import { foeHull, foeHullMax, foeLooksHostile, foeName, shipHere, type RunState } from '@/lib/run';
+import { foeHull, foeHullMax, foeLooksHostile, foeName, shipHere, wrenBars, type RunState } from '@/lib/run';
 import { encounterAt, type Encounter } from '@/lib/sectorMap';
 import { shipById } from '@/lib/ships';
 
@@ -32,7 +32,7 @@ import { shipById } from '@/lib/ships';
  * turns it to `empty` once the explosion is over, which lets the player's
  * ship take the middle.
  *
- * In combat both drift up and down (`useDrift`). The drift moves only the
+ * With power in its Wren Drive a ship bobs up and down (`useDrift`). The drift moves only the
  * drawing inside each measured box, so the boxes stay where the layout put
  * them and a shot is aimed from those plus the drift's known height.
  */
@@ -64,7 +64,7 @@ export function Arena({
   return (
     <View style={styles.arena}>
       {/* The reactor allocation, drawn on the ship: a bubble for shields, a
-          longer exhaust for engines. */}
+          brighter engine for the Wren Drive. */}
       <FadeInView enabled={animate} duration={700}>
         <View ref={shipRef} collapsable={false} style={wrecked ? styles.gone : null}>
           <Animated.View style={playerDrift}>
@@ -110,6 +110,7 @@ export function Arena({
                   <EncounterShip
                     encounter={encounter}
                     angry={!!run && foeLooksHostile(run)}
+                    engines={run ? wrenBars(run, 'foe') : 0}
                     width={waiting.width * artScale}
                     height={waiting.height * artScale}
                   />

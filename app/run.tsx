@@ -75,8 +75,9 @@ export default function RunScreen() {
   const live = useLiveRun();
   const { run, runRef, commit, apply } = live;
   useRunClock(live);
-  // In a fight both ships drift up and down, and line up before each shot.
-  const drifting = animate && !!run && modeOf(run) === 'combat' && !isWrecked(run.hull);
+  // A ship with power in its Wren Drive bobs gently, and both line up before
+  // each shot.
+  const drifting = animate && !!run && !isWrecked(run.hull);
   const drift = useDrift(drifting, run?.position ?? null, {
     player: run ? wrenBars(run, 'player') : 0,
     foe: run ? wrenBars(run, 'foe') : 0,

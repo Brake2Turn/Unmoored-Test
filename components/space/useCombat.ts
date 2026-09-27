@@ -8,7 +8,7 @@ import { MOUNTS } from '@/components/ships/ShipArt';
 import { SYSTEMS_SPAN } from '@/components/ships/ShipSystems';
 import { foeMuzzle } from '@/components/ships/EncounterShip';
 import { sidewaysPoint } from '@/components/ships/Sideways';
-import type { Drift } from '@/components/space/useDrift';
+import { DODGE_FOE, DODGE_HULL, DODGE_MARGIN, DODGE_SHIELD, type Drift } from '@/components/space/useDrift';
 import type { LiveRun } from '@/components/space/useLiveRun';
 import { weaponTip } from '@/components/WeaponArt';
 import {
@@ -46,20 +46,11 @@ export type Miss = { id: number; at: Point };
 export const MISS_MS = 900;
 
 /**
- * Where a missing bolt goes: from `from`, past the target's centre at `pass`
- * by `clear` points above or below it (whichever `roll` picks), and on off the
- * edge of the screen at `edgeX`. Returns the far end, and where the bolt is
- * as it goes by, for the MISS pop-up.
+ * When a bolt flying from `from` to `to` in one flight passes `x`: how far
+ * into its flight, for the MISS pop-up.
  */
-function pastTarget(from: Point, pass: Point, clear: number, edgeX: number, roll: number) {
-  const side = roll < 0.5 ? -1 : 1;
-  const by = { x: pass.x, y: pass.y + side * clear };
-  const slope = (by.y - from.y) / (by.x - from.x || 1);
-  const to = { x: edgeX, y: from.y + slope * (edgeX - from.x) };
-  // The bolt crosses the whole distance in one flight, so it passes the
-  // target this far into it.
-  const passesAt = FLIGHT_MS * Math.abs((by.x - from.x) / (to.x - from.x || 1));
-  return { to, by, passesAt };
+function passesAt(from: Point, to: Point, x: number): number {
+  return FLIGHT_MS * Math.max(0, Math.min(1, Math.abs((x - from.x) / (to.x - from.x || 1))));
 }
 
 type Box = { x: number; y: number; width: number; height: number };
@@ -152,20 +143,22 @@ export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width:
       const scale = box.height / SYSTEMS_SPAN / 200;
       const tip = weaponTip(weapon);
       const from = sidewaysPoint(box, (mount.x + tip.x - 100) * scale, (mount.y + tip.y - 130) * scale);
-      // Straight across to the other ship's middle; or, on a miss, just over
-      // or under its hull and on off the right edge; or, with nobody there,
-      // straight off the edge.
-      let to = { x: width + 40, y: from.y };
+      // Straight across to the other ship's middle; or, on a miss or with
+      // nobody there, straight on off the right edge. The bolt's path never
+      // changes: on a miss the other ship dodges out of it.
       const hits = there && !!foe && !misses;
+      const to = foe && hits ? { x: foe.x + foe.width * 0.45, y: from.y } : { x: width + 40, y: from.y };
+      const launch = () =>
+        setShots((current) => [...current, { id: Date.now() + Math.random(), by: 'player', node, from, to, hits }]);
       if (foe && there && !hits) {
+        // Clear of its widest part — the wings, across its upright width.
+        const lead = drift.dodge('foe', foe.height * DODGE_FOE + DODGE_MARGIN);
         const pass = { x: foe.x + foe.width / 2, y: foe.y + dy + foe.height / 2 };
-        const past = pastTarget(from, pass, foe.height * 0.55, width + 40, Math.random());
-        to = past.to;
-        showMiss(pass, past.passesAt);
-      } else if (foe && hits) {
-        to = { x: foe.x + foe.width * 0.45, y: from.y };
+        showMiss(pass, lead + passesAt(from, to, pass.x));
+        setTimeout(launch, lead);
+      } else {
+        launch();
       }
-      setShots((current) => [...current, { id: Date.now() + Math.random(), by: 'player', node, from, to, hits }]);
     };
     // Come level with the other ship's centre first, then let go.
     drift.lineUp('player', (dy) => void aim(dy));
@@ -205,13 +198,18 @@ export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width:
       const playerScale = box.height / SYSTEMS_SPAN / 200;
       const reach = (shielded ? 136 : 92) * playerScale;
       // Rolled against the player's own Wren Drive: the more in it, the more
-      // often a shot goes by — just over or under the shield (or the hull,
-      // with no shield up) and on off the left edge.
+      // often the player's ship dodges — out of the bolt's line far enough to
+      // take the shield with it (or the hull, with no shield up) — and the
+      // bolt flies on off the left edge.
       if (now && shotMisses(now, 'player', Math.random())) {
+        const lead = drift.dodge('player', (shielded ? DODGE_SHIELD : DODGE_HULL) * playerScale + DODGE_MARGIN);
+        const to = { x: -40, y: from.y };
         const pass = { x: box.x + box.width / 2, y: box.y + dy + box.height / 2 };
-        const past = pastTarget(from, pass, (shielded ? 104 : 70) * playerScale, -40, Math.random());
-        showMiss(pass, past.passesAt);
-        setShots((shots) => [...shots, { id: Date.now() + Math.random(), by: 'foe', node, from, to: past.to, hits: false }]);
+        showMiss(pass, lead + passesAt(from, to, pass.x));
+        setTimeout(
+          () => setShots((shots) => [...shots, { id: Date.now() + Math.random(), by: 'foe', node, from, to, hits: false }]),
+          lead,
+        );
         return;
       }
       const to = { x: box.x + box.width / 2 + reach, y: from.y };

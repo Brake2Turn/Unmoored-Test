@@ -769,24 +769,36 @@ placeholders), and a destroyed ship has none. The author chose "shots *at*
 it miss" over "its own shots miss"; the Wren Drive costs nothing in aim.
 
 **A miss is rolled as the bolt leaves**, after the line-up, against the
-target's bars. A missing bolt flies at a slight slant just over or under the
-target — past the shield's rim for the player with shields up, past the hull
-otherwise — and on off the screen (`pastTarget` in `useCombat`; `LaserShot`
-tilts the bolt to its slant), and nothing is hit. **MISS** pops up over the
+target's bars. **The bolt's path never changes — the target dodges.** Every
+bolt flies dead level from the muzzle; on a miss it flies straight on off the
+screen, and the *target* jinks up or down out of its line (`drift.dodge`) and
+back, the author's request. It dodges far enough to clear its widest part —
+past the shield's side for the player with shields up (`DODGE_SHIELD`), past
+the hull's pods otherwise (`DODGE_HULL`), past the wingtips for the other ship
+(`DODGE_FOE`) — and always back across its resting line when it is off it, so
+it never strays further than that from rest. The bolt crosses the screen in
+200ms, too quickly to get out of the way of, so on a miss the target starts
+moving `DODGE_LEAD_MS` (90ms) *before* the bolt is let go; it reads as the
+target seeing the shot coming. A slanting miss that flew just over or under
+the target was the rule before. **MISS** pops up over the
 target as the bolt goes by (`components/MissPop.tsx`, up `MISS_MS`, first
 frame already whole). `verify:run` holds the percentages bar by bar and over
 twenty thousand rolls.
 
-**In combat both ships sway up and down, and line up before every shot**
-(`components/space/useDrift.ts`, the author's request). How hard is the
-Wren Drive: `DRIFT_PER_BAR` (8pt) either side of the resting line per bar,
-and quicker the more bars — **no bars, no sway**. Each ship sways on its own
-course, up to `DRIFT` (a full drive, 32pt); before
+**A ship with power in its Wren Drive bobs gently up and down, and both line
+up before every shot** (`components/space/useDrift.ts`, the author's request).
+The bob is the same whatever the bars — `SWAY` (10pt) either side of the
+resting line, one height to the next every `SWAY_MS` or so — and it runs in
+either mode, alone at a star too. **No bars, no bob.** It used to grow harder
+and quicker with every bar; the author had that taken out, and the bars now
+show in the engine's brightness instead (below). Before
 a bolt leaves, the shooter glides level with the other ship's centre
 (`lineUp`, `ALIGN_MS` 320ms) and both hold that line until the bolt has
 landed (`HOLD_MS`), then wander off again. A second shot during a hold fires
-along the same line. The ships are sized with `DRIFT` of room kept above and
-below whenever a pair is on screen (`artScaleFor`).
+along the same line. **The ships are sized with room kept for a dodge**
+above and below whenever a pair is on screen (`artScaleFor`): a dodge is
+about half a ship's width, which grows with the ships, so the room is solved
+for together with the scale rather than being a fixed number of points.
 
 **Heights are decided in JavaScript, not read off the screen.** Each ship's
 next height is chosen ahead and kept in a ref; Reanimated only carries the
@@ -794,9 +806,10 @@ drawing there, and only the drawing *inside* each measured box moves. So a
 shot is aimed from the resting box plus the known shared height — measuring a
 moving view is not the same on web and phones — and the line-up is timed by a
 timer, not by the animation ending. Explosions are placed at the drifted
-height too. Drifting runs only in combat, with the ship alive and Reduce
-Motion off; outside it `lineUp` fires at once from the resting line, and when
-a fight ends the ships settle back after `EXPLOSION_MS`. **None of the motion
+height too. Swaying runs while the player's ship is alive and Reduce Motion
+is off; otherwise `lineUp` fires at once from the resting line, and the ships
+settle back after `EXPLOSION_MS`. **A dodge happens even under Reduce
+Motion** — without it a missed bolt would visibly pass through the ship. **None of the motion
 can be seen in headless** — there the ships are drawn at rest while shots are
 aimed at the drifted height, so a bolt looks off-centre in a capture. That is
 the capture, not the game; the hits themselves still land on the timer.
@@ -951,13 +964,22 @@ saving went straight to the art — a boss no longer shrinks anything.
 
 Two of the three subsystems are drawn on the ship itself
 (`components/ships/ShipSystems.tsx`): shields as a bubble that holds one size
-and grows brighter with each bar, engines as an exhaust plume that lengthens
-with each bar. Both are invisible at zero and use their subsystem's colour from
-`SUBSYSTEM_STYLE`, so a cyan bubble is the shields row and an orange flame
-is the engines row — and a ship with no flame is a ship that cannot jump. Each
-bar does more to the exhaust than lengthen it: the plume widens, the plume and
-its white core both brighten, the heat haze around it builds and the pulse
-deepens, so four bars reads as hotter rather than merely longer. Weapons (bright
+and grows brighter with each bar, and the Wren Drive as **the engine on the
+tail** (`components/ships/EngineArt.tsx`). Both use their subsystem's colour
+from `SUBSYSTEM_STYLE`, so a cyan bubble is the shields row and an orange
+engine is the Wren Drive row.
+
+**Every ship has an engine block on its tail, and there is no flame** — the
+author's request; it was an exhaust plume that lengthened with each bar. The
+block is part of the art (`EngineBlocks`, drawn by `ShipArt` and
+`EncounterShip` at `ENGINES` / `SHRIKE_ENGINES` / `MERCHANT_ENGINES`), and its
+mouth is what shows the power: dead dark metal at zero bars — a depowered
+engine, and a ship that cannot jump — then orange, hotter and whiter with each
+bar. A glow comes out of the back and round the block (`EngineGlow`, under the
+hull; a fainter halo over it), brighter per bar and absent at zero. It is
+still: no pulse. The other ship's engines are lit by its own Wren Drive
+(`wrenBars(run, 'foe')`), and every ship not flying — ship select, the
+encounter tester — draws them cold. Weapons (bright
 red) is drawn as the weapon on the nose and the bolt it fires.
 
 The cells in the reactor rows animate between unlit and their subsystem's
@@ -983,15 +1005,14 @@ bare background exactly at every level, while the rim climbs with each bar.
 Two things there are worth keeping:
 
 - **The overlay boxes share the ship box's aspect ratio.** `ShipSystems` draws
-  the shield and the exhaust in `viewBox`es that are the art's 200×260 grown
+  the shield and the engine's glow in `viewBox`es that are the art's 200×260 grown
   about its centre by `SYSTEMS_SPAN`. Because the ratio is unchanged, both
-  overlays letterbox exactly as `ShipArt` does, and a nozzle written as y=232
-  lands on the engine bar with no arithmetic. Change the span and the ratio
+  overlays letterbox exactly as `ShipArt` does, and a glow written at y=232
+  lands on the engine block with no arithmetic. Change the span and the ratio
   must hold, or every overlay slides out of register.
-- **Nozzle positions are a table in `ShipArt.tsx`** (`ENGINES`), beside the
-  paths they were read off, so moving a ship's tail moves the flame with it.
-  Every hull's engines share one `y`, which is what lets the flame pulse from
-  a single `transformOrigin` — including the Bulwark's pair.
+- **Engine positions are a table in `ShipArt.tsx`** (`ENGINES`), beside the
+  paths they were read off, so moving a ship's tail moves the engine and its
+  glow with it — including the Bulwark's pair.
 
 **No ship has a colour of its own, and neither does the player.**
 `palette.player` — plain white — draws every hull, the card it sits in, its
@@ -1009,7 +1030,7 @@ value, so the ships cannot quietly drift apart again.
 colour-coded things on screen free to mean something: a **red** boss star, and
 whatever is waiting at a star (`ENCOUNTER_STYLE`). Those stay. So do the
 subsystem tints, which are a different question again — a cyan shield bubble
-and an orange exhaust say which *row* is powering them, not which ship it is.
+and an orange engine say which *row* is powering them, not which ship it is.
 
 The accent survives only as app chrome that was never ship-specific: the menu
 buttons, the
@@ -1153,7 +1174,7 @@ out again:
 - **That upgrade is not small, and its risk lands where it cannot be tested.**
   SDK 57 means React Native 0.79 → 0.86 and **Reanimated 3 → 4**, which is a
   rewrite requiring the new architecture. Reanimated drives every moving thing
-  here — the shield break, the energy cells, the exhaust, the fades, the star
+  here — the shield break, the energy cells, the sway and dodge, the fades, the star
   field, the carousel — across 7 files and ~110 calls. Motion cannot be checked
   in this container at all (see the traps above), so the compiler, the property
   checks and a screenshot would all pass while the animations were broken. The
@@ -1199,8 +1220,9 @@ Settled with the author, so a new chat does not reopen them:
   sound yet — placeholders the author wants kept.
 - **Placeholder numbers the author may retune:** enemy hulls (Shrike 6,
   merchant 4, Elder Shrike 12), enemy Wren Drive (2, 1, 3), 10% miss per Wren
-  bar, sway 8pt per bar, the 320ms line-up before a shot.
-- **Not yet seen on the author's phone:** the sway and the line-up before a
+  bar, a 10pt sway, the 320ms line-up before a shot, and the dodge's timing
+  (90ms lead, 170ms out, 220ms held, 380ms back).
+- **Not yet seen on the author's phone:** the dodge, the sway and the line-up before a
   shot, the MISS pop-up in motion, and star select sized from the game area
   (`useScreenBox`). All were checked in headless only, where nothing moves.
 
