@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { stopDemo, useDemo } from '@/components/space/devDemo';
 import { shieldLevel } from '@/lib/energy';
 import { isWrecked } from '@/lib/hull';
 import { devRefillCharges, foeHull, hitFoe, takeHit, type RunState } from '@/lib/run';
@@ -27,6 +28,7 @@ export function DevControls({
   const wrecked = !!run && isWrecked(run.hull);
   const canTakeHit = !!run && (shieldLevel(run.shieldCharge) > 0 || run.hull > 0);
   const canHitThem = !!run && !wrecked && foeHull(run) > 0;
+  const demo = useDemo();
 
   return (
     <View style={[styles.row, { top }]}>
@@ -51,6 +53,16 @@ export function DevControls({
         color={palette.power}
         onPress={() => apply(devRefillCharges)}
       />
+      {/* Only while a demo from the encounter tester is playing here. */}
+      {demo && run?.position === demo.node ? (
+        <DevButton
+          label={`DEV · STOP ${demo.slow ? 'SLOW ' : ''}DEMO`}
+          description="Developer: stop the dodge-and-fire demo"
+          enabled
+          color={palette.textPrimary}
+          onPress={stopDemo}
+        />
+      ) : null}
     </View>
   );
 }

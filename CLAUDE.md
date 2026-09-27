@@ -952,7 +952,8 @@ one switch for every test tool, so none of them reach a player:
 - **Space screen** shows DEV · TAKE A HIT, DEV · HIT THEM (`hitFoe` on the
   ship here — it can destroy it, and it does not provoke a yellow ship, since
   only real fire does) and DEV · REFILL CHARGES (`devRefillCharges`: drive,
-  weapon if mounted, and shields to their powered level, all full at once).
+  weapon if mounted, and shields to their powered level, all full at once),
+  and DEV · STOP DEMO while a combat test is playing.
 - **Star select** shows ENCOUNTERS in a row under the header (the chart moves
   down by `DEV_ROW_HEIGHT`), opening `app/encounters.tsx`: one card per entry
   in `MEETINGS`, with its portrait (or its ship, for the faceless), its full
@@ -962,6 +963,20 @@ one switch for every test tool, so none of them reach a player:
   meeting at the ship's star (or the first star that can hold one), moves the
   ship there and resets it as never visited: dialogue again, ship undamaged
   and unprovoked, both guns and the drive empty — then `router.dismissTo('/run')`.
+- **The encounter tester ends with COMBAT TESTS** — moments of a fight on a
+  loop, to be watched rather than played. The one there, **DODGE AND FIRE**
+  (full speed, and slow motion at `SLOW_FACTOR` 4×), was asked for to see a
+  ship shoot while dodging. `devStageDodgeDemo` sets the scene (the table's
+  first red ship, talking done, weapon on the hardpoint, nothing aimed) and
+  `components/space/devDemo.ts` holds which demo is running — screen state,
+  never saved, ended by leaving the star or DEV · STOP DEMO. `useCombat` plays
+  it: every `DEMO_ROUND_MS` (4s) the other ship is patched up and its gun
+  filled; its shot always misses, and as the player dodges it is handed a
+  charged weapon aimed at their weapons, so it fires mid-dodge and turns to
+  aim; that shot always hits. Slow motion goes through `paced()`, which every
+  moving part of a shot uses — the line-up, dodge and turn in `useDrift`, the
+  bolt's flight in `LaserShot` — so they stay in step at any speed. Checked
+  in headless: the shot left pinned 48pt off its line, turned 19°, and hit.
 
 **The space screen is assembled from `components/space/`.** `app/run.tsx`
 only puts the pieces together: `useLiveRun` (the run, `runRef`, `commit`,

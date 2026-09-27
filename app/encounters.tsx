@@ -8,7 +8,8 @@ import { EncounterShip } from '@/components/ships/EncounterShip';
 import { Sideways } from '@/components/ships/Sideways';
 import { MEETINGS, nameOf, type Meeting } from '@/lib/dialogue';
 import { ENCOUNTER_STYLE } from '@/lib/encounters';
-import { devStageEncounter } from '@/lib/run';
+import { SLOW_FACTOR, startDemo, stopDemo } from '@/components/space/devDemo';
+import { devStageDodgeDemo, devStageEncounter } from '@/lib/run';
 import { loadRun, saveRun } from '@/lib/runStore';
 import { useHaptics } from '@/lib/settings';
 import { fonts, palette, tracking } from '@/lib/theme';
@@ -45,8 +46,26 @@ export default function EncountersScreen() {
       setBusy(true);
       haptics.confirm();
       const run = await loadRun();
+      stopDemo();
       if (run) await saveRun(devStageEncounter(run, target));
       // Back past star select to the space screen, where the encounter waits.
+      router.dismissTo('/run');
+    },
+    [busy, haptics, router],
+  );
+
+  /** Stages the dodge-and-fire demo and goes to watch it. */
+  const onDemo = useCallback(
+    async (slow: boolean) => {
+      if (busy) return;
+      setBusy(true);
+      haptics.confirm();
+      const run = await loadRun();
+      const staged = run ? devStageDodgeDemo(run) : null;
+      if (staged) {
+        await saveRun(staged);
+        startDemo({ kind: 'dodge-fire', node: staged.position, slow });
+      }
       router.dismissTo('/run');
     },
     [busy, haptics, router],
@@ -127,6 +146,28 @@ export default function EncountersScreen() {
           <Text style={styles.name}>{ENCOUNTER_STYLE.boss.label}</Text>
           <Text style={[styles.kind, { color: palette.danger }]}>BOSS</Text>
         </Pressable>
+
+        {/* Not encounters but moments of a fight, played on a loop so they
+            can be watched: the space screen runs them (devDemo.ts). */}
+        <Text style={styles.section}>COMBAT TESTS</Text>
+        {[false, true].map((slow) => (
+          <Pressable
+            key={String(slow)}
+            accessibilityRole="button"
+            accessibilityLabel={`Combat test: dodge and fire${slow ? ', slow motion' : ''}`}
+            onPress={() => void onDemo(slow)}
+            style={({ pressed }) => [styles.card, styles.testCard, pressed && styles.pressed]}
+          >
+            <Text style={styles.name}>DODGE AND FIRE</Text>
+            <Text style={[styles.kind, { color: palette.weapons }]}>
+              {slow ? `SLOW MOTION · ${SLOW_FACTOR}× SLOWER` : 'FULL SPEED'}
+            </Text>
+            <Text style={styles.blurb}>
+              A Shrike fires and always misses. You dodge, and your weapon fires back mid-dodge, turning to aim at
+              their weapons. Repeats every few seconds.
+            </Text>
+          </Pressable>
+        ))}
       </ScrollView>
     </View>
   );
@@ -188,6 +229,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.035)',
   },
   pressed: { backgroundColor: 'rgba(255,255,255,0.09)' },
+  section: {
+    width: '100%',
+    marginTop: 12,
+    fontFamily: fonts.bodyBold,
+    fontSize: 10,
+    fontWeight: '700',
+    color: palette.textMuted,
+    letterSpacing: tracking.caption,
+  },
+  testCard: { borderColor: 'rgba(255,74,74,0.35)', justifyContent: 'flex-start' },
+  blurb: {
+    fontFamily: fonts.body,
+    fontSize: 9,
+    lineHeight: 13,
+    color: palette.textMuted,
+    textAlign: 'center',
+    marginTop: 6,
+  },
   face: { width: FACE, height: FACE, alignItems: 'center', justifyContent: 'center' },
   name: {
     fontFamily: fonts.bodyBold,

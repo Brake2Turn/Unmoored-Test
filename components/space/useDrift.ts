@@ -9,6 +9,7 @@ import {
 } from 'react-native-reanimated';
 
 import { EXPLOSION_MS } from '@/components/Explosion';
+import { paced } from '@/components/space/devDemo';
 import type { Side } from '@/lib/run';
 
 /**
@@ -187,7 +188,7 @@ export function useDrift(
   );
 
   const turnTo = useCallback((side: Side, radians: number) => {
-    turns[side].value = withTiming((radians * 180) / Math.PI, { duration: TURN_MS, easing: Easing.out(Easing.quad) });
+    turns[side].value = withTiming((radians * 180) / Math.PI, { duration: paced(TURN_MS), easing: Easing.out(Easing.quad) });
   }, []);
 
   /** Ends a dodge: back to where it came from, and forgotten once there. */
@@ -195,12 +196,12 @@ export function useDrift(
     (side: Side, jink: Jink) => {
       if (jinks.current[side] !== jink) return;
       jink.returning = true;
-      moveTo(side, jink.from, DODGE_RETURN_MS);
-      jink.backAt = Date.now() + DODGE_RETURN_MS;
+      moveTo(side, jink.from, paced(DODGE_RETURN_MS));
+      jink.backAt = Date.now() + paced(DODGE_RETURN_MS);
       jink.timers.push(
         setTimeout(() => {
           if (jinks.current[side] === jink) jinks.current[side] = null;
-        }, DODGE_RETURN_MS),
+        }, paced(DODGE_RETURN_MS)),
       );
     },
     [moveTo],
@@ -270,7 +271,13 @@ export function useDrift(
         // out finishes that — a fifth of a second at most — before anything
         // is decided about where it is.
         const outAt = Math.max(jinks.current.player?.outAt ?? 0, jinks.current.foe?.outAt ?? 0);
-        const clearAt = Math.max(line.current?.holdUntil ?? 0, outAt);
+        // A shooter caught mid-dodge does not wait for the other ship's shot
+        // to finish: it will turn rather than move, and the other ship is
+        // already holding still for its own shot, so nothing is pulled two
+        // ways. That is what lets it fire back while dodging.
+        const own = jinks.current[shooter];
+        const dodging = !!own && !own.returning;
+        const clearAt = Math.max(dodging ? 0 : (line.current?.holdUntil ?? 0), outAt);
         if (now < clearAt) {
           later(go, clearAt - now + 10);
           return;
@@ -294,19 +301,23 @@ export function useDrift(
         if (!shooterPinned) {
           // Free: glide level with the part aimed at; the target stops where
           // it is going.
-          moveTo(other, targetDy, ALIGN_MS);
-          moveTo(shooter, shooterDy, ALIGN_MS);
-          settleIn = ALIGN_MS;
+          moveTo(other, targetDy, paced(ALIGN_MS));
+          moveTo(shooter, shooterDy, paced(ALIGN_MS));
+          settleIn = paced(ALIGN_MS);
         }
-        line.current = { holdUntil: now + settleIn + TURN_MS + HOLD_MS };
+        // Held at least as long as any shot already in the air needs.
+        const hold = (until: number) => {
+          line.current = { holdUntil: Math.max(line.current?.holdUntil ?? 0, until) };
+        };
+        hold(now + settleIn + paced(TURN_MS) + paced(HOLD_MS));
         later(() => {
           const shot = plan({ shooterDy, targetDy, pinned: shooterPinned });
           if (!shot) return;
           // Caught mid-dodge: turn the nose onto the target, then fire.
           const turning = Math.abs(shot.turn) > 0.002;
           if (turning) turnTo(shooter, shot.turn);
-          later(shot.launch, turning ? TURN_MS : 0);
-          line.current = { holdUntil: Date.now() + (turning ? TURN_MS : 0) + HOLD_MS };
+          later(shot.launch, turning ? paced(TURN_MS) : 0);
+          hold(Date.now() + (turning ? paced(TURN_MS) : 0) + paced(HOLD_MS));
           later(() => {
             if (turning) turnTo(shooter, 0);
             // The dodges held for this shot can go home now — unless one has
@@ -322,8 +333,8 @@ export function useDrift(
               if (jinks.current.player || jinks.current.foe) return;
               moveTo('player', 0, SETTLE_MS);
               moveTo('foe', 0, SETTLE_MS);
-            }, DODGE_RETURN_MS + 20);
-          }, (turning ? TURN_MS : 0) + HOLD_MS);
+            }, paced(DODGE_RETURN_MS) + 20);
+          }, (turning ? paced(TURN_MS) : 0) + paced(HOLD_MS));
         }, settleIn);
       };
       go();
@@ -348,16 +359,16 @@ export function useDrift(
       const jink: Jink = {
         from,
         to: at + step,
-        outAt: now + DODGE_MS,
-        backAt: now + DODGE_MS + DODGE_HOLD_MS + DODGE_RETURN_MS,
+        outAt: now + paced(DODGE_MS),
+        backAt: now + paced(DODGE_MS) + paced(DODGE_HOLD_MS) + paced(DODGE_RETURN_MS),
         pinned: false,
         returning: false,
         timers: [],
       };
       jinks.current[side] = jink;
-      moveTo(side, jink.to, DODGE_MS, Easing.out(Easing.cubic));
-      jink.timers.push(setTimeout(() => release(side, jink), DODGE_MS + DODGE_HOLD_MS));
-      return DODGE_LEAD_MS;
+      moveTo(side, jink.to, paced(DODGE_MS), Easing.out(Easing.cubic));
+      jink.timers.push(setTimeout(() => release(side, jink), paced(DODGE_MS) + paced(DODGE_HOLD_MS)));
+      return paced(DODGE_LEAD_MS);
     },
     [moveTo, release],
   );

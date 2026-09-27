@@ -10,6 +10,7 @@
  *   npm run verify:run
  */
 import {
+  devStageDodgeDemo,
   fireReady,
   shiftEnergy,
   foeCapacity,
@@ -180,6 +181,12 @@ function hits(run: RunState, n: number): RunState {
   check('autofire waits for the charge', !fireReady({ ...ready, weaponCharge: 1 }));
   check('autofire waits for the talking', !fireReady({ ...ready, spoken: [] }));
   check('autofire never fires at nothing', !fireReady(at(3, { weaponCharge: WEAPON_UNITS, autofire: true })));
+  // The dev demo's stage: a red ship, talking done, weapon on the hardpoint.
+  const stowed = moveGear(at(0, { target: null }), 'mount', 0);
+  const demo = devStageDodgeDemo(stowed);
+  check('the dodge demo stages a red ship', !!demo && foeArmed(demo) && modeOf(demo) === 'combat');
+  check('the dodge demo brings the weapon up', !!demo && demo.mounted !== null && demo.hold.every((item) => item === null));
+  check('the dodge demo starts unaimed, autofire off', !!demo && demo.target === null && !demo.autofire);
   const picks = new Set<string>();
   for (let i = 0; i < 300; i++) picks.add(foeTargetFor(Math.random()));
   check('a hostile ship aims at every system', SUBSYSTEMS.every((s) => picks.has(s)) && foeTargetFor(0.9999) === 'engines');

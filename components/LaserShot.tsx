@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { paced } from '@/components/space/devDemo';
 
 import { palette } from '@/lib/theme';
 
@@ -71,8 +72,8 @@ export function LaserShot({
         onImpact();
         setPhase('sparks');
       }
-    }, FLIGHT_MS);
-    const done = setTimeout(onDone, FLIGHT_MS + (hits ? SPARK_MS : 0) + 20);
+    }, paced(FLIGHT_MS));
+    const done = setTimeout(onDone, paced(FLIGHT_MS) + (hits ? SPARK_MS : 0) + 20);
     return () => {
       clearTimeout(impact);
       clearTimeout(done);
@@ -91,7 +92,7 @@ function Bolt({ from, to, animate }: { from: Point; to: Point; animate: boolean 
   const progress = useSharedValue(0);
 
   useEffect(() => {
-    if (animate) progress.value = withTiming(1, { duration: FLIGHT_MS, easing: Easing.linear });
+    if (animate) progress.value = withTiming(1, { duration: paced(FLIGHT_MS), easing: Easing.linear });
   }, [animate, progress]);
 
   // Every shot flies level today — a miss is the target dodging, not the

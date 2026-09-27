@@ -10,6 +10,8 @@ import { FOE_WEAPON, foeMuzzle, systemSpots } from '@/components/ships/Encounter
 import { sidewaysPoint } from '@/components/ships/Sideways';
 import { DODGE_FOE, DODGE_HULL, DODGE_MARGIN, DODGE_SHIELD, type Drift } from '@/components/space/useDrift';
 import type { LiveRun } from '@/components/space/useLiveRun';
+import { demoNow, paced, stopDemo, useDemo } from '@/components/space/devDemo';
+import { isWrecked } from '@/lib/hull';
 import { weaponTip } from '@/components/WeaponArt';
 import type { Subsystem } from '@/lib/energy';
 import { weaponById } from '@/lib/weapons';
@@ -54,6 +56,14 @@ export type Blast = { id: number; at: Point; size: number };
 /** A MISS pop-up, over the ship a bolt just went past. */
 export type Miss = { id: number; at: Point };
 
+/** How often the dodge-and-fire demo plays a round, at normal speed. */
+const DEMO_ROUND_MS = 4000;
+
+/** The dodge-and-fire demo is running at this star. */
+function demoAt(node: number): boolean {
+  return demoNow()?.node === node;
+}
+
 /** How long a MISS stays up. */
 export const MISS_MS = 900;
 
@@ -62,7 +72,7 @@ export const MISS_MS = 900;
  * into its flight, for the MISS pop-up.
  */
 function passesAt(from: Point, to: Point, x: number): number {
-  return FLIGHT_MS * Math.max(0, Math.min(1, Math.abs((x - from.x) / (to.x - from.x || 1))));
+  return paced(FLIGHT_MS) * Math.max(0, Math.min(1, Math.abs((x - from.x) / (to.x - from.x || 1))));
 }
 
 /** No offset at all: the ship's own centre. */
@@ -213,7 +223,9 @@ export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width:
         const there = !!now && now.position === node && foeHull(now, node) > 0;
         // Whether it misses is rolled as it leaves, against the other ship's
         // Wren Drive: the harder a ship sways, the harder it is to hit.
-        const misses = there && shotMisses(now, 'foe', Math.random());
+        // (The dodge-and-fire demo always hits, so the turn can be watched
+        // landing.)
+        const misses = there && !demoAt(node) && shotMisses(now, 'foe', Math.random());
         const centre = { x: rest.x + rest.width / 2, y: rest.y + rest.height / 2 + shooterDy };
         // Onto the targeted system; with nobody there, straight ahead.
         const at = foe
@@ -258,6 +270,35 @@ export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width:
    * the charge and shoots the moment it is full, from the muzzle of the
    * Weapon 1 on its nose to the player's ship.
    */
+  /**
+   * Dev mode's dodge-and-fire demo (`devDemo.ts`): every few seconds the
+   * other ship is patched up and its gun filled, so it fires; the shot above
+   * then always misses and hands the player a charged, aimed weapon as it
+   * dodges. It ends when the ship leaves the star.
+   */
+  const demo = useDemo();
+  const demoHere = !!demo && !!run && run.position === demo.node && !isWrecked(run.hull);
+  useEffect(() => {
+    if (demo && run && run.position !== demo.node) stopDemo();
+  }, [demo, run?.position]);
+  useEffect(() => {
+    if (!demoHere) return;
+    const round = () => {
+      const current = runRef.current;
+      if (!current || pendingMeeting(current)) return;
+      const key = String(current.position);
+      const { [key]: _hull, ...foeDamage } = current.foeDamage;
+      const { [key]: _systems, ...foeSystemDamage } = current.foeSystemDamage;
+      commit({ ...current, foeDamage, foeSystemDamage, weaponCharge: 0, target: null, foeCharge: WEAPON_UNITS }, false);
+    };
+    const first = setTimeout(round, 1200);
+    const every = setInterval(round, paced(DEMO_ROUND_MS));
+    return () => {
+      clearTimeout(first);
+      clearInterval(every);
+    };
+  }, [commit, demo, demoHere, runRef]);
+
   const foeReady = !!run && foeArmed(run) && !pendingMeeting(run) && run.foeCharge >= WEAPON_UNITS;
   useEffect(() => {
     const current = runRef.current;
@@ -305,12 +346,19 @@ export function useCombat({ run, runRef, commit }: LiveRun, drift: Drift, width:
         // more often the player's ship dodges — out of the bolt's line far
         // enough to take the shield with it (or the hull, with no shield up) —
         // and the bolt flies on off the left edge.
-        const misses = !!now && shotMisses(now, 'player', Math.random());
+        // (The dodge-and-fire demo always misses, so the player always dodges.)
+        const misses = !!now && (demoAt(node) || shotMisses(now, 'player', Math.random()));
         const to = misses ? along(aim, -40) : at;
         const launch = () => {
           if (misses) {
             const clear = (shielded ? DODGE_SHIELD : DODGE_HULL) * playerScale + DODGE_MARGIN;
             const lead = drift.dodge('player', clear, spot.y);
+            // The demo's point: with the ship now jinking out of the way, its
+            // weapon is charged and aimed, so it fires back mid-dodge.
+            const staged = runRef.current;
+            if (demoAt(node) && staged && staged.position === node) {
+              commit({ ...staged, weaponCharge: WEAPON_UNITS, target: 'weapons' }, false);
+            }
             showMiss(at, lead + passesAt(aim.from, to, at.x));
             setTimeout(() => addShot({ by: 'foe', node, from: aim.from, to, hits: false, target, damage }), lead);
           } else {

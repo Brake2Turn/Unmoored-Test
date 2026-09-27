@@ -17,7 +17,7 @@ import {
   type Subsystem,
 } from './energy.ts';
 import { ENCOUNTER_RULES } from './encounterRules.ts';
-import { nameOf, type Meeting } from './dialogue.ts';
+import { MEETINGS, nameOf, type Meeting } from './dialogue.ts';
 import { HULL_MAX, damagedHull, isWrecked } from './hull.ts';
 import { cargoSlots, fitHold, moveItem, type Place } from './hold.ts';
 import { shipById } from './ships.ts';
@@ -817,6 +817,30 @@ export function devStageEncounter(run: RunState, target: number | 'boss'): RunSt
     target: null,
     jumpCharge: 0,
     weaponCharge: 0,
+  };
+}
+
+/**
+ * Dev mode only: the stage for the dodge-and-fire demo — a red ship at a
+ * star, its talking already done, nothing targeted and autofire off, and a
+ * weapon on the hardpoint (brought up from the hold if it is down there). The
+ * demo itself is played by the space screen; this only sets the scene. The
+ * red ship is whichever the table lists first, so nothing names an id. Null
+ * when the table has no red ship to stage.
+ */
+export function devStageDodgeDemo(run: RunState): RunState | null {
+  const red = MEETINGS.find((meeting) => meeting.hull === 'red');
+  if (!red) return null;
+  let staged = devStageEncounter(run, red.id);
+  if (!staged.mounted) {
+    const slot = staged.hold.findIndex((item) => item !== null);
+    if (slot >= 0) staged = moveGear(staged, slot, 'mount');
+  }
+  return {
+    ...staged,
+    spoken: staged.spoken.includes(staged.position) ? staged.spoken : [...staged.spoken, staged.position],
+    target: null,
+    autofire: false,
   };
 }
 
