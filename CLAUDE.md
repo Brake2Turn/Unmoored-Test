@@ -899,7 +899,7 @@ To check a shot in headless, the probe holds the shot's timers (skip any
 frame; guessing a `--virtual-time-budget` that lands inside a 200ms flight
 did not work.
 
-**The reactor rows are named** — SHIELDS, WEAPONS, ENGINES, beside their
+**The reactor rows are named** — SHIELDS, WEAPONS, WREN DRIVE, beside their
 marks. They were wordless for a long while (the marks were meant to carry it);
 the author's mock-up put the names back, and the author's call wins. Spare
 energy reads REACTOR and a number, not `0 FREE`.
@@ -1186,6 +1186,26 @@ None of that blocks content work — dialogue, encounters, art — which is what
 the link is *better* for: no setup, no build wait, always current, and
 verifiable. Revisit when the question is "does this feel right in the hand,
 does it hold 60fps, does the title fit", not before.
+
+## Where things were left (September 2026)
+
+Settled with the author, so a new chat does not reopen them:
+
+- **The SECTOR number stays as it is** (`jumps + 1`, so a hop back still
+  counts). The author was told it counts jumps rather than progress, and
+  that the Bulwark's REACH SECTOR 5 hangs on it, and chose to keep it for now.
+- **Music and Sound Effects sliders stay** in Settings though there is no
+  sound yet — placeholders the author wants kept.
+- **Placeholder numbers the author may retune:** enemy hulls (Shrike 6,
+  merchant 4, Elder Shrike 12), enemy Wren Drive (2, 1, 3), 10% miss per Wren
+  bar, sway 8pt per bar, the 320ms line-up before a shot.
+- **Not yet seen on the author's phone:** the sway and the line-up before a
+  shot, the MISS pop-up in motion, and star select sized from the game area
+  (`useScreenBox`). All were checked in headless only, where nothing moves.
+
+Probe scripts used in these sessions lived in a scratch `/p/` folder and are
+gone with the container; `scripts/drive-encounter.py` is the kept one, and the
+"launch a run and drive the UI" recipe above rebuilds the rest.
 
 ## Working style that fits this project
 

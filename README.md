@@ -45,9 +45,10 @@ game in a container.
   Dev Mode → Unlock All Ships opens it). Each launches with its own weapon, and
   differs in cargo space and reactor size.
 - **Space screen** — your ship on its side, and whatever is waiting at this star
-  facing it. Below: the hull, the reactor panel (move bars of energy between
-  shields, weapons and engines with − and +), then FIRE, SHIP (the weapon,
-  cargo and crew) and JUMP, with the fuel left on it.
+  facing it. Below: the hull (yellow at half, red at a quarter), the reactor
+  panel (move bars of energy between shields, weapons and the Wren Drive with
+  − and +), then FIRE, SHIP (the weapon, cargo and crew) and JUMP, with the
+  fuel left on it.
 - **Star select** — twenty stars on a chart. Stars in range are bright; the boss
   is the red one at the top, always six jumps away. A tank holds ten jumps.
 - **Settings** — sound sliders (there is no sound in the game yet), haptics,
@@ -60,6 +61,11 @@ fire on them. The weapon and the jump drive charge over time, faster with more
 energy in their row; the energy in the shields sets how many layers they can
 build up to. Shields soak hits until they are down; then the hull loses
 plates, and at zero it is Game Over.
+
+In a fight both ships sway up and down — harder the more bars are in their
+**Wren Drive** — and each shot waits a moment while the shooter lines up with
+the other ship. Every Wren Drive bar makes shots at that ship 10% likelier to
+miss: a miss flies just past, and MISS pops up over the ship.
 
 ## Project layout
 
