@@ -31,6 +31,9 @@ const HIT_SIZE = 46;
  */
 const VERT_PAD = 24;
 
+/** Clear space between the bottom of the chart and the words under it. */
+const FOOTER_GAP = 16;
+
 /** The dev-mode row under the header that holds ENCOUNTERS. */
 const DEV_ROW_HEIGHT = 34;
 
@@ -44,6 +47,8 @@ export default function SectorScreen() {
   const [run, setRun] = useState<RunState | null>(null);
   const [target, setTarget] = useState<number | null>(null);
   const [jumping, setJumping] = useState(false);
+  // Until the footer has been laid out, a generous guess at its height.
+  const [footerHeight, setFooterHeight] = useState(insets.bottom + 140);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,7 +81,11 @@ export default function SectorScreen() {
   // chart starts below it rather than behind it.
   const devRow = settings.devMode ? DEV_ROW_HEIGHT : 0;
   const boardTop = insets.top + 62 + devRow;
-  const boardBottom = insets.bottom + 132;
+  // The chart stops a clear gap above the footer — the line of words and
+  // JUMP — measured as drawn rather than guessed. A fixed allowance fitted
+  // in the test browser with 11 points to spare and still let the words run
+  // into the chart on a phone, whose font draws taller.
+  const boardBottom = footerHeight + FOOTER_GAP;
   const boardW = width - 32;
   const boardH = Math.max(height - boardTop - boardBottom, 120);
   const scale = Math.min(boardW / MAP_W, boardH / (MAP_H + VERT_PAD));
@@ -291,7 +300,10 @@ export default function SectorScreen() {
         })}
       </View>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 34 }]}>
+      <View
+        onLayout={(event) => setFooterHeight(event.nativeEvent.layout.height)}
+        style={[styles.footer, { paddingBottom: insets.bottom + 34 }]}
+      >
         <Text
           style={[
             styles.prompt,

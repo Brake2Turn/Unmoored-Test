@@ -883,7 +883,10 @@ FUEL gauge (the cyan F badge in its corner is gone, and `FuelBadge` with it),
 and every blocked state uses the space screen's words in `jumpBlocker`'s
 order — OUT OF FUEL, NO WREN DRIVE, or JUMP (dark while the Wren Drive
 charges) — with the line above it saying why. The author asked for the two
-screens not to contradict each other.
+screens not to contradict each other. **The chart is sized from the footer as
+drawn** (`onLayout`, then `FOOTER_GAP`), not from a fixed allowance: the old
+fixed 132 points fitted the test browser with 11 to spare and still let
+"3 STARS IN RANGE" run into the chart on the author's phone.
 
 **JUMP is the engines' orange** the way FIRE is the weapons' red: dark while
 the drive charges, bright when it is ready, grey when it cannot (no fuel, cold
